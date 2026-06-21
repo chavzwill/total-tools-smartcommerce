@@ -1,0 +1,10 @@
+import { BriefcaseBusiness, CheckCircle2 } from "lucide-react";
+import Container from "../components/shared/Container";
+import rentalImage from "../assets/services/equipment-rentals.jpg";
+import { go } from "../lib/router";
+
+const benefits = ["Fleet rental management", "Bulk purchasing", "Contract business pricing", "Government procurement support", "Dedicated account manager", "30-day business credit review"];
+
+export default function CommercialPage({ quote = false }: { quote?: boolean }) {
+  return <div className="demo-page"><section className="demo-commercial-page"><Container><div><span>Total Tools Commercial</span><h1>One account for the tools, equipment, and support your business needs.</h1><p>Purpose-built service for contractors, facilities, government entities, and growing Jamaican businesses.</p></div><img src={rentalImage} alt="Total Tools commercial equipment fleet" /></Container></section><Container className="demo-commercial-body"><section><h2>Commercial capability at every scale</h2><div className="demo-benefit-list">{benefits.map((benefit) => <div key={benefit}><CheckCircle2 size={20} /><span>{benefit}</span></div>)}</div></section><form className="demo-flow-form" onSubmit={(event) => { event.preventDefault(); go("/commercial-confirmation"); }}><BriefcaseBusiness size={30} /><h2>{quote ? "Request commercial pricing" : "Open a business account"}</h2><label>Business name<input required defaultValue="Caribbean BuildWorks Ltd." /></label><label>Contact name<input required defaultValue="Andre Campbell" /></label><label>Work email<input type="email" required defaultValue="andre@caribbeanbuildworks.demo" /></label><label>Business need<select defaultValue={quote ? "Bulk product pricing" : "Fleet rentals"}><option>Fleet rentals</option><option>Bulk product pricing</option><option>Government contract</option><option>Business credit</option></select></label><label>Tell us about your requirement<textarea defaultValue="We need tools and rental equipment for three active sites in St. Andrew." /></label><button type="submit">{quote ? "Request Pricing" : "Submit Business Account"}</button></form></Container></div>;
+}

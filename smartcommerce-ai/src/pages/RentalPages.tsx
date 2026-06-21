@@ -1,0 +1,16 @@
+import { CalendarDays, CheckCircle2, ShieldCheck, Truck } from "lucide-react";
+import Container from "../components/shared/Container";
+import RentalTile from "../components/demo/RentalTile";
+import { findRental, rentals } from "../data/rentals";
+import { money } from "../lib/format";
+import { go, routeHref } from "../lib/router";
+
+export function RentalsPage() {
+  return <div className="demo-page"><section className="demo-page-hero demo-page-hero--rental"><Container><span>Total Tools Rentals</span><h1>Heavy equipment without the ownership overhead.</h1><p>Choose equipment, review rates, select dates, and reserve with islandwide delivery support.</p></Container></section><Container className="demo-page-content"><div className="demo-rental-grid">{rentals.map((rental) => <RentalTile rental={rental} key={rental.id} />)}</div></Container></div>;
+}
+
+export function RentalDetailPage({ id }: { id: string }) {
+  const rental = findRental(id);
+  if (!rental) return <div className="demo-empty"><h1>Rental not found</h1><a href={routeHref("/rentals")}>Return to rental fleet</a></div>;
+  return <div className="demo-page"><Container className="demo-detail demo-rental-detail"><div className="demo-detail__gallery"><img src={rental.image} alt={rental.name} /><span>Maintained fleet</span></div><div className="demo-detail__content"><small>{rental.category}</small><h1>{rental.name}</h1><p>{rental.description}</p><p className="demo-available"><CheckCircle2 size={17} /> {rental.availability} | {rental.branchAvailability}</p><div className="demo-rates demo-rates--large"><span><b>{money(rental.dailyRate)}</b>/day</span><span><b>{money(rental.weeklyRate)}</b>/week</span><span><b>{money(rental.monthlyRate)}</b>/month</span></div><form className="demo-reserve-form" onSubmit={(event) => { event.preventDefault(); go(`/rental-confirmation?item=${rental.id}`); }}><label>Start date<input type="date" defaultValue="2026-06-24" required /></label><label>End date<input type="date" defaultValue="2026-06-27" required /></label><label>Branch or delivery<select defaultValue="Islandwide delivery"><option>Islandwide delivery</option><option>Ocho Rios - 102 Main Street, Ocho Rios, P.O. St. Ann</option><option>Kingston - 34 Slipe Road, Kingston 5</option><option>Drax Hall - Lot C6, Drax Hall, St. Ann</option></select></label><label>Full name<input required defaultValue="Jordan Williams" /></label><label>Email<input type="email" required defaultValue="jordan@example.demo" /></label><label>Phone<input required defaultValue="876-555-0147" /></label><button type="submit"><CalendarDays size={18} /> Reserve Equipment</button></form></div><section className="demo-detail__specs"><h2>Equipment details</h2>{Object.entries(rental.specs).map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</section><section className="demo-detail__services"><div><Truck /><strong>Delivery coordinated</strong><span>Site access confirmed before dispatch</span></div><div><ShieldCheck /><strong>Safety checked</strong><span>Pre-hire inspection on every unit</span></div><div><CheckCircle2 /><strong>Fleet support</strong><span>Help throughout your rental term</span></div></section></Container></div>;
+}
