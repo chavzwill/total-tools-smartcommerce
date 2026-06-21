@@ -1,0 +1,4 @@
+smartcommerce-ai/node_modules/
+smartcommerce-ai/dist/
+*.log
+*.tsbuidinfo
