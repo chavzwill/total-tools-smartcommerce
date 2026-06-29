@@ -1,6 +1,7 @@
-import { repairs } from "../data/repairs";
+import { getRepairTypes } from "../data/repairs";
 
 export default function RepairSection() {
+  const repairs = getRepairTypes();
   return (
     <section className="section repair-section" id="repairs">
       <div className="section-heading">

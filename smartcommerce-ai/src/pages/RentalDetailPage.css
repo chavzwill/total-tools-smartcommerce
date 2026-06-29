@@ -1,0 +1,381 @@
+.demo-rental-detail {
+  align-items: start;
+  gap: 42px 48px;
+  padding-bottom: 98px;
+  padding-top: 74px;
+}
+
+.demo-rental-detail .demo-detail__gallery {
+  background: linear-gradient(145deg, #f7faf8, #eef4f0);
+  border: 1px solid rgba(7, 85, 55, .1);
+  border-radius: 24px;
+  box-shadow: 0 28px 80px rgba(16, 44, 30, .11);
+  min-height: 500px;
+  padding: 18px;
+}
+
+.demo-rental-detail .demo-detail__gallery img {
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .72);
+}
+
+.demo-rental-detail .demo-detail__gallery > span {
+  background: rgba(255, 255, 255, .94);
+  border: 1px solid rgba(7, 85, 55, .12);
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(16, 44, 30, .08);
+  color: var(--tt-green);
+  font-size: 11px;
+  letter-spacing: .14em;
+  padding: 9px 13px;
+}
+
+.demo-rental-detail .demo-detail__content {
+  align-self: start;
+  padding-top: 10px;
+}
+
+.demo-rental-detail .demo-detail__content > small {
+  color: #075537;
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: .18em;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+
+.demo-rental-detail .demo-detail__content h1 {
+  color: var(--tt-charcoal);
+  font-size: clamp(50px, 5.2vw, 74px);
+  letter-spacing: -.055em;
+  line-height: .94;
+  margin: 0 0 18px;
+  max-width: 760px;
+}
+
+.demo-rental-detail .demo-detail__content > p:not(.demo-available) {
+  color: #536158;
+  font-size: 17px;
+  line-height: 1.58;
+  margin: 0;
+  max-width: 660px;
+}
+
+.demo-rental-detail .demo-available {
+  align-items: center;
+  background: linear-gradient(135deg, #e8f6ed, #f8fcf9);
+  border: 1px solid rgba(7, 85, 55, .24);
+  border-radius: 18px;
+  box-shadow: 0 16px 38px rgba(7, 85, 55, .1);
+  color: var(--tt-green);
+  display: grid;
+  gap: 5px 12px;
+  grid-template-columns: auto 1fr;
+  margin: 26px 0 24px;
+  padding: 15px 17px;
+}
+
+.demo-rental-detail .demo-available svg {
+  background: var(--tt-green);
+  border-radius: 999px;
+  color: #fff;
+  grid-row: span 2;
+  height: 32px;
+  padding: 6px;
+  width: 32px;
+}
+
+.demo-rental-detail .demo-available strong {
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.1;
+  text-transform: capitalize;
+}
+
+.demo-rental-detail .demo-available span {
+  color: #607068;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.demo-rental-detail .demo-rates {
+  background: #fff;
+  border: 1px solid var(--tt-gray-100);
+  border-radius: 20px;
+  box-shadow: 0 18px 52px rgba(16, 44, 30, .08);
+  gap: 0;
+  margin: 0 0 25px;
+  padding: 8px;
+}
+
+.demo-rental-detail .demo-rates span {
+  align-content: start;
+  border-radius: 15px;
+  color: #5f6d65;
+  display: grid;
+  min-height: 112px;
+  padding: 18px 17px;
+}
+
+.demo-rental-detail .demo-rates span + span {
+  border-left: 1px solid var(--tt-gray-100);
+}
+
+.demo-rental-detail .demo-rates em {
+  color: #55635b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: .12em;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.demo-rental-detail .demo-rates b {
+  color: var(--tt-green);
+  font-size: clamp(22px, 2.3vw, 30px);
+  letter-spacing: -.035em;
+  line-height: 1;
+}
+
+.demo-rental-detail .demo-rates small {
+  color: #7a867f;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 8px;
+}
+
+.demo-rental-detail .demo-reserve-form {
+  background: #fff;
+  border: 1px solid var(--tt-gray-100);
+  border-radius: 22px;
+  box-shadow: 0 18px 52px rgba(16, 44, 30, .08);
+  gap: 16px;
+  margin-top: 0;
+  padding: 20px;
+}
+
+.demo-rental-detail .demo-reserve-form label {
+  color: #33443a;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 8px;
+  letter-spacing: .02em;
+}
+
+.demo-rental-detail .demo-reserve-form input,
+.demo-rental-detail .demo-reserve-form select {
+  background: #f9fbf9;
+  border: 1px solid #dbe4de;
+  border-radius: 13px;
+  color: var(--tt-charcoal);
+  min-height: 52px;
+  padding: 0 14px;
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.demo-rental-detail .demo-reserve-form input:focus,
+.demo-rental-detail .demo-reserve-form select:focus {
+  background: #fff;
+  border-color: #89b59b;
+  box-shadow: 0 0 0 4px rgba(7, 85, 55, .08);
+  outline: 0;
+}
+
+.demo-rental-detail .demo-reserve-form button {
+  border-radius: 15px;
+  box-shadow: 0 16px 34px rgba(7, 85, 55, .18);
+  font-size: 14px;
+  min-height: 56px;
+}
+
+.demo-rental-detail .demo-detail__specs {
+  background: linear-gradient(180deg, #fff, #fbfcfb);
+  border: 1px solid rgba(7, 85, 55, .1);
+  border-radius: 24px;
+  box-shadow: 0 28px 80px rgba(16, 44, 30, .09);
+  padding: 34px;
+}
+
+.demo-rental-detail .demo-detail__specs-heading {
+  border: 0;
+  display: block;
+  padding: 0 0 25px;
+}
+
+.demo-rental-detail .demo-detail__specs-heading span {
+  color: var(--tt-green);
+  display: block;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .16em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.demo-rental-detail .demo-detail__specs h2 {
+  font-size: clamp(28px, 3vw, 42px);
+  letter-spacing: -.04em;
+  line-height: 1;
+  margin: 0;
+}
+
+.demo-rental-detail .demo-detail__spec-grid {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.demo-rental-detail .demo-detail__spec-grid div {
+  align-items: start;
+  border-top: 1px solid var(--tt-gray-100);
+  display: grid;
+  gap: 8px;
+  justify-content: stretch;
+  min-height: 92px;
+  padding: 19px 22px 19px 0;
+}
+
+.demo-rental-detail .demo-detail__spec-grid div:nth-child(odd) {
+  border-right: 1px solid var(--tt-gray-100);
+}
+
+.demo-rental-detail .demo-detail__spec-grid div:nth-child(even) {
+  padding-left: 22px;
+}
+
+.demo-rental-detail .demo-detail__spec-grid span {
+  color: #68766e;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.demo-rental-detail .demo-detail__spec-grid strong {
+  color: var(--tt-charcoal);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.demo-rental-detail .demo-detail__services {
+  gap: 18px;
+}
+
+.demo-rental-detail .demo-detail__services div {
+  background: #fff;
+  border: 1px solid var(--tt-gray-100);
+  border-radius: 20px;
+  box-shadow: 0 18px 46px rgba(16, 44, 30, .07);
+  gap: 9px;
+  padding: 25px;
+}
+
+.demo-rental-detail .demo-detail__services svg {
+  background: #edf7f1;
+  border-radius: 13px;
+  color: var(--tt-green);
+  height: 42px;
+  padding: 10px;
+  width: 42px;
+}
+
+.demo-rental-detail .demo-detail__services strong {
+  font-size: 17px;
+}
+
+.demo-rental-detail .demo-detail__services span {
+  color: #647269;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1080px) {
+  .demo-rental-detail {
+    gap: 34px;
+  }
+
+  .demo-rental-detail .demo-detail__content h1 {
+    font-size: clamp(44px, 6vw, 62px);
+  }
+
+}
+
+@media (max-width: 780px) {
+  .demo-rental-detail {
+    padding-bottom: 76px;
+    padding-top: 52px;
+  }
+
+  .demo-rental-detail .demo-detail__gallery {
+    border-radius: 20px;
+    min-height: 420px;
+    padding: 14px;
+  }
+
+  .demo-rental-detail .demo-detail__content {
+    padding-top: 0;
+  }
+
+  .demo-rental-detail .demo-rates {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .demo-rental-detail .demo-rates span {
+    min-height: 104px;
+    padding: 15px 12px;
+  }
+
+  .demo-rental-detail .demo-rates b {
+    font-size: 21px;
+  }
+
+  .demo-rental-detail .demo-detail__spec-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-rental-detail .demo-detail__spec-grid div:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .demo-rental-detail .demo-detail__spec-grid div:nth-child(even) {
+    padding-left: 0;
+  }
+
+}
+
+@media (max-width: 520px) {
+  .demo-rental-detail {
+    gap: 28px;
+    padding-bottom: 64px;
+    padding-top: 42px;
+  }
+
+  .demo-rental-detail .demo-detail__content h1 {
+    font-size: 44px;
+  }
+
+  .demo-rental-detail .demo-available {
+    align-items: start;
+  }
+
+  .demo-rental-detail .demo-rates {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-rental-detail .demo-rates span {
+    min-height: auto;
+  }
+
+  .demo-rental-detail .demo-rates span + span {
+    border-left: 0;
+    border-top: 1px solid var(--tt-gray-100);
+  }
+
+  .demo-rental-detail .demo-reserve-form,
+  .demo-rental-detail .demo-detail__specs {
+    border-radius: 18px;
+    padding: 18px;
+  }
+}

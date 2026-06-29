@@ -52,7 +52,6 @@ a { color: inherit; text-decoration: none; }
 .tt-nav { align-items: center; display: flex; gap: 36px; min-height: 48px; }
 .tt-nav a { color: #435047; font-size: 13px; font-weight: 800; }
 .tt-nav a:hover { color: var(--tt-green); }
-.tt-nav__deal { color: #a72127 !important; margin-left: auto; }
 
 .tt-button { align-items: center; border: 1px solid transparent; border-radius: 8px; display: inline-flex; font-weight: 850; justify-content: center; white-space: nowrap; }
 .tt-button--medium { min-height: 46px; padding: 0 18px; }

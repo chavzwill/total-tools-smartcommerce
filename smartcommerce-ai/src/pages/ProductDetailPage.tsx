@@ -1,13 +1,13 @@
 import { CheckCircle2, Heart, ShieldCheck, Star, Truck } from "lucide-react";
 import Container from "../components/shared/Container";
-import { findProduct } from "../data/products";
+import { getProductById } from "../data/products";
 import { money } from "../lib/format";
 import { routeHref } from "../lib/router";
 
 type Props = { id: string; wished: boolean; onWishlist: (id: string) => void; onAdd: (id: string) => void };
 
 export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Props) {
-  const product = findProduct(id);
+  const product = getProductById(id);
   if (!product) return <div className="demo-empty"><h1>Product not found</h1><a href={routeHref("/products")}>Return to products</a></div>;
   return (
     <div className="demo-page"><Container className="demo-detail">

@@ -16,9 +16,21 @@ import cleaningCategoryImage from "../assets/categories/cleaning.jpg";
 import handToolsCategoryImage from "../assets/categories/hand-tools.jpg";
 import plumbingCategoryImage from "../assets/categories/plumbing.jpg";
 import outdoorCategoryImage from "../assets/categories/outdoor-equipment.jpg";
+import {
+  createProductionSyncClient,
+  createSmartCommercePlatformApi,
+  type ApiClientOptions,
+} from "../apiClient";
+import type {
+  CommerceProduct,
+  PlatformApiResult,
+  PlatformSyncResult,
+  PosAdapterContext,
+  ProductCategory,
+} from "../platform";
 import type { Category, Product } from "../types";
 
-export const products: Product[] = [
+const temporaryProductFallback: Product[] = [
   { id: "pulsar-g12", name: "Pulsar 12,000W Dual Fuel Generator", sku: "PGD12000E", category: "Generators", department: "Power Equipment", price: 329999, stockStatus: "In stock - Kingston", badge: "Farm ready", image: portableGeneratorImage, tags: ["generator", "farm", "power", "electricity"], rating: 4.8, reviews: 86, rentable: true, description: "Heavy-duty dual fuel power for farms, workshops, and emergency backup.", specs: { Output: "12,000 peak watts", Fuel: "Gasoline or LPG", Runtime: "Up to 12 hours", Start: "Electric" } },
   { id: "champion-9200", name: "Champion 9,200W Inverter Generator", sku: "CH9200IX", category: "Generators", department: "Power Equipment", price: 289500, stockStatus: "Available at select branches", badge: "Quiet power", image: generatorImage, tags: ["generator", "farm", "quiet", "power"], rating: 4.7, reviews: 51, rentable: true, description: "Clean, quiet power for sensitive equipment, trade sites, and backup use.", specs: { Output: "9,200 peak watts", Noise: "64 dBA", Runtime: "11 hours", Warranty: "3 years" } },
   { id: "makita-dhp", name: "Makita 18V Brushless Hammer Drill Kit", sku: "DHP486RTJ", category: "Power Tools", department: "Power Tools", price: 98500, stockStatus: "In stock at 3 branches", badge: "Best seller", image: cordlessDrillImage, tags: ["drill", "makita", "cordless", "hammer"], rating: 4.9, reviews: 142, description: "High-torque professional drill with two 5Ah batteries and rapid charger.", specs: { Voltage: "18V", Torque: "130 Nm", Chuck: "13 mm", Batteries: "2 x 5Ah" } },
@@ -41,7 +53,7 @@ export const products: Product[] = [
   { id: "sigma-5000", name: "Sigma 5000W Generator", sku: "SG5000E", category: "Generators", subcategory: "Portable Generators", department: "Power Equipment", price: 159900, stockStatus: "In stock - Ocho Rios and Kingston", badge: "Island favorite", image: generatorImage, tags: ["generator", "portable", "sigma", "5000w"], rating: 4.6, reviews: 58, description: "Versatile portable power with electric start and AVR protection.", specs: { Output: "5,000W", Fuel: "Gasoline", Runtime: "10 hours", Start: "Electric" } }
 ];
 
-const categoryBase = [
+const temporaryCategoryFallback = [
   ["Generators", "Reliable standby and site power solutions.", generatorImage, "GN"],
   ["Power Tools", "Cordless and corded tools for every trade.", cordlessDrillImage, "DR"],
   ["Electrical", "Cable, protection, lighting, and test gear.", electricalCategoryImage, "EL"],
@@ -56,6 +68,292 @@ const categoryBase = [
   ["Pressure Washers", "Home, trade, and industrial cleaning power.", pressureWasherImage, "PW"]
 ] as const;
 
-export const categories: Category[] = categoryBase.map(([name, description, image, icon]) => ({ name, description, image, icon }));
+type ProductDataSnapshot = {
+  products: Product[];
+  categories: Category[];
+};
+
+type ProductDataProviderOptions = ApiClientOptions & {
+  context?: PosAdapterContext;
+  autoRefresh?: boolean;
+};
+
+type ProductRefreshOptions = {
+  synchronize?: boolean;
+};
+
+const replaceArrayContents = <T>(target: T[], source: T[]) => {
+  target.splice(0, target.length, ...source);
+};
+
+const emitProductDataChanged = (snapshot: ProductDataSnapshot) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("smartcommerce:products-changed", { detail: snapshot })
+  );
+};
+
+const mapPlatformProduct = (product: CommerceProduct): Product => ({
+  id: product.id,
+  name: product.name,
+  sku: product.sku || product.id,
+  category: product.categoryIds?.[0] || "Uncategorized",
+  department: product.categoryIds?.[0] || "Products",
+  price:
+    product.pricing?.find((price) => price.salePrice !== undefined)?.salePrice ||
+    product.pricing?.find((price) => price.listPrice !== undefined)?.listPrice ||
+    0,
+  stockStatus: "Availability provided by connected system",
+  badge: product.rentable ? "Rental available" : "Connected item",
+  image: product.images?.[0]?.url || generatorImage,
+  tags: product.tags || [],
+  rating: 0,
+  reviews: 0,
+  rentable: product.rentable,
+  description: product.description || "",
+  specs: Object.fromEntries(
+    Object.entries(product.attributes || {}).map(([key, value]) => [
+      key,
+      String(value ?? ""),
+    ])
+  ),
+});
+
+const mapPlatformCategory = (category: ProductCategory): Category => ({
+  name: category.name,
+  description: category.description || "",
+  image: generatorImage,
+  icon: category.name.slice(0, 2).toUpperCase(),
+});
+
+const getConfiguredContext = (): PosAdapterContext | undefined => {
+  const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
+  const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
+
+  if (!businessAccountId || !providerId) return undefined;
+
+  return {
+    businessAccountId,
+    providerId,
+  };
+};
+
+const createProductDataProvider = (options: ProductDataProviderOptions = {}) => {
+  let snapshot: ProductDataSnapshot = {
+    products: temporaryProductFallback,
+    categories: temporaryCategoryFallback.map(([name, description, image, icon]) => ({
+      name,
+      description,
+      image,
+      icon,
+    })),
+  };
+  let lastSyncResult: PlatformApiResult<PlatformSyncResult> | undefined;
+  let refreshPromise: Promise<ProductDataSnapshot> | undefined;
+  const listeners = new Set<(snapshot: ProductDataSnapshot) => void>();
+
+  const notify = () => {
+    replaceArrayContents(products, snapshot.products);
+    replaceArrayContents(categories, snapshot.categories);
+    replaceArrayContents(
+      departments,
+      snapshot.categories.map((category) => category.name)
+    );
+    emitProductDataChanged(snapshot);
+    listeners.forEach((listener) => listener(snapshot));
+  };
+
+  return {
+    getSnapshot() {
+      return snapshot;
+    },
+
+    getLastSyncResult() {
+      return lastSyncResult;
+    },
+
+    subscribe(listener: (snapshot: ProductDataSnapshot) => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+
+    async sync() {
+      const context = options.context || getConfiguredContext();
+
+      if (!context) {
+        lastSyncResult = {
+          success: false,
+          error: {
+            code: "PLATFORM_CONTEXT_REQUIRED",
+            message:
+              "Product synchronization requires a configured business account and provider.",
+          },
+        };
+        return lastSyncResult;
+      }
+
+      lastSyncResult = await createProductionSyncClient(options).syncProducts(
+        context
+      );
+      return lastSyncResult;
+    },
+
+    async refresh(refreshOptions: ProductRefreshOptions = {}) {
+      if (refreshPromise) return refreshPromise;
+
+      refreshPromise = (async () => {
+        const context = options.context || getConfiguredContext();
+
+        if (!context) return snapshot;
+
+        if (refreshOptions.synchronize) {
+          lastSyncResult = await createProductionSyncClient(options).syncProducts(
+            context
+          );
+        }
+
+        const api = createSmartCommercePlatformApi({
+          ...options,
+          context,
+        });
+
+        const [productResult, categoryResult] = await Promise.all([
+          api.searchProducts(),
+          api.listCategories(),
+        ]);
+
+        const nextProducts =
+          productResult.success && productResult.data.items.length
+            ? productResult.data.items.map(mapPlatformProduct)
+            : snapshot.products;
+        const nextCategories =
+          categoryResult.success && categoryResult.data.items.length
+            ? categoryResult.data.items.map(mapPlatformCategory)
+            : snapshot.categories;
+
+        snapshot = {
+          products: nextProducts.length ? nextProducts : temporaryProductFallback,
+          categories: nextCategories.length
+            ? nextCategories
+            : temporaryCategoryFallback.map(([name, description, image, icon]) => ({
+                name,
+                description,
+                image,
+                icon,
+              })),
+        };
+        notify();
+        return snapshot;
+      })().finally(() => {
+        refreshPromise = undefined;
+      });
+
+      return refreshPromise;
+    },
+
+    async createProduct(product: CommerceProduct) {
+      const context = options.context || getConfiguredContext();
+
+      if (!context) {
+        return {
+          success: false,
+          error: {
+            code: "PLATFORM_CONTEXT_REQUIRED",
+            message:
+              "Product creation requires a configured business account and provider.",
+          },
+        } as const;
+      }
+
+      const result = await createProductionSyncClient(options).createProduct(
+        context,
+        product
+      );
+
+      if (result.success) {
+        await this.refresh({ synchronize: true });
+      }
+
+      return result;
+    },
+
+    async updateProduct(
+      productId: string,
+      product: Partial<CommerceProduct>
+    ) {
+      const context = options.context || getConfiguredContext();
+
+      if (!context) {
+        return {
+          success: false,
+          error: {
+            code: "PLATFORM_CONTEXT_REQUIRED",
+            message:
+              "Product updates require a configured business account and provider.",
+          },
+        } as const;
+      }
+
+      const result = await createProductionSyncClient(options).updateProduct(
+        context,
+        productId,
+        product
+      );
+
+      if (result.success) {
+        await this.refresh({ synchronize: true });
+      }
+
+      return result;
+    },
+
+    async deleteProduct(productId: string) {
+      const context = options.context || getConfiguredContext();
+
+      if (!context) {
+        return {
+          success: false,
+          error: {
+            code: "PLATFORM_CONTEXT_REQUIRED",
+            message:
+              "Product deletion requires a configured business account and provider.",
+          },
+        } as const;
+      }
+
+      const result = await createProductionSyncClient(options).deleteProduct(
+        context,
+        productId
+      );
+
+      if (result.success) {
+        await this.refresh({ synchronize: true });
+      }
+
+      return result;
+    },
+  };
+};
+
+export const productDataProvider = createProductDataProvider();
+export const loadProductsFromPlatform = productDataProvider.refresh;
+export const syncProductsWithPlatform = productDataProvider.sync;
+export const createProductWithPlatform = productDataProvider.createProduct;
+export const updateProductWithPlatform = productDataProvider.updateProduct;
+export const deleteProductWithPlatform = productDataProvider.deleteProduct;
+export const products: Product[] = productDataProvider.getSnapshot().products;
+export const categories: Category[] = productDataProvider.getSnapshot().categories;
 export const departments = categories.map((category) => category.name);
 export const findProduct = (id: string) => products.find((product) => product.id === id);
+export const getProducts = () => productDataProvider.getSnapshot().products;
+export const getCategories = () => productDataProvider.getSnapshot().categories;
+export const getDepartments = () =>
+  productDataProvider.getSnapshot().categories.map((category) => category.name);
+export const getProductById = (id: string) =>
+  productDataProvider.getSnapshot().products.find((product) => product.id === id);
+
+if (typeof window !== "undefined" && getConfiguredContext()) {
+  window.setTimeout(() => {
+    void productDataProvider.refresh({ synchronize: true });
+  }, 0);
+}

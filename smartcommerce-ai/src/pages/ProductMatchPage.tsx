@@ -2,7 +2,7 @@ import { Camera, CheckCircle2, ImageUp, ScanSearch, Sparkles, Store, UserCheck }
 import { ChangeEvent, useRef, useState } from "react";
 import Container from "../components/shared/Container";
 import toolsImage from "../assets/smartcommerce-tools-optimized.jpg";
-import { products } from "../data/products";
+import { getProducts } from "../data/products";
 import { money } from "../lib/format";
 import { go, routeHref } from "../lib/router";
 
@@ -10,6 +10,7 @@ type Props = { onAdd: (id: string) => void };
 type MatchState = "idle" | "scanning" | "results";
 
 export default function ProductMatchPage({ onAdd }: Props) {
+  const products = getProducts();
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState(toolsImage);

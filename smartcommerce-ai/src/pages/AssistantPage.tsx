@@ -2,14 +2,16 @@ import { Bot, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import mascot from "../assets/brand/mascot-illustrated.jpeg";
-import { products } from "../data/products";
-import { rentals } from "../data/rentals";
+import { getProducts } from "../data/products";
+import { getRentals } from "../data/rentals";
 import { money } from "../lib/format";
 import { routeHref } from "../lib/router";
 
 const prompts = ["I need a generator for my farm.", "I need an excavator tomorrow.", "My pressure washer stopped working."];
 
 function responseFor(prompt: string) {
+  const products = getProducts();
+  const rentals = getRentals();
   const text = prompt.toLowerCase();
   if (text.includes("excavator") || text.includes("rent")) return { title: "An excavator is available tomorrow", summary: "The CAT 320 suits deep excavation and bulk earthmoving. For tighter access, consider the CAT 303.5 CR mini excavator.", items: rentals.filter((item) => item.id === "excavator" || item.id === "skid-steer").map((item) => `${item.name} - ${money(item.dailyRate)}/day`), action: "/rentals", label: "View Rental Fleet" };
   if (text.includes("repair") || text.includes("stopped") || text.includes("pressure washer")) return { title: "Let us diagnose the pressure washer", summary: "Start with a certified inspection. Bring the hose, gun, and power lead so the technician can test the complete system.", items: ["Choose a preferred branch", "Upload a photo of the model plate", "Typical turnaround: 3 to 5 business days"], action: "/repairs", label: "Book a Repair" };

@@ -1,6 +1,7 @@
-import { rentals } from "../data/rentals";
+import { getRentals } from "../data/rentals";
 
 export default function RentalSection() {
+  const rentals = getRentals();
   return (
     <section className="section rental-section" id="rentals">
       <div className="section-heading">

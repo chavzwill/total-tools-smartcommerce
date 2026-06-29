@@ -1,8 +1,7 @@
-import { departments } from "../data/products";
-
-const visibleDepartments = departments.slice(0, 7);
+import { getDepartments } from "../data/products";
 
 export default function DepartmentGrid() {
+  const visibleDepartments = getDepartments().slice(0, 7);
   return (
     <section className="category-section" id="commercial" aria-labelledby="category-heading">
       <div className="section-intro split-intro">

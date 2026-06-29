@@ -3,9 +3,10 @@ import { useMemo, useState } from "react";
 import CategoryCard from "../components/demo/CategoryCard";
 import ProductTile from "../components/demo/ProductTile";
 import Container from "../components/shared/Container";
-import { categories, products } from "../data/products";
+import { getCategories, getProducts } from "../data/products";
 import { slugify } from "../lib/format";
 import { routeHref } from "../lib/router";
+import type { Product } from "../types";
 
 const subcategories: Record<string, string[]> = {
   generators: ["Portable Generators", "Diesel Generators", "Inverter Generators", "Commercial Generators", "Generator Accessories"],
@@ -20,7 +21,7 @@ type Actions = {
   onAdd: (id: string) => void;
 };
 
-function ProductResults({ items, title, description, actions }: { items: typeof products; title: string; description: string; actions: Actions }) {
+function ProductResults({ items, title, description, actions }: { items: Product[]; title: string; description: string; actions: Actions }) {
   const [filter, setFilter] = useState("");
   const visible = useMemo(() => items.filter((product) => `${product.name} ${product.category} ${product.tags.join(" ")}`.toLowerCase().includes(filter.toLowerCase())), [filter, items]);
   return (
@@ -36,10 +37,13 @@ function ProductResults({ items, title, description, actions }: { items: typeof 
 }
 
 export function ProductsPage({ actions }: { actions: Actions }) {
+  const products = getProducts();
   return <ProductResults items={products} title="Products" description="Professional products for construction, industrial, commercial, and home projects." actions={actions} />;
 }
 
 export function CategoryPage({ slug, subcategory, actions }: { slug: string; subcategory?: string; actions: Actions }) {
+  const categories = getCategories();
+  const products = getProducts();
   const category = categories.find((item) => slugify(item.name) === slug);
   const categoryProducts = products.filter((product) => category && (product.category === category.name || product.department === category.name || product.tags.includes(slug.split("-")[0])));
   const fallback = categoryProducts.length ? categoryProducts : products.filter((product) => product.tags.some((tag) => category?.name.toLowerCase().includes(tag)));
@@ -48,10 +52,12 @@ export function CategoryPage({ slug, subcategory, actions }: { slug: string; sub
 }
 
 export function CategoriesPage() {
+  const categories = getCategories();
   return <div className="demo-page"><section className="demo-page-hero"><Container><span>Departments</span><h1>Shop by category</h1><p>Move from job requirement to the right range in a few confident clicks.</p></Container></section><Container className="demo-page-content"><div className="demo-category-grid">{categories.map((category) => <CategoryCard category={category} key={category.name} />)}</div></Container></div>;
 }
 
 export function SearchPage({ query, actions }: { query: string; actions: Actions }) {
+  const products = getProducts();
   const normalized = query.toLowerCase();
   const matches = products.filter((product) => `${product.name} ${product.category} ${product.tags.join(" ")}`.toLowerCase().includes(normalized));
   return <ProductResults items={matches} title={`Search results for "${query}"`} description="Results are matched against the local executive demo catalog." actions={actions} />;

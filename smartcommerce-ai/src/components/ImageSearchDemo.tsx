@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { products } from "../data/products";
+import { getProducts } from "../data/products";
 import ProductCard from "./ProductCard";
-
-const matches = products.filter((product) => product.tags.includes("fitting") || product.tags.includes("picture"));
 
 export default function ImageSearchDemo() {
   const [showMatches, setShowMatches] = useState(false);
+  const matches = getProducts().filter((product) => product.tags.includes("fitting") || product.tags.includes("picture"));
 
   return (
     <section className="section image-search" id="image-search">

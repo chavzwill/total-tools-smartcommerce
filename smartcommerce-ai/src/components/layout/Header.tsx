@@ -10,8 +10,7 @@ const navigation = [
   { label: "Rentals", href: "/rentals" },
   { label: "Repairs", href: "/repairs" },
   { label: "Commercial", href: "/commercial" },
-  { label: "AI Assistant", href: "/assistant" },
-  { label: "Deals", href: "/products?filter=deals" }
+  { label: "AI Assistant", href: "/assistant" }
 ];
 
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
@@ -54,7 +53,7 @@ export default function Header() {
       </Container>
       <Container size="wide" className="tt-nav-wrap">
         <nav className="tt-nav" aria-label="Main navigation">
-          {navigation.map((item) => <a className={item.label === "Deals" ? "tt-nav__deal" : ""} href={routeHref(item.href)} key={item.label}>{item.label}</a>)}
+          {navigation.map((item) => <a href={routeHref(item.href)} key={item.label}>{item.label}</a>)}
         </nav>
       </Container>
     </header>

@@ -1,8 +1,8 @@
 import { Bot, CheckCircle2, PackageCheck, ShieldCheck, Store, Truck, Wrench } from "lucide-react";
 import mascot from "../../assets/brand/mascot-illustrated.jpeg";
 import repairImage from "../../assets/services/repairs-service.jpg";
-import { categories, products } from "../../data/products";
-import { rentals } from "../../data/rentals";
+import { getCategories, getProducts } from "../../data/products";
+import { getRentals } from "../../data/rentals";
 import { routeHref } from "../../lib/router";
 import CategoryCard from "../demo/CategoryCard";
 import ProductTile from "../demo/ProductTile";
@@ -31,6 +31,10 @@ const aiExamples = [
 ] as const;
 
 export default function CommerceSections(props: Props) {
+  const categories = getCategories();
+  const products = getProducts();
+  const rentals = getRentals();
+
   return <>
     <section className="home-promises"><Container size="wide">{promises.map(([Icon, label]) => <div key={label}><Icon size={18} /><span>{label}</span></div>)}</Container></section>
     <section className="home-merch-section"><Container size="wide"><SectionHeader eyebrow="Featured Categories" title="Shop by the work ahead." description="Fast paths into the departments Jamaican homes, trades, and businesses rely on." /><div className="home-featured-categories">{categories.slice(0, 6).map((category) => <CategoryCard category={category} key={category.name} />)}</div><a className="demo-text-link" href={routeHref("/categories")}>Browse all categories</a></Container></section>

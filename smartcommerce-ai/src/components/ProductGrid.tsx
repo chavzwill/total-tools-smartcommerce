@@ -1,7 +1,8 @@
-import { products } from "../data/products";
+import { getProducts } from "../data/products";
 import ProductCard from "./ProductCard";
 
 export default function ProductGrid() {
+  const products = getProducts();
   return (
     <section className="product-section" id="products" aria-labelledby="product-heading">
       <div className="section-intro split-intro">
