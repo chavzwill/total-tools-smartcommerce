@@ -3,18 +3,20 @@ import { Dispatch, FormEvent, SetStateAction, useRef } from "react";
 import { go } from "../lib/router";
 
 const examples = [
-  "Generator for my house",
+  "Best generator for home backup",
   "Rent an excavator",
-  "Book a repair",
-  "Find pressure washer",
-  "Electrical supplies",
-  "Concrete mixer"
+  "Book a repair for my pressure washer",
+  "Compare cordless drills for contractors",
 ];
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
 
-type Props = { prompt: string; setPrompt: Dispatch<SetStateAction<string>> };
+type Props = {
+  prompt: string;
+  setPrompt: Dispatch<SetStateAction<string>>;
+  onCommandFocusChange?: (active: boolean) => void;
+};
 
-export default function HeroAdvisor({ prompt, setPrompt }: Props) {
+export default function HeroAdvisor({ prompt, setPrompt, onCommandFocusChange }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   function ask(event: FormEvent) {
@@ -26,7 +28,14 @@ export default function HeroAdvisor({ prompt, setPrompt }: Props) {
   }
 
   return (
-    <div className="hero-advisor hero-advisor--integrated">
+    <div
+      className="hero-advisor hero-advisor--integrated"
+      onFocusCapture={() => onCommandFocusChange?.(true)}
+      onBlurCapture={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        onCommandFocusChange?.(false);
+      }}
+    >
       <form className="advisor-input-row" onSubmit={ask}>
         <Search size={20} aria-hidden="true" />
         <label className="tt-sr-only" htmlFor="hero-ai-input">Tell us what you need</label>

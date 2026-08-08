@@ -23,7 +23,7 @@ export default function HomePage(props: Props) {
       <section className="home-categories" aria-labelledby="home-categories-title">
         <Container size="wide">
           <div className="home-categories__heading"><div><span>Shop by category</span><h2 id="home-categories-title">Go straight to what you need.</h2></div><a href={routeHref("/categories")}>View all categories</a></div>
-          <div className="home-category-links">{categories.map((category) => <a href={routeHref(`/category/${slugify(category.name)}`)} key={category.name}><b>{category.icon}</b><span>{category.name}<small>{category.description}</small></span></a>)}</div>
+          <div className="home-category-links">{categories.map((category) => <a href={routeHref(`/category/${slugify(category.name)}`)} key={category.name}><b>{category.icon}</b><span>{category.name}</span></a>)}</div>
         </Container>
       </section>
       <CommerceSections {...props} />
