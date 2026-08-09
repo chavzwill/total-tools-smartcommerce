@@ -90,6 +90,19 @@ export type PlatformBackendService = {
     request: Request,
     productId: PlatformEntityId
   ): Promise<PlatformApiResult<CommerceProduct>>;
+  createProduct(
+    request: Request,
+    input: CommerceProduct
+  ): Promise<PlatformApiResult<CommerceProduct>>;
+  updateProduct(
+    request: Request,
+    productId: PlatformEntityId,
+    input: Partial<CommerceProduct>
+  ): Promise<PlatformApiResult<CommerceProduct>>;
+  deleteProduct(
+    request: Request,
+    productId: PlatformEntityId
+  ): Promise<PlatformApiResult<{ id: PlatformEntityId }>>;
   listRentalAssets(
     request: Request,
     query?: RentalAssetQuery
@@ -98,6 +111,19 @@ export type PlatformBackendService = {
     request: Request,
     rentalAssetId: PlatformEntityId
   ): Promise<PlatformApiResult<RentalAsset>>;
+  createRentalAsset(
+    request: Request,
+    input: RentalAsset
+  ): Promise<PlatformApiResult<RentalAsset>>;
+  updateRentalAsset(
+    request: Request,
+    rentalAssetId: PlatformEntityId,
+    input: Partial<RentalAsset>
+  ): Promise<PlatformApiResult<RentalAsset>>;
+  deleteRentalAsset(
+    request: Request,
+    rentalAssetId: PlatformEntityId
+  ): Promise<PlatformApiResult<{ id: PlatformEntityId }>>;
   getRentalAvailability(
     request: Request,
     query: RentalAvailabilityQuery
@@ -109,6 +135,19 @@ export type PlatformBackendService = {
   listRepairCatalog(
     request: Request
   ): Promise<PlatformApiResult<PlatformPage<RepairType>>>;
+  createRepairCatalogItem(
+    request: Request,
+    input: RepairType
+  ): Promise<PlatformApiResult<RepairType>>;
+  updateRepairCatalogItem(
+    request: Request,
+    repairTypeId: PlatformEntityId,
+    input: Partial<RepairType>
+  ): Promise<PlatformApiResult<RepairType>>;
+  deleteRepairCatalogItem(
+    request: Request,
+    repairTypeId: PlatformEntityId
+  ): Promise<PlatformApiResult<{ id: PlatformEntityId }>>;
   createRepairRequest(
     request: Request,
     input: RepairRequest

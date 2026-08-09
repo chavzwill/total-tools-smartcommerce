@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import generatorImage from "../assets/generator-recommendation.png";
-import { demoPrompts, getAdvisorResponse } from "../lib/advisor";
+import { advisorPrompts, getAdvisorResponse, type AdvisorUiResult } from "../lib/advisor";
 
 type AIAdvisorProps = { variant?: "hero" | "section" };
 
@@ -14,9 +14,28 @@ const consultantPrompts = [
 ];
 
 export default function AIAdvisor({ variant = "section" }: AIAdvisorProps) {
-  const [prompt, setPrompt] = useState(demoPrompts[0]);
-  const response = useMemo(() => getAdvisorResponse(prompt), [prompt]);
-  const product = response.recommendedProducts[0];
+  const [prompt, setPrompt] = useState(advisorPrompts[0]);
+  const [response, setResponse] = useState<AdvisorUiResult | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState("");
+
+  const product = response?.products[0];
+
+  const submitPrompt = async (nextPrompt = prompt) => {
+    setStatus("loading");
+    setError("");
+    const result = await getAdvisorResponse(nextPrompt);
+
+    if (!result.success) {
+      setStatus("error");
+      setResponse(null);
+      setError(result.error.message);
+      return;
+    }
+
+    setStatus("idle");
+    setResponse(result.data);
+  };
 
   return (
     <section className={variant === "hero" ? "consultant" : "advisor-section"} id="advisor" aria-label="Total Tools AI Advisor">
@@ -29,27 +48,61 @@ export default function AIAdvisor({ variant = "section" }: AIAdvisorProps) {
         <label htmlFor="advisor-prompt">What are you working on today?</label>
         <div className="prompt-field">
           <textarea id="advisor-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={2} />
-          <button type="button" aria-label="Submit request">{"->"}</button>
+          <button type="button" aria-label="Submit request" onClick={() => void submitPrompt()}>
+            {status === "loading" ? "..." : "->"}
+          </button>
         </div>
       </div>
       <div className="suggestion-chips" aria-label="Suggested requests">
         {consultantPrompts.map((item, index) => (
-          <button className={index === 0 ? "active" : ""} key={item} onClick={() => setPrompt(index < demoPrompts.length ? demoPrompts[index] : item)}>{item}</button>
+          <button
+            className={index === 0 ? "active" : ""}
+            key={item}
+            onClick={() => {
+              const nextPrompt = index < advisorPrompts.length ? advisorPrompts[index] : item;
+              setPrompt(nextPrompt);
+              void submitPrompt(nextPrompt);
+            }}
+          >
+            {item}
+          </button>
         ))}
       </div>
+      {status === "error" && (
+        <p role="status">Assistant unavailable: {error}. Verify provider connectivity and retry.</p>
+      )}
+      {response && !response.products.length && !response.rentals.length && (
+        <p role="status">{response.summary}</p>
+      )}
       {product && (
         <article className="ai-recommendation">
           <img src={generatorImage} alt="Portable site generator recommended by Total Tools AI" />
           <div className="recommendation-copy">
             <span className="recommendation-label">AI recommended</span>
             <h3>{product.name}</h3>
-            <p>{response.needSummary}</p>
-            <div className="recommendation-meta"><strong>${product.price.toLocaleString()}</strong><span>{product.stockStatus}</span></div>
+            <p>{response.summary}</p>
+            <div className="recommendation-meta">
+              <strong>
+                $
+                {(
+                  product.pricing?.find((value) => value.salePrice !== undefined)
+                    ?.salePrice ??
+                  product.pricing?.find((value) => value.listPrice !== undefined)
+                    ?.listPrice ??
+                  0
+                ).toLocaleString()}
+              </strong>
+              <span>{product.active ? "Active" : "Inactive"}</span>
+            </div>
           </div>
         </article>
       )}
       <footer className="consultant-footer">
-        <span>{response.addOns.length} matched accessories</span>
+        <span>
+          {response
+            ? `${response.products.length + response.rentals.length} matched recommendations`
+            : "No recommendations yet"}
+        </span>
         <a href="#products">View full recommendation {"->"}</a>
       </footer>
     </section>

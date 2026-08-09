@@ -139,14 +139,17 @@ const getConfiguredContext = (): PosAdapterContext | undefined => {
 };
 
 const createProductDataProvider = (options: ProductDataProviderOptions = {}) => {
+  const configuredContext = options.context || getConfiguredContext();
   let snapshot: ProductDataSnapshot = {
-    products: temporaryProductFallback,
-    categories: temporaryCategoryFallback.map(([name, description, image, icon]) => ({
-      name,
-      description,
-      image,
-      icon,
-    })),
+    products: configuredContext ? [] : temporaryProductFallback,
+    categories: configuredContext
+      ? []
+      : temporaryCategoryFallback.map(([name, description, image, icon]) => ({
+          name,
+          description,
+          image,
+          icon,
+        })),
   };
   let lastSyncResult: PlatformApiResult<PlatformSyncResult> | undefined;
   let refreshPromise: Promise<ProductDataSnapshot> | undefined;
@@ -222,25 +225,16 @@ const createProductDataProvider = (options: ProductDataProviderOptions = {}) => 
           api.listCategories(),
         ]);
 
-        const nextProducts =
-          productResult.success && productResult.data.items.length
-            ? productResult.data.items.map(mapPlatformProduct)
-            : snapshot.products;
-        const nextCategories =
-          categoryResult.success && categoryResult.data.items.length
-            ? categoryResult.data.items.map(mapPlatformCategory)
-            : snapshot.categories;
+        const nextProducts = productResult.success
+          ? productResult.data.items.map(mapPlatformProduct)
+          : [];
+        const nextCategories = categoryResult.success
+          ? categoryResult.data.items.map(mapPlatformCategory)
+          : [];
 
         snapshot = {
-          products: nextProducts.length ? nextProducts : temporaryProductFallback,
-          categories: nextCategories.length
-            ? nextCategories
-            : temporaryCategoryFallback.map(([name, description, image, icon]) => ({
-                name,
-                description,
-                image,
-                icon,
-              })),
+          products: nextProducts,
+          categories: nextCategories,
         };
         notify();
         return snapshot;

@@ -120,7 +120,8 @@ const mapPlatformRentalAsset = (asset: RentalAsset): RentalItem => ({
 });
 
 const createRentalDataProvider = (options: RentalDataProviderOptions = {}) => {
-  let snapshot = temporaryRentalFallback;
+  const configuredContext = options.context || getConfiguredContext();
+  let snapshot = configuredContext ? [] : temporaryRentalFallback;
   let lastSyncResult: PlatformApiResult<PlatformSyncResult> | undefined;
   let refreshPromise: Promise<RentalItem[]> | undefined;
   const listeners = new Set<(snapshot: RentalItem[]) => void>();
@@ -187,10 +188,10 @@ const createRentalDataProvider = (options: RentalDataProviderOptions = {}) => {
 
         const result = await api.listRentalAssets();
 
-        if (result.success && result.data.items.length) {
+        if (result.success) {
           snapshot = result.data.items.map(mapPlatformRentalAsset);
-        } else if (!snapshot.length) {
-          snapshot = temporaryRentalFallback;
+        } else {
+          snapshot = [];
         }
 
         notify();

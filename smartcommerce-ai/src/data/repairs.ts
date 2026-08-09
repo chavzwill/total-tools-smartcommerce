@@ -71,7 +71,8 @@ const getConfiguredContext = (): PosAdapterContext | undefined => {
 };
 
 const createRepairDataProvider = (options: RepairDataProviderOptions = {}) => {
-  let snapshot = temporaryRepairFallback;
+  const configuredContext = options.context || getConfiguredContext();
+  let snapshot = configuredContext ? [] : temporaryRepairFallback;
   let lastSyncResult: PlatformApiResult<PlatformSyncResult> | undefined;
   let refreshPromise: Promise<RepairType[]> | undefined;
   const listeners = new Set<(snapshot: RepairType[]) => void>();
@@ -133,12 +134,10 @@ const createRepairDataProvider = (options: RepairDataProviderOptions = {}) => {
           const catalogResult =
             await createProductionSyncClient(options).listRepairCatalog(context);
 
-          if (catalogResult.success && catalogResult.data.items.length) {
-            snapshot = catalogResult.data.items;
-          }
+          snapshot = catalogResult.success ? catalogResult.data.items : [];
+        } else if (!snapshot.length) {
+          snapshot = temporaryRepairFallback;
         }
-
-        if (!snapshot.length) snapshot = temporaryRepairFallback;
         notify();
         return snapshot;
       })().finally(() => {

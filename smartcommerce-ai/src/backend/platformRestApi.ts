@@ -1,35 +1,44 @@
 import type {
   CommercialQuoteRequest,
+  CommerceProduct,
   CustomerAccount,
   PlatformApiResult,
   PlatformInvoice,
   PlatformOrder,
   PlatformWebhookEvent,
+  RentalAsset,
   RentalReservationRequest,
   RepairRequest,
 } from "../platform";
+import type { RepairType } from "../types";
 import type {
   AssistantRequest,
   CheckoutRequest,
   PlatformBackendService,
 } from "./platformBackendTypes";
 import {
-  pendingProductMutation,
-  pendingRentalAssetMutation,
-  pendingRepairCatalogMutation,
   pendingInvoiceLookup,
 } from "./platformBackendService";
 
-const json = <T>(result: PlatformApiResult<T>, init?: ResponseInit) =>
-  new Response(JSON.stringify(result), {
+const getRequestId = (request: Request) =>
+  request.headers.get("x-request-id") ||
+  `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const json = <T>(
+  result: PlatformApiResult<T>,
+  init?: ResponseInit,
+  requestId = result.requestId || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+) =>
+  new Response(JSON.stringify({ ...result, requestId }), {
     status: result.success ? init?.status || 200 : init?.status || 400,
     headers: {
       "Content-Type": "application/json",
+      "X-Request-Id": requestId,
       ...init?.headers,
     },
   });
 
-const notFound = (path: string) =>
+const notFound = (path: string, requestId?: string) =>
   json(
     {
       success: false,
@@ -38,10 +47,11 @@ const notFound = (path: string) =>
         message: `No platform endpoint is registered for ${path}.`,
       },
     },
-    { status: 404 }
+    { status: 404 },
+    requestId
   );
 
-const methodNotAllowed = (method: string, path: string) =>
+const methodNotAllowed = (method: string, path: string, requestId?: string) =>
   json(
     {
       success: false,
@@ -50,7 +60,22 @@ const methodNotAllowed = (method: string, path: string) =>
         message: `${method} is not allowed for ${path}.`,
       },
     },
-    { status: 405 }
+    { status: 405 },
+    requestId
+  );
+
+const unauthorized = (requestId: string) =>
+  json(
+    {
+      success: false,
+      error: {
+        code: "PLATFORM_CONTEXT_HEADERS_REQUIRED",
+        message:
+          "X-Business-Account-Id and X-Provider-Id headers are required for platform operations.",
+      },
+    },
+    { status: 401 },
+    requestId
   );
 
 const readJson = async <T>(request: Request): Promise<T> => {
@@ -65,10 +90,17 @@ export async function handlePlatformRestRequest(
   request: Request,
   service: PlatformBackendService
 ): Promise<Response> {
+  const requestId = getRequestId(request);
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api/, "");
   const segments = path.split("/").filter(Boolean);
   const method = request.method.toUpperCase();
+  const businessAccountId = request.headers.get("x-business-account-id");
+  const providerId = request.headers.get("x-provider-id");
+
+  if (path.startsWith("/platform") && (!businessAccountId || !providerId)) {
+    return unauthorized(requestId);
+  }
 
   if (path === "/platform/sync/products" && method === "POST") {
     return json(await service.syncProducts(request));
@@ -86,7 +118,15 @@ export async function handlePlatformRestRequest(
     if (method === "GET") {
       return json(await service.searchProducts(request, paramsFromSearch(url)));
     }
-    if (method === "POST") return json(pendingProductMutation(), { status: 501 });
+    if (method === "POST") {
+      return json(
+        await service.createProduct(
+          request,
+          await readJson<CommerceProduct>(request)
+        ),
+        { status: 201 }
+      );
+    }
     return methodNotAllowed(method, path);
   }
 
@@ -94,8 +134,17 @@ export async function handlePlatformRestRequest(
     if (method === "GET") {
       return json(await service.getProductById(request, segments[2]));
     }
-    if (method === "PUT" || method === "DELETE") {
-      return json(pendingProductMutation(), { status: 501 });
+    if (method === "PUT") {
+      return json(
+        await service.updateProduct(
+          request,
+          segments[2],
+          await readJson<Partial<CommerceProduct>>(request)
+        )
+      );
+    }
+    if (method === "DELETE") {
+      return json(await service.deleteProduct(request, segments[2]));
     }
     return methodNotAllowed(method, path);
   }
@@ -105,7 +154,13 @@ export async function handlePlatformRestRequest(
       return json(await service.listRentalAssets(request, paramsFromSearch(url)));
     }
     if (method === "POST") {
-      return json(pendingRentalAssetMutation(), { status: 501 });
+      return json(
+        await service.createRentalAsset(
+          request,
+          await readJson<RentalAsset>(request)
+        ),
+        { status: 201 }
+      );
     }
     return methodNotAllowed(method, path);
   }
@@ -115,7 +170,13 @@ export async function handlePlatformRestRequest(
       return json(await service.listRentalAssets(request, paramsFromSearch(url)));
     }
     if (method === "POST") {
-      return json(pendingRentalAssetMutation(), { status: 501 });
+      return json(
+        await service.createRentalAsset(
+          request,
+          await readJson<RentalAsset>(request)
+        ),
+        { status: 201 }
+      );
     }
     return methodNotAllowed(method, path);
   }
@@ -129,8 +190,17 @@ export async function handlePlatformRestRequest(
     if (method === "GET") {
       return json(await service.getRentalAssetById(request, segments[3]));
     }
-    if (method === "PUT" || method === "DELETE") {
-      return json(pendingRentalAssetMutation(), { status: 501 });
+    if (method === "PUT") {
+      return json(
+        await service.updateRentalAsset(
+          request,
+          segments[3],
+          await readJson<Partial<RentalAsset>>(request)
+        )
+      );
+    }
+    if (method === "DELETE") {
+      return json(await service.deleteRentalAsset(request, segments[3]));
     }
     return methodNotAllowed(method, path);
   }
@@ -163,7 +233,13 @@ export async function handlePlatformRestRequest(
   if (path === "/platform/repairs/catalog") {
     if (method === "GET") return json(await service.listRepairCatalog(request));
     if (method === "POST") {
-      return json(pendingRepairCatalogMutation(), { status: 501 });
+      return json(
+        await service.createRepairCatalogItem(
+          request,
+          await readJson<RepairType>(request)
+        ),
+        { status: 201 }
+      );
     }
     return methodNotAllowed(method, path);
   }
@@ -188,8 +264,17 @@ export async function handlePlatformRestRequest(
     segments[2] === "catalog" &&
     segments[3]
   ) {
-    if (method === "PUT" || method === "DELETE") {
-      return json(pendingRepairCatalogMutation(), { status: 501 });
+    if (method === "PUT") {
+      return json(
+        await service.updateRepairCatalogItem(
+          request,
+          segments[3],
+          await readJson<Partial<RepairType>>(request)
+        )
+      );
+    }
+    if (method === "DELETE") {
+      return json(await service.deleteRepairCatalogItem(request, segments[3]));
     }
     return methodNotAllowed(method, path);
   }
@@ -291,9 +376,7 @@ export async function handlePlatformRestRequest(
     segments[2]
   ) {
     if (method === "GET") {
-      return json(await service.getInvoiceById(request, segments[2]), {
-        status: 501,
-      });
+      return json(await service.getInvoiceById(request, segments[2]));
     }
     return methodNotAllowed(method, path);
   }
@@ -323,5 +406,5 @@ export async function handlePlatformRestRequest(
     );
   }
 
-  return notFound(path);
+  return notFound(path, requestId);
 }
