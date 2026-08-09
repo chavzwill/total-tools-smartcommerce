@@ -1,4 +1,5 @@
 import type { Branch, BusinessAccount, CommercialQuoteRequest, CommercialQuoteResult, CommerceProduct, CustomerAccount, InventoryAvailability, PlatformApiResult, PlatformEntityId, PlatformInvoice, PlatformMetadata, PlatformOrder, PlatformPage, PlatformSyncResult, PlatformWebhookEvent, ProductCategory, RentalAsset, RentalReservationRequest, RentalReservationResult, RepairJob, RepairRequest } from "./contracts";
+import type { RepairType } from "../types";
 export type PosAdapterCapabilities = {
     branches?: boolean;
     categories?: boolean;
@@ -97,6 +98,23 @@ export interface PosAdapter {
     createOrder(context: PosAdapterContext, order: PlatformOrder): Promise<PlatformApiResult<PlatformOrder>>;
     getOrderById(context: PosAdapterContext, orderId: PlatformEntityId): Promise<PlatformApiResult<PlatformOrder>>;
     createInvoice(context: PosAdapterContext, invoice: PlatformInvoice): Promise<PlatformApiResult<PlatformInvoice>>;
+    getInvoiceById?(context: PosAdapterContext, invoiceId: PlatformEntityId): Promise<PlatformApiResult<PlatformInvoice>>;
+    createProduct?(context: PosAdapterContext, product: CommerceProduct): Promise<PlatformApiResult<CommerceProduct>>;
+    updateProduct?(context: PosAdapterContext, productId: PlatformEntityId, product: Partial<CommerceProduct>): Promise<PlatformApiResult<CommerceProduct>>;
+    deleteProduct?(context: PosAdapterContext, productId: PlatformEntityId): Promise<PlatformApiResult<{
+        id: PlatformEntityId;
+    }>>;
+    createRentalAsset?(context: PosAdapterContext, rentalAsset: RentalAsset): Promise<PlatformApiResult<RentalAsset>>;
+    updateRentalAsset?(context: PosAdapterContext, rentalAssetId: PlatformEntityId, rentalAsset: Partial<RentalAsset>): Promise<PlatformApiResult<RentalAsset>>;
+    deleteRentalAsset?(context: PosAdapterContext, rentalAssetId: PlatformEntityId): Promise<PlatformApiResult<{
+        id: PlatformEntityId;
+    }>>;
+    listRepairCatalog?(context: PosAdapterContext): Promise<PlatformApiResult<PlatformPage<RepairType>>>;
+    createRepairCatalogItem?(context: PosAdapterContext, repairType: RepairType): Promise<PlatformApiResult<RepairType>>;
+    updateRepairCatalogItem?(context: PosAdapterContext, repairTypeId: PlatformEntityId, repairType: Partial<RepairType>): Promise<PlatformApiResult<RepairType>>;
+    deleteRepairCatalogItem?(context: PosAdapterContext, repairTypeId: PlatformEntityId): Promise<PlatformApiResult<{
+        id: PlatformEntityId;
+    }>>;
     handleWebhook(context: PosAdapterContext, event: PlatformWebhookEvent): Promise<PlatformApiResult<PlatformSyncResult>>;
     getBusinessAccount?(context: PosAdapterContext): Promise<PlatformApiResult<BusinessAccount>>;
 }

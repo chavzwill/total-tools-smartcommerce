@@ -1,14 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createPlatformBackendService } from "./src/backend/platformBackendService";
-import { handlePlatformRestRequest } from "./src/backend/platformRestApi";
+import { createPlatformBackendService } from "./src/backend/platformBackendService.js";
+import { handlePlatformRestRequest } from "./src/backend/platformRestApi.js";
 import type {
   PlatformApiResult,
   PlatformSyncResult,
   PosAdapter,
   PosAdapterContext,
-} from "./src/platform";
+} from "./src/platform/index.js";
 
 const unsupported = <T,>(operation: string): PlatformApiResult<T> => ({
   success: false,

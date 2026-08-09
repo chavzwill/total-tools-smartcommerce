@@ -5,5 +5,10 @@
     "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true
   },
-  "include": ["vite.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "src/backend/**/*.ts",
+    "src/platform/**/*.ts",
+    "src/types.ts"
+  ]
 }

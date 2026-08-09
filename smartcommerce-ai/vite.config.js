@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { createPlatformBackendService } from "./src/backend/platformBackendService";
-import { handlePlatformRestRequest } from "./src/backend/platformRestApi";
+import { createPlatformBackendService } from "./src/backend/platformBackendService.js";
+import { handlePlatformRestRequest } from "./src/backend/platformRestApi.js";
 const unsupported = (operation) => ({
     success: false,
     error: {

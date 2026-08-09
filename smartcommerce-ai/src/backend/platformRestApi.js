@@ -1,35 +1,51 @@
-import { pendingProductMutation, pendingRentalAssetMutation, pendingRepairCatalogMutation, pendingInvoiceLookup, } from "./platformBackendService";
-const json = (result, init) => new Response(JSON.stringify(result), {
+import { pendingInvoiceLookup, } from "./platformBackendService";
+const getRequestId = (request) => request.headers.get("x-request-id") ||
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const json = (result, init, requestId = result.requestId || `${Date.now()}-${Math.random().toString(16).slice(2)}`) => new Response(JSON.stringify({ ...result, requestId }), {
     status: result.success ? init?.status || 200 : init?.status || 400,
     headers: {
         "Content-Type": "application/json",
+        "X-Request-Id": requestId,
         ...init?.headers,
     },
 });
-const notFound = (path) => json({
+const notFound = (path, requestId) => json({
     success: false,
     error: {
         code: "ENDPOINT_NOT_FOUND",
         message: `No platform endpoint is registered for ${path}.`,
     },
-}, { status: 404 });
-const methodNotAllowed = (method, path) => json({
+}, { status: 404 }, requestId);
+const methodNotAllowed = (method, path, requestId) => json({
     success: false,
     error: {
         code: "METHOD_NOT_ALLOWED",
         message: `${method} is not allowed for ${path}.`,
     },
-}, { status: 405 });
+}, { status: 405 }, requestId);
+const unauthorized = (requestId) => json({
+    success: false,
+    error: {
+        code: "PLATFORM_CONTEXT_HEADERS_REQUIRED",
+        message: "X-Business-Account-Id and X-Provider-Id headers are required for platform operations.",
+    },
+}, { status: 401 }, requestId);
 const readJson = async (request) => {
     const body = await request.text();
     return body ? JSON.parse(body) : {};
 };
 const paramsFromSearch = (url) => Object.fromEntries(url.searchParams.entries());
 export async function handlePlatformRestRequest(request, service) {
+    const requestId = getRequestId(request);
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api/, "");
     const segments = path.split("/").filter(Boolean);
     const method = request.method.toUpperCase();
+    const businessAccountId = request.headers.get("x-business-account-id");
+    const providerId = request.headers.get("x-provider-id");
+    if (path.startsWith("/platform") && (!businessAccountId || !providerId)) {
+        return unauthorized(requestId);
+    }
     if (path === "/platform/sync/products" && method === "POST") {
         return json(await service.syncProducts(request));
     }
@@ -43,16 +59,20 @@ export async function handlePlatformRestRequest(request, service) {
         if (method === "GET") {
             return json(await service.searchProducts(request, paramsFromSearch(url)));
         }
-        if (method === "POST")
-            return json(pendingProductMutation(), { status: 501 });
+        if (method === "POST") {
+            return json(await service.createProduct(request, await readJson(request)), { status: 201 });
+        }
         return methodNotAllowed(method, path);
     }
     if (segments[0] === "platform" && segments[1] === "products" && segments[2]) {
         if (method === "GET") {
             return json(await service.getProductById(request, segments[2]));
         }
-        if (method === "PUT" || method === "DELETE") {
-            return json(pendingProductMutation(), { status: 501 });
+        if (method === "PUT") {
+            return json(await service.updateProduct(request, segments[2], await readJson(request)));
+        }
+        if (method === "DELETE") {
+            return json(await service.deleteProduct(request, segments[2]));
         }
         return methodNotAllowed(method, path);
     }
@@ -61,7 +81,7 @@ export async function handlePlatformRestRequest(request, service) {
             return json(await service.listRentalAssets(request, paramsFromSearch(url)));
         }
         if (method === "POST") {
-            return json(pendingRentalAssetMutation(), { status: 501 });
+            return json(await service.createRentalAsset(request, await readJson(request)), { status: 201 });
         }
         return methodNotAllowed(method, path);
     }
@@ -70,7 +90,7 @@ export async function handlePlatformRestRequest(request, service) {
             return json(await service.listRentalAssets(request, paramsFromSearch(url)));
         }
         if (method === "POST") {
-            return json(pendingRentalAssetMutation(), { status: 501 });
+            return json(await service.createRentalAsset(request, await readJson(request)), { status: 201 });
         }
         return methodNotAllowed(method, path);
     }
@@ -81,8 +101,11 @@ export async function handlePlatformRestRequest(request, service) {
         if (method === "GET") {
             return json(await service.getRentalAssetById(request, segments[3]));
         }
-        if (method === "PUT" || method === "DELETE") {
-            return json(pendingRentalAssetMutation(), { status: 501 });
+        if (method === "PUT") {
+            return json(await service.updateRentalAsset(request, segments[3], await readJson(request)));
+        }
+        if (method === "DELETE") {
+            return json(await service.deleteRentalAsset(request, segments[3]));
         }
         return methodNotAllowed(method, path);
     }
@@ -96,7 +119,7 @@ export async function handlePlatformRestRequest(request, service) {
         if (method === "GET")
             return json(await service.listRepairCatalog(request));
         if (method === "POST") {
-            return json(pendingRepairCatalogMutation(), { status: 501 });
+            return json(await service.createRepairCatalogItem(request, await readJson(request)), { status: 201 });
         }
         return methodNotAllowed(method, path);
     }
@@ -112,8 +135,11 @@ export async function handlePlatformRestRequest(request, service) {
         segments[1] === "repairs" &&
         segments[2] === "catalog" &&
         segments[3]) {
-        if (method === "PUT" || method === "DELETE") {
-            return json(pendingRepairCatalogMutation(), { status: 501 });
+        if (method === "PUT") {
+            return json(await service.updateRepairCatalogItem(request, segments[3], await readJson(request)));
+        }
+        if (method === "DELETE") {
+            return json(await service.deleteRepairCatalogItem(request, segments[3]));
         }
         return methodNotAllowed(method, path);
     }
@@ -171,9 +197,7 @@ export async function handlePlatformRestRequest(request, service) {
         segments[1] === "invoices" &&
         segments[2]) {
         if (method === "GET") {
-            return json(await service.getInvoiceById(request, segments[2]), {
-                status: 501,
-            });
+            return json(await service.getInvoiceById(request, segments[2]));
         }
         return methodNotAllowed(method, path);
     }
@@ -186,5 +210,5 @@ export async function handlePlatformRestRequest(request, service) {
     if (path === "/platform/integrations/webhooks" && method === "POST") {
         return json(await service.handleWebhook(request, await readJson(request)));
     }
-    return notFound(path);
+    return notFound(path, requestId);
 }
