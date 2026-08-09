@@ -23,6 +23,7 @@ import {
 } from "../apiClient";
 import type {
   CommerceProduct,
+  InventoryAvailability,
   PlatformApiResult,
   PlatformSyncResult,
   PosAdapterContext,
@@ -93,17 +94,76 @@ const emitProductDataChanged = (snapshot: ProductDataSnapshot) => {
   );
 };
 
-const mapPlatformProduct = (product: CommerceProduct): Product => ({
+const getPreferredBranchId = (): string | undefined =>
+  import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
+
+const getBranchIdFromMetadata = (
+  metadata: Record<string, string | number | boolean | null> | undefined
+): string | undefined => {
+  if (!metadata) return undefined;
+  const value = metadata.branchId;
+  return typeof value === "string" && value ? value : undefined;
+};
+
+const selectPriceForBranch = (
+  product: CommerceProduct,
+  branchId?: string
+): number => {
+  const pricing = product.pricing || [];
+  const branchPrice = branchId
+    ? pricing.find(
+        (price) => getBranchIdFromMetadata(price.metadata) === branchId
+      )
+    : undefined;
+  const fallbackPrice = pricing.find(
+    (price) => getBranchIdFromMetadata(price.metadata) === undefined
+  );
+  const selectedPrice = branchPrice || fallbackPrice || pricing[0];
+  return selectedPrice?.salePrice ?? selectedPrice?.listPrice ?? 0;
+};
+
+const toStockStatus = (
+  inventory: InventoryAvailability[] | undefined,
+  branchId?: string
+): string => {
+  if (!inventory?.length) return "Availability unavailable from connected provider";
+
+  const branchInventory = branchId
+    ? inventory.find((item) => item.branchId === branchId)
+    : undefined;
+  const selected = branchInventory || inventory[0];
+  const branchSuffix = selected.branchId ? ` - ${selected.branchId}` : "";
+  const quantitySuffix =
+    selected.quantityAvailable !== undefined
+      ? ` (${selected.quantityAvailable} available)`
+      : "";
+
+  switch (selected.status) {
+    case "in_stock":
+      return `In stock${branchSuffix}${quantitySuffix}`;
+    case "low_stock":
+      return `Low stock${branchSuffix}${quantitySuffix}`;
+    case "out_of_stock":
+      return `Out of stock${branchSuffix}`;
+    case "reserved":
+      return `Reserved${branchSuffix}${quantitySuffix}`;
+    default:
+      return `Availability: ${selected.status}${branchSuffix}${quantitySuffix}`;
+  }
+};
+
+const mapPlatformProduct = (
+  product: CommerceProduct,
+  inventory: InventoryAvailability[] | undefined,
+  branchId?: string
+): Product => ({
   id: product.id,
   name: product.name,
   sku: product.sku || product.id,
   category: product.categoryIds?.[0] || "Uncategorized",
   department: product.categoryIds?.[0] || "Products",
-  price:
-    product.pricing?.find((price) => price.salePrice !== undefined)?.salePrice ||
-    product.pricing?.find((price) => price.listPrice !== undefined)?.listPrice ||
-    0,
-  stockStatus: "Availability provided by connected system",
+  price: selectPriceForBranch(product, branchId),
+  stockStatus: toStockStatus(inventory, branchId),
   badge: product.rentable ? "Rental available" : "Connected item",
   image: product.images?.[0]?.url || generatorImage,
   tags: product.tags || [],
@@ -206,6 +266,7 @@ const createProductDataProvider = (options: ProductDataProviderOptions = {}) => 
 
       refreshPromise = (async () => {
         const context = options.context || getConfiguredContext();
+        const branchId = getPreferredBranchId();
 
         if (!context) return snapshot;
 
@@ -221,12 +282,25 @@ const createProductDataProvider = (options: ProductDataProviderOptions = {}) => 
         });
 
         const [productResult, categoryResult] = await Promise.all([
-          api.searchProducts(),
+          api.searchProducts({ branchId }),
           api.listCategories(),
         ]);
 
         const nextProducts = productResult.success
-          ? productResult.data.items.map(mapPlatformProduct)
+          ? await Promise.all(
+              productResult.data.items.map(async (platformProduct) => {
+                const inventoryResult = await api.getInventoryAvailability({
+                  productId: platformProduct.id,
+                  branchId,
+                });
+
+                const inventory = inventoryResult.success
+                  ? inventoryResult.data
+                  : undefined;
+
+                return mapPlatformProduct(platformProduct, inventory, branchId);
+              })
+            )
           : [];
         const nextCategories = categoryResult.success
           ? categoryResult.data.items.map(mapPlatformCategory)

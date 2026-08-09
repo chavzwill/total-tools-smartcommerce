@@ -87,6 +87,26 @@ export function createPlatformBackendService(
   };
 
   return {
+    async healthCheck(request) {
+      const context = await getContext(request);
+      return runtime.adapter.healthCheck(context);
+    },
+
+    async listBranches(request) {
+      const context = await getContext(request);
+      return runtime.adapter.listBranches(context);
+    },
+
+    async listCategories(request) {
+      const context = await getContext(request);
+      return runtime.adapter.listCategories(context);
+    },
+
+    async getInventoryAvailability(request, query) {
+      const context = await getContext(request);
+      return runtime.adapter.getInventoryAvailability(context, query);
+    },
+
     syncProducts(request) {
       return requestSync(request, "products");
     },

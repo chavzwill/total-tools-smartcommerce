@@ -30,6 +30,13 @@ const unauthorized = (requestId) => json({
         message: "X-Business-Account-Id and X-Provider-Id headers are required for platform operations.",
     },
 }, { status: 401 }, requestId);
+const badRequest = (message, requestId) => json({
+    success: false,
+    error: {
+        code: "BAD_REQUEST",
+        message,
+    },
+}, { status: 400 }, requestId);
 const readJson = async (request) => {
     const body = await request.text();
     return body ? JSON.parse(body) : {};
@@ -45,6 +52,33 @@ export async function handlePlatformRestRequest(request, service) {
     const providerId = request.headers.get("x-provider-id");
     if (path.startsWith("/platform") && (!businessAccountId || !providerId)) {
         return unauthorized(requestId);
+    }
+    if (path === "/platform/integrations/health" && method === "GET") {
+        return json(await service.healthCheck(request));
+    }
+    if (path === "/platform/branches" && method === "GET") {
+        return json(await service.listBranches(request));
+    }
+    if (path === "/platform/categories" && method === "GET") {
+        return json(await service.listCategories(request));
+    }
+    if (path === "/platform/inventory/availability" && method === "GET") {
+        const productId = url.searchParams.get("productId");
+        if (!productId) {
+            return badRequest("Query parameter productId is required for inventory availability.", requestId);
+        }
+        const quantityValue = url.searchParams.get("quantity");
+        const quantity = quantityValue === null || quantityValue === ""
+            ? undefined
+            : Number(quantityValue);
+        if (quantityValue !== null && Number.isNaN(quantity)) {
+            return badRequest("Query parameter quantity must be a number.", requestId);
+        }
+        return json(await service.getInventoryAvailability(request, {
+            productId,
+            branchId: url.searchParams.get("branchId") || undefined,
+            quantity,
+        }));
     }
     if (path === "/platform/sync/products" && method === "POST") {
         return json(await service.syncProducts(request));

@@ -78,6 +78,19 @@ const unauthorized = (requestId: string) =>
     requestId
   );
 
+const badRequest = (message: string, requestId?: string) =>
+  json(
+    {
+      success: false,
+      error: {
+        code: "BAD_REQUEST",
+        message,
+      },
+    },
+    { status: 400 },
+    requestId
+  );
+
 const readJson = async <T>(request: Request): Promise<T> => {
   const body = await request.text();
   return body ? (JSON.parse(body) as T) : ({} as T);
@@ -100,6 +113,46 @@ export async function handlePlatformRestRequest(
 
   if (path.startsWith("/platform") && (!businessAccountId || !providerId)) {
     return unauthorized(requestId);
+  }
+
+  if (path === "/platform/integrations/health" && method === "GET") {
+    return json(await service.healthCheck(request));
+  }
+
+  if (path === "/platform/branches" && method === "GET") {
+    return json(await service.listBranches(request));
+  }
+
+  if (path === "/platform/categories" && method === "GET") {
+    return json(await service.listCategories(request));
+  }
+
+  if (path === "/platform/inventory/availability" && method === "GET") {
+    const productId = url.searchParams.get("productId");
+    if (!productId) {
+      return badRequest(
+        "Query parameter productId is required for inventory availability.",
+        requestId
+      );
+    }
+
+    const quantityValue = url.searchParams.get("quantity");
+    const quantity =
+      quantityValue === null || quantityValue === ""
+        ? undefined
+        : Number(quantityValue);
+
+    if (quantityValue !== null && Number.isNaN(quantity)) {
+      return badRequest("Query parameter quantity must be a number.", requestId);
+    }
+
+    return json(
+      await service.getInventoryAvailability(request, {
+        productId,
+        branchId: url.searchParams.get("branchId") || undefined,
+        quantity,
+      })
+    );
   }
 
   if (path === "/platform/sync/products" && method === "POST") {

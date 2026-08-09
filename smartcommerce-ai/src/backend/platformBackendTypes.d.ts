@@ -1,5 +1,5 @@
-import type { CommercialQuoteRequest, CommerceProduct, CustomerAccount, PlatformApiResult, PlatformEntityId, PlatformInvoice, PlatformOrder, PlatformPage, PlatformSyncResult, PlatformWebhookEvent, RentalAsset, RentalReservationRequest, RepairJob, RepairRequest } from "../platform";
-import type { PosAdapter, PosAdapterContext, ProductSearchQuery, RentalAssetQuery, RentalAvailabilityQuery } from "../platform";
+import type { Branch, CommercialQuoteRequest, CommerceProduct, CustomerAccount, InventoryAvailability, PlatformApiResult, PlatformEntityId, PlatformInvoice, PlatformOrder, PlatformPage, PlatformSyncResult, PlatformWebhookEvent, RentalAsset, RentalReservationRequest, RepairJob, RepairRequest, ProductCategory } from "../platform";
+import type { PosAdapter, PosAdapterContext, PosAdapterHealthStatus, ProductSearchQuery, RentalAssetQuery, RentalAvailabilityQuery } from "../platform";
 import type { RepairType } from "../types";
 export type PlatformBackendRuntime = {
     adapter: PosAdapter;
@@ -45,6 +45,14 @@ export type RepairCatalogMutationEndpoint = {
 };
 export type PendingBackendEndpoint = ProductMutationEndpoint | RentalAssetMutationEndpoint | RepairCatalogMutationEndpoint;
 export type PlatformBackendService = {
+    healthCheck(request: Request): Promise<PlatformApiResult<PosAdapterHealthStatus>>;
+    listBranches(request: Request): Promise<PlatformApiResult<Branch[]>>;
+    listCategories(request: Request): Promise<PlatformApiResult<PlatformPage<ProductCategory>>>;
+    getInventoryAvailability(request: Request, query: {
+        productId: PlatformEntityId;
+        branchId?: PlatformEntityId;
+        quantity?: number;
+    }): Promise<PlatformApiResult<InventoryAvailability[]>>;
     syncProducts(request: Request): Promise<PlatformApiResult<PlatformSyncResult>>;
     syncRentals(request: Request): Promise<PlatformApiResult<PlatformSyncResult>>;
     syncRepairs(request: Request): Promise<PlatformApiResult<PlatformSyncResult>>;
