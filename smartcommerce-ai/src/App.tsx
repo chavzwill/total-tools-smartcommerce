@@ -5,6 +5,7 @@ import HomePage from "./pages/HomePage";
 import AssistantPage from "./pages/AssistantPage";
 import CommercialPage from "./pages/CommercialPage";
 import { CategoriesPage, CategoryPage, ProductsPage, SearchPage } from "./pages/CatalogPages";
+import DealsPage from "./pages/DealsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
 import RepairPage from "./pages/RepairPage";
 import ProductMatchPage from "./pages/ProductMatchPage";
@@ -42,6 +43,7 @@ export default function App() {
   else if (path.startsWith("/rental/")) page = <RentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
+  else if (path === "/deals") page = <DealsPage />;
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
   else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
