@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Footer from "./Footer";
 import Header from "./Header";
+import MobileCommerceNav from "./MobileCommerceNav";
 import PromoTicker from "./PromoTicker";
 import UtilityBar from "./UtilityBar";
 
@@ -16,6 +17,7 @@ export default function PageShell({ children }: PageShellProps) {
       <PromoTicker />
       <main id="main-content">{children}</main>
       <Footer />
+      <MobileCommerceNav />
     </div>
   );
 }
