@@ -18,6 +18,7 @@ import type {
   RentalAsset,
   RentalReservationRequest,
   RentalReservationResult,
+  RentalVerificationResult,
   RepairJob,
   RepairRequest,
 } from "./contracts";
@@ -34,12 +35,19 @@ export type PosAdapterCapabilities = {
   invoices?: boolean;
   rentals?: boolean;
   rentalReservations?: boolean;
+  rentalAssetVerification?: boolean;
+  rentalCustomerEligibility?: boolean;
+  rentalScheduleVerification?: boolean;
   repairs?: boolean;
   commercialQuotes?: boolean;
   webhooks?: boolean;
   fullSync?: boolean;
   incrementalSync?: boolean;
   realTimeAvailability?: boolean;
+  adaptiveDiscovery?: boolean;
+  semanticRouteMapping?: boolean;
+  semanticFieldMapping?: boolean;
+  capabilityNegotiation?: boolean;
   metadata?: PlatformMetadata;
 };
 
@@ -103,10 +111,18 @@ export type RentalAvailabilityQuery = {
   rentalAssetId?: PlatformEntityId;
   productId?: PlatformEntityId;
   branchId?: PlatformEntityId;
+  customerAccountId?: PlatformEntityId;
   startDate: string;
   endDate: string;
   quantity?: number;
   metadata?: PlatformMetadata;
+};
+
+export type RentalVerificationQuery = RentalAvailabilityQuery & {
+  requireIdentityVerification?: boolean;
+  requireAccountStanding?: boolean;
+  requireCertificationCheck?: boolean;
+  requireInsuranceCheck?: boolean;
 };
 
 export interface PosAdapter {
@@ -151,6 +167,16 @@ export interface PosAdapter {
     context: PosAdapterContext,
     query: RentalAvailabilityQuery
   ): Promise<PlatformApiResult<InventoryAvailability[]>>;
+
+  /**
+   * Optional provider-native verification hook. When supported, this should
+   * verify the machine, requested schedule, and customer eligibility before a
+   * reservation is represented as confirmed.
+   */
+  verifyRental?(
+    context: PosAdapterContext,
+    query: RentalVerificationQuery
+  ): Promise<PlatformApiResult<RentalVerificationResult>>;
 
   createRentalReservation(
     context: PosAdapterContext,
