@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import "../../styles/experience-upgrade.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
