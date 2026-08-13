@@ -1,10 +1,11 @@
-import { Bot, CheckCircle2, PackageCheck, ShieldCheck, Store, Truck, Wrench } from "lucide-react";
+import { Bot, BriefcaseBusiness, CheckCircle2, MapPin, PackageSearch, Wrench } from "lucide-react";
 import mascot from "../../assets/brand/mascot-illustrated.jpeg";
 import repairImage from "../../assets/services/repairs-service.jpg";
-import { getCategories, getProducts } from "../../data/products";
+import { getProducts } from "../../data/products";
+import { getCommerceDataMode } from "../../data/providerMode";
 import { getRentals } from "../../data/rentals";
 import { routeHref } from "../../lib/router";
-import CategoryCard from "../demo/CategoryCard";
+import { company } from "../../styles/theme";
 import ProductTile from "../demo/ProductTile";
 import RentalTile from "../demo/RentalTile";
 import Container from "../shared/Container";
@@ -18,29 +19,69 @@ type Props = {
   onAdd: (id: string) => void;
 };
 
-const promises = [
-  [PackageCheck, "Product availability across core categories"], [Store, "Branches in Ocho Rios, Kingston, and Drax Hall"],
-  [Truck, "Islandwide delivery options"], [Bot, "Expert advice with SmartCommerce AI support"],
-  [ShieldCheck, "Secure Shopping Experience"]
-] as const;
-
 const aiExamples = [
-  ["Find a generator for my house", "/assistant?prompt=Find%20me%20a%20generator%20for%20my%20house"],
-  ["Compare these drills", "/search?q=drill"], ["Rent equipment for tomorrow", "/rentals"],
-  ["Match this image", "/product-match"], ["Recommend safety gear", "/assistant?prompt=Recommend%20safety%20gear"]
+  ["I need a generator for my house", "/assistant?prompt=I%20need%20a%20generator%20for%20my%20house"],
+  ["Compare drills", "/search?q=drill"],
+  ["Rent equipment", "/rentals"],
+  ["Find from a photo", "/product-match"],
 ] as const;
 
 export default function CommerceSections(props: Props) {
-  const categories = getCategories();
   const products = getProducts();
   const rentals = getRentals();
+  const connected = getCommerceDataMode() === "connected";
 
   return <>
-    <section className="home-promises"><Container size="wide">{promises.map(([Icon, label]) => <div key={label}><Icon size={18} /><span>{label}</span></div>)}</Container></section>
-    <section className="home-merch-section"><Container size="wide"><SectionHeader eyebrow="Featured Categories" title="Shop by the work ahead." description="Fast paths into the departments Jamaican homes, trades, and businesses rely on." /><div className="home-featured-categories">{categories.slice(0, 6).map((category) => <CategoryCard category={category} key={category.name} />)}</div><a className="demo-text-link" href={routeHref("/categories")}>Browse all categories</a></Container></section>
-    <section className="home-merch-section home-merch-section--soft"><Container size="wide"><div className="home-section-line"><SectionHeader eyebrow="Popular Products" title="In stock and ready to work." /><a href={routeHref("/products")}>View all products</a></div><div className="home-product-rail">{products.slice(0, 6).map((product) => <ProductTile product={product} wished={props.wishlist.includes(product.id)} compared={props.compared.includes(product.id)} onWishlist={props.onWishlist} onCompare={props.onCompare} onAdd={props.onAdd} key={product.id} />)}</div></Container></section>
-    <section className="home-merch-section" id="rental-preview"><Container size="wide"><div className="home-section-line"><SectionHeader eyebrow="Rental Catalogue Preview" title="Commercial equipment with transparent rates." description="Trusted fleet equipment with clear daily, weekly, and monthly pricing guidance." /><a href={routeHref("/rentals")}>View rental catalogue</a></div><div className="home-rental-grid">{rentals.slice(0, 6).map((rental) => <RentalTile rental={rental} key={rental.id} />)}</div></Container></section>
-    <section className="home-repair-highlight"><Container size="wide"><div className="home-repair-image"><img src={repairImage} alt="Total Tools technician repairing professional equipment" /></div><div className="home-repair-copy"><span>Repairs and Service</span><h2>Keep the equipment you depend on working.</h2><p>Certified diagnostics, scheduled maintenance, service plans, and genuine parts support across tools, generators, pressure washers, pumps, and compressors.</p><ul><li><CheckCircle2 size={17} /> Diagnostics and inspections</li><li><CheckCircle2 size={17} /> Preventive maintenance plans</li><li><CheckCircle2 size={17} /> Genuine replacement parts</li></ul><div><a href={routeHref("/repairs")}>Book Repair</a><a href={routeHref("/repairs?mode=inspection")}>Book Inspection</a><a href={routeHref("/account")}>Track Repair</a></div></div></Container></section>
-    <section className="home-ai-showcase"><Container size="wide"><div className="home-ai-copy"><span>Total Tools AI</span><h2>Ask once. Move the job forward.</h2><p>From choosing the right generator to finding a replacement part by photo, the assistant connects customers to real products and services.</p><div>{aiExamples.map(([label, route]) => <a href={routeHref(route)} key={label}>{label}</a>)}</div></div><img src={mascot} alt="Total Tools AI guide" /><div className="home-ai-capabilities"><Wrench size={26} /><strong>One intelligent starting point</strong><p>Product recommendations, rental availability, repair booking, comparisons, and image matching.</p><a href={routeHref("/assistant")}>Open AI Assistant</a></div></Container></section>
+    <section className="home-promises sc-trust-strip">
+      <Container size="wide">
+        <div><MapPin size={18} /><span>{company.branches.length} Total Tools branch locations</span></div>
+        <div><PackageSearch size={18} /><span>Products, rentals, repairs, and commercial support</span></div>
+        <div><Bot size={18} /><span>SmartCommerce guided discovery</span></div>
+        <div><Wrench size={18} /><span>Repair request workflow</span></div>
+        <div><BriefcaseBusiness size={18} /><span>Commercial enquiry path</span></div>
+      </Container>
+    </section>
+
+    <section className="home-merch-section" id="rental-preview">
+      <Container size="wide">
+        <div className="home-section-line"><SectionHeader eyebrow="Rentals" title="Choose equipment by the work, not just the machine name." description="Set rental context, compare capability, and move toward availability verification without burying the decision in a long catalogue." /><a href={routeHref("/rentals")}>Plan a rental</a></div>
+        {rentals.length ? <div className="home-rental-grid">{rentals.slice(0, 6).map((rental) => <RentalTile rental={rental} key={rental.id} />)}</div> : <div className="sc-provider-empty"><strong>No rental assets have been returned yet.</strong><a href={routeHref("/rentals")}>Open rental planner</a></div>}
+      </Container>
+    </section>
+
+    <section className="home-merch-section home-merch-section--soft">
+      <Container size="wide">
+        <div className="home-section-line"><SectionHeader eyebrow={connected ? "Connected products" : "Catalogue preview"} title={connected ? "Products from the configured commerce provider." : "Explore the product experience without pretending preview data is live."} description={connected ? "Use live-provider price and availability context where returned." : "Live price, branch stock, and ratings are withheld from transactional treatment until a provider is connected."} /><a href={routeHref("/products")}>Explore products</a></div>
+        {products.length ? <div className="home-product-rail">{products.slice(0, 6).map((product) => <ProductTile product={product} wished={props.wishlist.includes(product.id)} compared={props.compared.includes(product.id)} onWishlist={props.onWishlist} onCompare={props.onCompare} onAdd={props.onAdd} key={product.id} />)}</div> : <div className="sc-provider-empty"><strong>No products returned by the connected provider.</strong><a href={routeHref("/assistant")}>Ask SmartCommerce for another path</a></div>}
+      </Container>
+    </section>
+
+    <section className="home-repair-highlight">
+      <Container size="wide">
+        <div className="home-repair-image"><img src={repairImage} alt="Technician servicing professional equipment" loading="lazy" decoding="async" /></div>
+        <div className="home-repair-copy">
+          <span>Repairs & service</span>
+          <h2>Already own it? Start with the problem instead of shopping again.</h2>
+          <p>Identify the equipment, describe the fault, add photos for context, and submit a provider-backed repair request where that capability is connected.</p>
+          <ul><li><CheckCircle2 size={17} /> Equipment and model details</li><li><CheckCircle2 size={17} /> Issue description and photo context</li><li><CheckCircle2 size={17} /> Provider status when supported</li></ul>
+          <div><a href={routeHref("/repairs")}>Start Repair Request</a><a href={routeHref("/assistant?prompt=Help%20me%20describe%20an%20equipment%20fault")}>Ask AI</a></div>
+        </div>
+      </Container>
+    </section>
+
+    <section className="sc-commercial-home">
+      <Container size="wide">
+        <div><span>Total Tools Commercial</span><h2>For the customer buying for a project, crew, site, or organisation.</h2><p>Move directly to a structured commercial request instead of treating a contractor like a one-item retail shopper.</p></div>
+        <div><a href={routeHref("/commercial?mode=quote")}>Request commercial support</a><a href={routeHref("/rentals")}>Plan fleet rentals</a><a href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>Call Total Tools</a></div>
+      </Container>
+    </section>
+
+    <section className="home-ai-showcase">
+      <Container size="wide">
+        <div className="home-ai-copy"><span>SmartCommerce AI</span><h2>When you know the job but not the product name.</h2><p>Describe the work and SmartCommerce uses connected provider data where configured, then routes you toward products, rentals, repairs, or commercial support.</p><div>{aiExamples.map(([label, route]) => <a href={routeHref(route)} key={label}>{label}</a>)}</div></div>
+        <img src={mascot} alt="Total Tools SmartCommerce guide" loading="lazy" decoding="async" />
+        <div className="home-ai-capabilities"><Wrench size={26} /><strong>One intelligent starting point</strong><p>Search, job-based guidance, comparison, photo matching, and service routing without inventing provider facts.</p><a href={routeHref("/assistant")}>Ask SmartCommerce</a></div>
+      </Container>
+    </section>
   </>;
 }
