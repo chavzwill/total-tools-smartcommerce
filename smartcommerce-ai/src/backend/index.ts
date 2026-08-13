@@ -5,3 +5,4 @@ export * from "./libsqlAdaptiveProfileRepository";
 export * from "./adaptiveIntegrationAdminService";
 export * from "./adaptiveIntegrationRestApi";
 export * from "./platformRequestRouter";
+export * from "./capabilityGuardedPosAdapter";
