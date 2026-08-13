@@ -29,14 +29,28 @@ import type {
   RentalAvailabilityQuery,
 } from "./posAdapter";
 import type {
+  AdaptiveMappingPolicy,
   AdaptiveProviderProfile,
+  BusinessSystemKind,
+  DiscoveredProviderEndpoint,
   SmartCommerceCapability,
 } from "./adaptiveIntegration";
+import {
+  runAdaptiveDiscovery,
+  type AdaptiveDiscoveryResult,
+} from "./adaptiveMappingEngine";
 
 export type SmartCommercePlatformApiOptions = {
   adapter: PosAdapter;
   context: PosAdapterContext;
   capabilityProfile?: AdaptiveProviderProfile;
+};
+
+export type ConfigureAdaptiveProviderInput = {
+  providerKind?: BusinessSystemKind;
+  apiDescription?: unknown;
+  endpoints?: DiscoveredProviderEndpoint[];
+  policy?: Partial<AdaptiveMappingPolicy>;
 };
 
 export class SmartCommercePlatformApi {
@@ -56,6 +70,23 @@ export class SmartCommercePlatformApi {
 
   getCapabilityProfile() {
     return this.capabilityProfile;
+  }
+
+  configureAdaptiveProvider(
+    input: ConfigureAdaptiveProviderInput
+  ): AdaptiveDiscoveryResult {
+    const result = runAdaptiveDiscovery({
+      businessAccountId: this.context.businessAccountId,
+      connectionId: this.context.connectionId,
+      providerId: this.context.providerId,
+      providerKind: input.providerKind,
+      apiDescription: input.apiDescription,
+      endpoints: input.endpoints,
+      policy: input.policy,
+      metadata: this.context.metadata,
+    });
+    this.capabilityProfile = result.profile;
+    return result;
   }
 
   private requireCapability<T>(
