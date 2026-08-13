@@ -1,13 +1,16 @@
 import type {
   AdaptiveMappingPolicy,
   AdaptiveProviderProfile,
+  BusinessSystemKind,
   DiscoveredProviderEndpoint,
   ProviderCapability,
+  ProviderHttpMethod,
   SemanticFieldMapping,
   SemanticRouteMapping,
   SmartCommerceCapability,
 } from "./adaptiveIntegration";
-import type { PlatformEntityId } from "./contracts";
+import { defaultAdaptiveMappingPolicy } from "./adaptiveIntegration";
+import type { PlatformEntityId, PlatformMetadata } from "./contracts";
 
 const WRITE_CAPABILITIES = new Set<SmartCommerceCapability>([
   "products.write",
@@ -39,6 +42,8 @@ const ROUTE_RULES: Array<{
   { capability: "invoices.write", methods: ["POST", "PUT", "PATCH"], tokens: ["invoice", "billing"] },
   { capability: "rentals.read", methods: ["GET"], tokens: ["rental", "hire", "asset", "equipment"] },
   { capability: "rentals.availability", methods: ["GET"], tokens: ["rental", "availability", "schedule", "reservation", "booking"] },
+  { capability: "rentals.verify_asset", methods: ["GET"], tokens: ["rental", "asset", "machine", "equipment", "inspection", "maintenance"] },
+  { capability: "rentals.verify_customer", methods: ["GET", "POST"], tokens: ["rental", "customer", "eligibility", "verification", "qualification", "credit"] },
   { capability: "rentals.reserve", methods: ["POST", "PUT", "PATCH"], tokens: ["rental", "reservation", "booking", "hire"] },
   { capability: "repairs.read", methods: ["GET"], tokens: ["repair", "service", "workorder", "job"] },
   { capability: "repairs.write", methods: ["POST", "PUT", "PATCH"], tokens: ["repair", "service", "workorder", "job"] },
@@ -65,6 +70,9 @@ const FIELD_RULES: Array<{ canonicalPath: string; aliases: string[] }> = [
   { canonicalPath: "customer.phone", aliases: ["phone", "telephone", "mobile", "customer_phone"] },
   { canonicalPath: "rental.assetId", aliases: ["asset_id", "rental_asset_id", "machine_id", "equipment_id", "asset_tag"] },
   { canonicalPath: "rental.serialNumber", aliases: ["serial", "serial_number", "serial_no"] },
+  { canonicalPath: "rental.inspectionStatus", aliases: ["inspection_status", "inspection_state", "safety_status"] },
+  { canonicalPath: "rental.maintenanceStatus", aliases: ["maintenance_status", "service_status", "maintenance_state"] },
+  { canonicalPath: "rental.eligibilityStatus", aliases: ["eligibility", "eligibility_status", "qualification_status"] },
   { canonicalPath: "status", aliases: ["status", "state", "availability_status"] },
 ];
 
@@ -73,6 +81,11 @@ const normalize = (value: unknown) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 
 const flattenKeys = (value: unknown, prefix = "", depth = 0): string[] => {
   if (depth > 3 || value === null || value === undefined) return [];
@@ -85,6 +98,105 @@ const flattenKeys = (value: unknown, prefix = "", depth = 0): string[] => {
     result.push(path, ...flattenKeys(child, path, depth + 1));
   }
   return result;
+};
+
+const sampleFromSchema = (schema: unknown): unknown => {
+  const record = asRecord(schema);
+  if (!record) return undefined;
+  if ("example" in record) return record.example;
+  if (Array.isArray(record.examples) && record.examples.length) return record.examples[0];
+  if (record.type === "array" && record.items) {
+    const child = sampleFromSchema(record.items);
+    return child === undefined ? [] : [child];
+  }
+
+  const properties = asRecord(record.properties);
+  if (!properties) return undefined;
+
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    const property = asRecord(value);
+    if (!property) continue;
+    if ("example" in property) output[key] = property.example;
+    else if ("default" in property) output[key] = property.default;
+    else if (Array.isArray(property.enum) && property.enum.length) output[key] = property.enum[0];
+    else if (property.type === "string") output[key] = "";
+    else if (property.type === "number" || property.type === "integer") output[key] = 0;
+    else if (property.type === "boolean") output[key] = false;
+    else if (property.type === "array") output[key] = [];
+    else if (property.type === "object" || property.properties) output[key] = sampleFromSchema(property);
+  }
+  return output;
+};
+
+const operationSchema = (
+  operation: Record<string, unknown>,
+  kind: "request" | "response"
+) => {
+  if (kind === "request") {
+    const body = asRecord(operation.requestBody);
+    const content = body ? asRecord(body.content) : undefined;
+    const media = content
+      ? asRecord(content["application/json"] || content["application/*+json"] || Object.values(content)[0])
+      : undefined;
+    return media?.schema;
+  }
+
+  const responses = asRecord(operation.responses);
+  if (!responses) return undefined;
+  const response = asRecord(
+    responses["200"] || responses["201"] || responses.default || Object.values(responses)[0]
+  );
+  const content = response ? asRecord(response.content) : undefined;
+  const media = content
+    ? asRecord(content["application/json"] || content["application/*+json"] || Object.values(content)[0])
+    : undefined;
+  return media?.schema;
+};
+
+export const discoverEndpointsFromApiDescription = (
+  apiDescription: unknown
+): DiscoveredProviderEndpoint[] => {
+  const root = asRecord(apiDescription);
+  const paths = root ? asRecord(root.paths) : undefined;
+  if (!paths) return [];
+
+  const allowed = new Set<ProviderHttpMethod>([
+    "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+  ]);
+  const endpoints: DiscoveredProviderEndpoint[] = [];
+
+  for (const [path, pathValue] of Object.entries(paths)) {
+    const pathRecord = asRecord(pathValue);
+    if (!pathRecord) continue;
+
+    for (const [methodRaw, operationValue] of Object.entries(pathRecord)) {
+      const method = methodRaw.toUpperCase() as ProviderHttpMethod;
+      if (!allowed.has(method)) continue;
+      const operation = asRecord(operationValue);
+      if (!operation) continue;
+      const requestSchema = operationSchema(operation, "request");
+      const responseSchema = operationSchema(operation, "response");
+
+      endpoints.push({
+        id: String(operation.operationId || `${method}:${path}`),
+        path,
+        method,
+        operationId: typeof operation.operationId === "string" ? operation.operationId : undefined,
+        summary: typeof operation.summary === "string" ? operation.summary : undefined,
+        description: typeof operation.description === "string" ? operation.description : undefined,
+        requestSchema,
+        responseSchema,
+        sampleRequest: sampleFromSchema(requestSchema),
+        sampleResponse: sampleFromSchema(responseSchema),
+        authRequired: Array.isArray(operation.security)
+          ? operation.security.length > 0
+          : Array.isArray(root?.security) && root.security.length > 0,
+      });
+    }
+  }
+
+  return endpoints;
 };
 
 export const inferSemanticFieldMappings = (sample: unknown): SemanticFieldMapping[] => {
@@ -157,9 +269,11 @@ export const buildAdaptiveProviderProfile = (input: {
   businessAccountId: PlatformEntityId;
   connectionId?: PlatformEntityId;
   providerId: string;
+  providerKind?: BusinessSystemKind;
   mappings: SemanticRouteMapping[];
   policy: AdaptiveMappingPolicy;
   discoveredAt?: string;
+  metadata?: PlatformMetadata;
 }): AdaptiveProviderProfile => {
   const grouped = new Map<SmartCommerceCapability, SemanticRouteMapping[]>();
   for (const mapping of input.mappings) {
@@ -215,7 +329,57 @@ export const buildAdaptiveProviderProfile = (input: {
     businessAccountId: input.businessAccountId,
     connectionId: input.connectionId,
     providerId: input.providerId,
+    providerKind: input.providerKind,
     discoveredAt: input.discoveredAt || new Date().toISOString(),
     capabilities,
+    metadata: input.metadata,
   };
+};
+
+export type AdaptiveDiscoveryResult = {
+  endpoints: DiscoveredProviderEndpoint[];
+  profile: AdaptiveProviderProfile;
+  warnings: string[];
+};
+
+/**
+ * Runs deterministic discovery over an API description or an already-normalized
+ * endpoint list. It does not execute any discovered provider endpoint.
+ */
+export const runAdaptiveDiscovery = (input: {
+  businessAccountId: PlatformEntityId;
+  connectionId?: PlatformEntityId;
+  providerId: string;
+  providerKind?: BusinessSystemKind;
+  apiDescription?: unknown;
+  endpoints?: DiscoveredProviderEndpoint[];
+  policy?: Partial<AdaptiveMappingPolicy>;
+  metadata?: PlatformMetadata;
+}): AdaptiveDiscoveryResult => {
+  const policy: AdaptiveMappingPolicy = {
+    ...defaultAdaptiveMappingPolicy,
+    ...input.policy,
+  };
+  const endpoints = input.endpoints?.length
+    ? input.endpoints
+    : discoverEndpointsFromApiDescription(input.apiDescription);
+  const mappings = inferSemanticRouteMappings(endpoints, policy);
+  const profile = buildAdaptiveProviderProfile({
+    businessAccountId: input.businessAccountId,
+    connectionId: input.connectionId,
+    providerId: input.providerId,
+    providerKind: input.providerKind,
+    mappings,
+    policy,
+    metadata: input.metadata,
+  });
+
+  const warnings: string[] = [];
+  if (!endpoints.length) warnings.push("No endpoints were discoverable from the supplied API description.");
+  if (endpoints.length && !mappings.length) warnings.push("Endpoints were discovered but no semantic capability mapping was established.");
+  if (!profile.capabilities.some((capability) => capability.availability === "available")) {
+    warnings.push("No capability is approved for automatic execution under the current mapping policy.");
+  }
+
+  return { endpoints, profile, warnings };
 };
