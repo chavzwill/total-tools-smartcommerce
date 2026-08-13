@@ -1,25 +1,24 @@
 import type {
+  AdaptiveMappingPolicy,
   AdaptiveProfileRepository,
   PosAdapter,
   PosAdapterContext,
 } from "../platform";
+import { defaultAdaptiveMappingPolicy } from "../platform";
 import { createPlatformBackendService } from "./platformBackendService";
 import {
   createCapabilityGuardedPosAdapter,
   type CapabilityGuardedPosAdapterOptions,
 } from "./capabilityGuardedPosAdapter";
 import { createRentalVerificationEnforcedAdapter } from "./rentalVerificationEnforcedAdapter";
-import {
-  AdaptiveIntegrationAdminService,
-  type AdaptiveIntegrationAdminOptions,
-} from "./adaptiveIntegrationAdminService";
+import { AdaptiveIntegrationAdminService } from "./adaptiveIntegrationAdminService";
 
 export type SmartCommerceBackendRuntimeOptions = {
   providerAdapter: PosAdapter;
   adaptiveProfiles: AdaptiveProfileRepository;
   resolveContext(request: Request): PosAdapterContext | Promise<PosAdapterContext>;
   capabilityGuard?: CapabilityGuardedPosAdapterOptions;
-  adaptiveAdmin?: AdaptiveIntegrationAdminOptions;
+  adaptivePolicy?: Partial<AdaptiveMappingPolicy>;
 };
 
 /**
@@ -53,10 +52,13 @@ export const createSmartCommerceBackendRuntime = (
     resolveContext: options.resolveContext,
   });
 
-  const adaptiveAdminService = new AdaptiveIntegrationAdminService({
-    repository: options.adaptiveProfiles,
-    ...options.adaptiveAdmin,
-  });
+  const adaptiveAdminService = new AdaptiveIntegrationAdminService(
+    options.adaptiveProfiles,
+    {
+      ...defaultAdaptiveMappingPolicy,
+      ...options.adaptivePolicy,
+    }
+  );
 
   return {
     platformService,
