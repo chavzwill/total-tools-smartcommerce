@@ -21,6 +21,7 @@ const formatDate = (value?: string) => {
 export default function DealStage() {
   const promotions = useMemo(() => getVerifiedPromotions(), []);
   const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -32,12 +33,12 @@ export default function DealStage() {
   }, []);
 
   useEffect(() => {
-    if (reducedMotion || promotions.length <= 1) return;
+    if (paused || reducedMotion || promotions.length <= 1) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % promotions.length);
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [promotions.length, reducedMotion]);
+  }, [paused, promotions.length, reducedMotion]);
 
   if (!promotions.length) {
     return (
@@ -68,9 +69,19 @@ export default function DealStage() {
   const validity = start && end ? `${start} – ${end}` : end ? `Ends ${end}` : start ? `Starts ${start}` : "";
 
   return (
-    <section className="sc-deal-stage sc-deal-stage--campaign" aria-label="Current verified promotion">
+    <section
+      className="sc-deal-stage sc-deal-stage--campaign"
+      aria-label="Current verified promotion"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setPaused(false);
+      }}
+    >
       <Container size="wide" className="sc-deal-stage__campaign-inner">
-        <div className="sc-deal-stage__campaign-copy">
+        <div className="sc-deal-stage__campaign-copy" aria-live="off">
           <span><BadgePercent size={16} aria-hidden="true" /> {promotion.eyebrow}</span>
           {promotion.value ? <strong className="sc-deal-stage__value">{promotion.value}</strong> : null}
           <h2>{promotion.headline}</h2>
