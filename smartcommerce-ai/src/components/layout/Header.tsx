@@ -13,7 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import logo from "../../assets/brand/total-tools-logo.svg";
+import logo from "../../assets/brand/total-tools-logo-transparent.png";
 import { getCategories } from "../../data/products";
 import { slugify } from "../../lib/format";
 import { go, routeHref } from "../../lib/router";
