@@ -1,8 +1,10 @@
 import {
+  Bot,
   Camera,
   Compass,
   Heart,
   ImageUp,
+  MapPin,
   Mic,
   Search,
   ShoppingCart,
@@ -28,18 +30,20 @@ const navigation = [
   { label: "Rentals", href: "/rentals" },
   { label: "Repairs", href: "/repairs" },
   { label: "Commercial", href: "/commercial" },
-  { label: "AI Assistant", href: "/assistant" }
+  { label: "Deals", href: "/deals" },
+  { label: "AI Assistant", href: "/assistant" },
 ];
 
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
 
 const exploreLinks = [
   { title: "Browse all categories", description: "Navigate departments and category pages", href: "/categories" },
-  { title: "Rentals catalogue", description: "Explore equipment and rental terms", href: "/rentals" },
-  { title: "Repair services", description: "Book diagnostics, maintenance, and service", href: "/repairs" },
-  { title: "Commercial accounts", description: "Open or manage business pricing access", href: "/commercial" },
-  { title: "SmartCommerce AI Assistant", description: "Get guided recommendations and next steps", href: "/assistant" },
-  { title: "Product match by photo", description: "Use upload or camera to identify products", href: "/product-match" },
+  { title: "Rentals catalogue", description: "Explore equipment and rental planning", href: "/rentals" },
+  { title: "Repair services", description: "Start diagnostics and service requests", href: "/repairs" },
+  { title: "Commercial support", description: "Business and contractor enquiries", href: "/commercial" },
+  { title: "Deals", description: "See verified published promotions", href: "/deals" },
+  { title: "SmartCommerce AI", description: "Describe the job when you need guidance", href: "/assistant" },
+  { title: "Product match by photo", description: "Use upload or camera when you do not know the name", href: "/product-match" },
 ] as const;
 
 export default function Header() {
@@ -53,9 +57,9 @@ export default function Header() {
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
 
   const launcherItems = useMemo(() => {
-    const categoryLinks = getCategories().slice(0, 8).map((category) => ({
+    const categoryLinks = getCategories().slice(0, 10).map((category) => ({
       title: category.name,
-      description: `Category · ${category.description}`,
+      description: category.description ? `Category · ${category.description}` : "Product category",
       href: `/category/${slugify(category.name)}`,
     }));
     return [...exploreLinks, ...categoryLinks];
@@ -107,43 +111,51 @@ export default function Header() {
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
-    const query = search.trim().toLowerCase();
+    const value = search.trim();
+    const query = value.toLowerCase();
+    if (!value) return go("/products");
     if (matchTerms.some((term) => query.includes(term))) return go("/product-match");
     if (query.includes("repair")) return go("/repairs");
-    if (query.includes("rental") || query.includes("rent ")) return go("/rentals");
-    go(`/search?q=${encodeURIComponent(search.trim())}`);
+    if (query.includes("rental") || query.startsWith("rent ")) return go(`/rentals?q=${encodeURIComponent(value)}`);
+    go(`/search?q=${encodeURIComponent(value)}`);
   }
-  function openExplore() {
-    setIsLauncherOpen(true);
+
+  function askAI() {
+    go(`/assistant?prompt=${encodeURIComponent(search.trim() || "Help me figure out what I need for this job")}`);
   }
+
   function closeExplore() {
     setIsLauncherOpen(false);
     launcherTriggerRef.current?.focus();
-  }
-  function launchTo(path: string) {
-    closeExplore();
-    go(path);
   }
 
   return (
     <header className={`tt-header ${isCompact ? "tt-header--compact" : ""}`}>
       <Container size="wide" className="tt-header__top">
         <a className="tt-brand tt-brand--image" href={routeHref("/")} aria-label="Total Tools Jamaica home">
-          <img src={logo} alt="Total Tools Jamaica official logo" width="900" height="249" />
+          <img src={logo} alt="Total Tools Jamaica" width="900" height="249" />
           <span>{company.subtitle}</span>
         </a>
         <form className="tt-search tt-search--smart" role="search" onSubmit={submitSearch}>
           <Search size={19} aria-hidden="true" />
           <label className="tt-sr-only" htmlFor="global-search">Search Total Tools</label>
-          <input id="global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search, ask AI, or upload a photo to match a product..." />
+          <input
+            id="global-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="What are you working on today?"
+            autoComplete="off"
+          />
           <button type="button" className="tt-search__icon" title="Upload a product photo" onClick={() => uploadRef.current?.click()}><ImageUp size={19} /><span className="tt-sr-only">Upload image</span></button>
-          <button type="button" className="tt-search__icon" title="Use camera for Product Match" onClick={() => cameraRef.current?.click()}><Camera size={19} /><span className="tt-sr-only">Open camera</span></button>
-          <button type="button" className="tt-search__icon" title="Start voice search" onClick={() => go("/assistant?prompt=Voice%20search%20demo")}><Mic size={19} /><span className="tt-sr-only">Voice search</span></button>
-          <button type="submit" className="tt-search__submit"><Sparkles size={17} /> <span>Ask AI</span></button>
+          <button type="button" className="tt-search__icon" title="Use camera for product match" onClick={() => cameraRef.current?.click()}><Camera size={19} /><span className="tt-sr-only">Open camera</span></button>
+          <button type="button" className="tt-search__icon" title="Voice-assisted search" onClick={() => go("/assistant?prompt=Help%20me%20search%20by%20voice")}><Mic size={19} /><span className="tt-sr-only">Voice-assisted search</span></button>
+          <button type="submit" className="tt-search__search-submit"><Search size={16} /> <span>Search</span></button>
+          <button type="button" className="tt-search__ai-submit" onClick={askAI}><Sparkles size={16} /> <span>Ask AI</span></button>
           <input ref={uploadRef} type="file" accept="image/*" hidden onChange={() => go("/product-match?source=upload")} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={() => go("/product-match?source=camera")} />
         </form>
         <div className="tt-header__actions" aria-label="Customer actions">
+          <button title="Branch locations" onClick={() => setIsLauncherOpen(true)}><MapPin size={20} /><span className="tt-sr-only">Branch locations</span></button>
           <button title="Wishlist" onClick={() => go("/wishlist")}><Heart size={20} /><span className="tt-sr-only">Wishlist</span></button>
           <button title="Account" onClick={() => go("/account")}><UserRound size={20} /><span className="tt-sr-only">Account</span></button>
           <button className="tt-header__cart" title="Cart" onClick={() => go("/cart")}><ShoppingCart size={20} /><span className="tt-sr-only">Cart</span></button>
@@ -155,31 +167,32 @@ export default function Header() {
           <button
             className="tt-explore-trigger"
             type="button"
-            onClick={openExplore}
+            onClick={() => setIsLauncherOpen(true)}
             ref={launcherTriggerRef}
             aria-haspopup="dialog"
             aria-expanded={isLauncherOpen}
             aria-controls="tt-explore-launcher"
           >
             <Compass size={17} />
-            <span>Explore</span>
+            <span>Quick Find</span>
             <small>Ctrl/Cmd + K</small>
           </button>
         </nav>
       </Container>
-      {isLauncherOpen && (
+      {isLauncherOpen ? (
         <div className="tt-explore-overlay" role="presentation" onClick={closeExplore}>
           <div
             id="tt-explore-launcher"
             className="tt-explore-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="Explore pages and services"
+            aria-label="Quick Find navigation"
             onClick={(event) => event.stopPropagation()}
           >
             <header>
-              <h2>Quick Find</h2>
-              <p>Explore pages, services, and categories.</p>
+              <span><Bot size={17} /> SmartCommerce navigation</span>
+              <h2>Where do you want to go?</h2>
+              <p>Jump to a product category, service, rental flow, deal, or AI guidance.</p>
             </header>
             <label htmlFor="tt-explore-search" className="tt-sr-only">Quick Find search</label>
             <div className="tt-explore-search">
@@ -189,24 +202,20 @@ export default function Header() {
                 ref={launcherInputRef}
                 value={launcherQuery}
                 onChange={(event) => setLauncherQuery(event.target.value)}
-                placeholder="Find categories, rentals, services, and support…"
+                placeholder="Find categories, rentals, repairs, deals, or support"
               />
             </div>
             <div className="tt-explore-results" role="list">
-              {filteredLauncherItems.length ? (
-                filteredLauncherItems.map((item) => (
-                  <button key={item.href} type="button" role="listitem" onClick={() => launchTo(item.href)}>
-                    <strong>{item.title}</strong>
-                    <span>{item.description}</span>
-                  </button>
-                ))
-              ) : (
-                <p className="tt-explore-empty">No matching destinations yet.</p>
-              )}
+              {filteredLauncherItems.length ? filteredLauncherItems.map((item) => (
+                <button key={item.href} type="button" role="listitem" onClick={() => { closeExplore(); go(item.href); }}>
+                  <strong>{item.title}</strong>
+                  <span>{item.description}</span>
+                </button>
+              )) : <p className="tt-explore-empty">No matching destination. Try the main search or Ask AI.</p>}
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </header>
   );
 }
