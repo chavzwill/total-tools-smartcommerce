@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
 import { getRoute, go } from "./lib/router";
-import HomePage from "./pages/HomePage";
+import HomePageV3 from "./pages/HomePageV3";
 import AssistantPage from "./pages/AssistantPage";
 import CommercialPage from "./pages/CommercialPage";
 import { CategoriesPage, CategoryPage, ProductsPage, SearchPage } from "./pages/CatalogPages";
@@ -34,7 +34,7 @@ export default function App() {
   }), [wishlist, compared]);
 
   const path = route.path;
-  let page = <HomePage {...actions} />;
+  let page = <HomePageV3 {...actions} />;
   if (path === "/products") page = <ProductsPage actions={actions} />;
   else if (path === "/categories") page = <CategoriesPage />;
   else if (path.startsWith("/category/")) page = <CategoryPage slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
