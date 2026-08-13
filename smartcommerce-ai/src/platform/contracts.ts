@@ -209,6 +209,89 @@ export type RentalAsset = {
   metadata?: PlatformMetadata;
 };
 
+export type RentalVerificationDecision =
+  | "approved"
+  | "conditional"
+  | "manual_review"
+  | "rejected";
+
+export type RentalMachineVerification = {
+  rentalAssetId?: PlatformEntityId;
+  productId?: PlatformEntityId;
+  branchId?: PlatformEntityId;
+  verified: boolean;
+  rentable: boolean;
+  status?: RentalAsset["status"];
+  inspectionStatus?: "valid" | "due" | "required" | "failed" | "unknown" | string;
+  maintenanceStatus?: "clear" | "due" | "in_progress" | "blocked" | "unknown" | string;
+  holdReasons?: string[];
+  requiredAccessories?: string[];
+  checkedAt: ISODateTime;
+  externalRefs?: ExternalSystemReference[];
+  metadata?: PlatformMetadata;
+};
+
+export type RentalScheduleVerification = {
+  requestedStartDate: ISODateTime;
+  requestedEndDate: ISODateTime;
+  branchId?: PlatformEntityId;
+  quantityRequested?: number;
+  available: boolean;
+  status:
+    | "available"
+    | "available_later"
+    | "available_other_branch"
+    | "available_with_transfer"
+    | "waitlist"
+    | "unavailable"
+    | "unknown"
+    | string;
+  quantityAvailable?: number;
+  nextAvailableAt?: ISODateTime;
+  alternateBranchIds?: PlatformEntityId[];
+  conflicts?: Array<{
+    type: string;
+    startsAt?: ISODateTime;
+    endsAt?: ISODateTime;
+    referenceId?: PlatformEntityId;
+    message?: string;
+  }>;
+  checkedAt: ISODateTime;
+  metadata?: PlatformMetadata;
+};
+
+export type RentalCustomerEligibility = {
+  customerAccountId?: PlatformEntityId;
+  verified: boolean;
+  eligible: boolean;
+  accountStanding?: "good" | "restricted" | "blocked" | "unknown" | string;
+  overdueRentalCount?: number;
+  outstandingBalance?: number;
+  depositRequired?: boolean;
+  depositAmount?: number;
+  identityVerificationRequired?: boolean;
+  certificationRequirements?: string[];
+  insuranceRequirements?: string[];
+  outstandingRequirements?: string[];
+  riskFlags?: string[];
+  manualReviewRequired?: boolean;
+  checkedAt: ISODateTime;
+  externalRefs?: ExternalSystemReference[];
+  metadata?: PlatformMetadata;
+};
+
+export type RentalVerificationResult = {
+  businessAccountId: PlatformEntityId;
+  decision: RentalVerificationDecision;
+  machine: RentalMachineVerification;
+  availability: RentalScheduleVerification;
+  customer: RentalCustomerEligibility;
+  outstandingRequirements?: string[];
+  reasons?: string[];
+  verifiedAt: ISODateTime;
+  metadata?: PlatformMetadata;
+};
+
 export type RentalReservationRequest = {
   businessAccountId: PlatformEntityId;
   customerAccountId?: PlatformEntityId;
@@ -221,6 +304,7 @@ export type RentalReservationRequest = {
   deliveryRequested?: boolean;
   deliveryAddress?: Branch["address"];
   customerNotes?: string;
+  verification?: RentalVerificationResult;
   metadata?: PlatformMetadata;
 };
 
@@ -229,6 +313,9 @@ export type RentalReservationResult = {
   businessAccountId: PlatformEntityId;
   status:
     | "requested"
+    | "verification_required"
+    | "conditional"
+    | "manual_review"
     | "reserved"
     | "confirmed"
     | "declined"
@@ -238,6 +325,7 @@ export type RentalReservationResult = {
   rentalAssetId?: PlatformEntityId;
   productId?: PlatformEntityId;
   customerAccountId?: PlatformEntityId;
+  verification?: RentalVerificationResult;
   externalRefs?: ExternalSystemReference[];
   metadata?: PlatformMetadata;
 };
