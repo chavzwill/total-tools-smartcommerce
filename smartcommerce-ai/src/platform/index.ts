@@ -5,3 +5,4 @@ export * from "./adaptiveIntegration";
 export * from "./adaptiveMappingEngine";
 export * from "./adaptiveProfileLifecycle";
 export * from "./adaptiveProviderController";
+export * from "./rentalVerificationEngine";
