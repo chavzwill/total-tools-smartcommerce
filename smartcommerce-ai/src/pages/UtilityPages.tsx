@@ -1,10 +1,11 @@
-import { CheckCircle2, Heart, PackageCheck, UserRound } from "lucide-react";
+import { CheckCircle2, Heart, PackageCheck } from "lucide-react";
 import ProductTile from "../components/demo/ProductTile";
 import Container from "../components/shared/Container";
 import { getProductById, getProducts } from "../data/products";
 import { getRentalById } from "../data/rentals";
 import { money } from "../lib/format";
 import { go, routeHref } from "../lib/router";
+import CustomerAccountPage from "./CustomerAccountPage";
 
 type Actions = { wishlist: string[]; compared: string[]; onWishlist: (id: string) => void; onCompare: (id: string) => void; onAdd: (id: string) => void };
 
@@ -25,7 +26,7 @@ export function WishlistPage({ actions }: { actions: Actions }) {
 }
 
 export function AccountPage() {
-  return <div className="demo-page"><Container className="demo-account"><UserRound size={42} /><span>Customer Account Demo</span><h1>Welcome back, Jordan.</h1><p>A future account would bring purchases, rentals, repairs, and commercial pricing into one view.</p><div><article><strong>2</strong><span>Open orders</span></article><article><strong>1</strong><span>Active rental</span></article><article><strong>1</strong><span>Repair in progress</span></article></div><a href={routeHref("/products")}>Continue shopping</a></Container></div>;
+  return <CustomerAccountPage />;
 }
 
 export function ConfirmationPage({ type, item }: { type: "order" | "rental" | "repair" | "commercial"; item?: string }) {
