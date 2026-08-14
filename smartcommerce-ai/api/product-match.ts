@@ -80,8 +80,24 @@ export default async function handler(request: any, response: any) {
       errorCode: result.success ? undefined : result.error.code,
     });
 
-    response.statusCode = result.success ? 200 : result.error.retryable ? 503 : 422;
-    response.end(JSON.stringify({ ...result, requestId: result.requestId || id }));
+    if (result.success) {
+      response.statusCode = 200;
+      response.end(JSON.stringify({ ...result, requestId: result.requestId || id }));
+      return;
+    }
+
+    response.statusCode = result.error.retryable ? 503 : 422;
+    response.end(JSON.stringify({
+      success: false,
+      requestId: id,
+      error: {
+        code: result.error.code,
+        message: result.error.retryable
+          ? "Product Match is temporarily unavailable. Please try again shortly."
+          : "Product Match could not verify this image reliably.",
+        retryable: Boolean(result.error.retryable),
+      },
+    }));
   } catch (error) {
     if (sendGuardError(response, error, id)) return;
 
