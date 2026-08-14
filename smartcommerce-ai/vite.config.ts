@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createPlatformBackendService } from "./src/backend/platformBackendService.js";
 import { handlePlatformRestRequest } from "./src/backend/platformRestApi.js";
+import { createTotalToolsPosReadAdapter } from "./src/integrations/totalToolsPosReadAdapter.js";
 import type {
   PlatformApiResult,
   PlatformSyncResult,
@@ -44,6 +45,21 @@ const unsupportedAdapter: PosAdapter = {
     ),
 };
 
+const createConfiguredAdapter = (): PosAdapter => {
+  const baseUrl = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
+  if (!baseUrl) return unsupportedAdapter;
+
+  return createTotalToolsPosReadAdapter({
+    baseUrl,
+    apiKey: process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim() || undefined,
+    apiKeyHeader:
+      process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY_HEADER?.trim() ||
+      "X-API-Key",
+    defaultCurrency:
+      process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_CURRENCY?.trim() || "JMD",
+  });
+};
+
 const firstHeader = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
@@ -55,7 +71,7 @@ const resolvePlatformContext = (request: Request): PosAdapterContext => ({
   providerId:
     request.headers.get("x-provider-id") ||
     process.env.SMARTCOMMERCE_PROVIDER_ID ||
-    "unsupported",
+    (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "unsupported"),
   connectionId: request.headers.get("x-connection-id") || undefined,
   actorId: request.headers.get("x-actor-id") || undefined,
   requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
@@ -64,7 +80,7 @@ const resolvePlatformContext = (request: Request): PosAdapterContext => ({
 });
 
 const platformBackendService = createPlatformBackendService({
-  adapter: unsupportedAdapter,
+  adapter: createConfiguredAdapter(),
   resolveContext: resolvePlatformContext,
 });
 
