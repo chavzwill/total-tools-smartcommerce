@@ -2,7 +2,6 @@ import {
   Bot,
   Camera,
   Compass,
-  Heart,
   ImageUp,
   MapPin,
   Mic,
@@ -17,6 +16,12 @@ import logo from "../../assets/brand/total-tools-logo-transparent.png";
 import { getCategories } from "../../data/products";
 import { slugify } from "../../lib/format";
 import { go, routeHref } from "../../lib/router";
+import {
+  CUSTOMER_ACCOUNT_CHANGED_EVENT,
+  getCustomerAccount,
+  type CustomerAccount,
+  type CustomerAccountState,
+} from "../../lib/customerAccount";
 import Container from "../shared/Container";
 
 const navigation = [
@@ -38,10 +43,17 @@ const exploreLinks = [
 
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
 
+function customerLabel(customer: CustomerAccount | null) {
+  if (!customer) return "Sign in";
+  const firstName = customer.fullName.trim().split(/\s+/)[0];
+  return firstName || "Account";
+}
+
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
+  const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const launcherInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +74,23 @@ export default function Header() {
     if (!query) return launcherItems;
     return launcherItems.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(query));
   }, [launcherItems, launcherQuery]);
+
+  useEffect(() => {
+    let active = true;
+    getCustomerAccount()
+      .then((state) => { if (active) setCustomer(state.customer); })
+      .catch(() => { if (active) setCustomer(null); });
+
+    const syncCustomer = (event: Event) => {
+      const detail = (event as CustomEvent<CustomerAccountState>).detail;
+      setCustomer(detail?.customer || null);
+    };
+    window.addEventListener(CUSTOMER_ACCOUNT_CHANGED_EVENT, syncCustomer);
+    return () => {
+      active = false;
+      window.removeEventListener(CUSTOMER_ACCOUNT_CHANGED_EVENT, syncCustomer);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -109,6 +138,8 @@ export default function Header() {
     launcherTriggerRef.current?.focus();
   };
 
+  const accountLabel = customerLabel(customer);
+
   return (
     <header className="v2-header">
       <Container size="wide" className="v2-header__primary">
@@ -122,7 +153,7 @@ export default function Header() {
 
         <div className="v2-header__actions" aria-label="Customer actions">
           <button type="button" onClick={() => setLauncherOpen(true)} title="Locations and quick find"><MapPin size={19} /><span>Explore</span></button>
-          <button type="button" onClick={() => go("/account")} title="Account"><UserRound size={19} /><span>Account</span></button>
+          <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className="v2-account-action"><UserRound size={19} /><span>{accountLabel}</span></button>
           <button type="button" onClick={() => go("/cart")} title="Cart" className="v2-cart"><ShoppingCart size={19} /><span>Cart</span></button>
         </div>
       </Container>
@@ -142,7 +173,10 @@ export default function Header() {
           <input ref={uploadRef} type="file" accept="image/*" hidden onChange={() => go("/product-match?source=upload")} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={() => go("/product-match?source=camera")} />
         </form>
-        <button ref={launcherTriggerRef} className="v2-quick-find" type="button" onClick={() => setLauncherOpen(true)} aria-expanded={launcherOpen} aria-haspopup="dialog"><Compass size={18} /><span>Quick Find</span><kbd>⌘K</kbd></button>
+        <div className="v2-command-side-actions">
+          <a className="v2-mobile-account" href={routeHref("/account")} aria-label={customer ? `Open ${accountLabel}'s account` : "Sign in or create an account"}><UserRound size={18} /><span>{accountLabel}</span></a>
+          <button ref={launcherTriggerRef} className="v2-quick-find" type="button" onClick={() => setLauncherOpen(true)} aria-expanded={launcherOpen} aria-haspopup="dialog"><Compass size={18} /><span>Quick Find</span><kbd>⌘K</kbd></button>
+        </div>
       </Container>
 
       {launcherOpen ? (
