@@ -1,20 +1,187 @@
-import {
-  authenticateCustomer,
-  createCustomerAccount,
-  createCustomerSession,
-  getCustomerBySessionToken,
-  revokeCustomerSession,
-} from "../src/backend/customerAuthStore";
+import { createClient, type Client } from "@libsql/client";
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
 const WINDOW_MS = 15 * 60 * 1000;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const scrypt = promisify(scryptCallback);
 
 type Bucket = { count: number; resetAt: number };
+type CustomerAccount = {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  emailVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const buckets = new Map<string, Bucket>();
+let clientPromise: Promise<Client> | undefined;
+let schemaPromise: Promise<void> | undefined;
 
 function firstHeader(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function databaseConfig() {
+  const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.SMARTCOMMERCE_DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
+  if (!url) throw new Error("CUSTOMER_DATABASE_NOT_CONFIGURED");
+  return { url, authToken };
+}
+
+async function dbClient() {
+  if (!clientPromise) clientPromise = Promise.resolve(createClient(databaseConfig()));
+  return clientPromise;
+}
+
+async function ensureSchema() {
+  if (!schemaPromise) {
+    schemaPromise = (async () => {
+      const db = await dbClient();
+      await db.batch([
+        `CREATE TABLE IF NOT EXISTS customer_accounts (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          full_name TEXT NOT NULL,
+          phone TEXT,
+          email_verified INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS customer_sessions (
+          id TEXT PRIMARY KEY,
+          customer_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          revoked_at TEXT,
+          user_agent_hash TEXT,
+          FOREIGN KEY(customer_id) REFERENCES customer_accounts(id)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_customer_sessions_customer ON customer_sessions(customer_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_customer_sessions_token ON customer_sessions(token_hash)`,
+      ], "write");
+    })();
+  }
+  return schemaPromise;
+}
+
+function accountFromRow(row: Record<string, unknown>): CustomerAccount {
+  return {
+    id: String(row.id),
+    email: String(row.email),
+    fullName: String(row.full_name),
+    phone: row.phone ? String(row.phone) : undefined,
+    emailVerified: Number(row.email_verified) === 1,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+async function passwordHash(password: string) {
+  const salt = randomBytes(16);
+  const derived = (await scrypt(password, salt, 64)) as Buffer;
+  return `scrypt$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+}
+
+async function passwordMatches(password: string, stored: string) {
+  const [algorithm, saltEncoded, hashEncoded] = stored.split("$");
+  if (algorithm !== "scrypt" || !saltEncoded || !hashEncoded) return false;
+  const salt = Buffer.from(saltEncoded, "base64url");
+  const expected = Buffer.from(hashEncoded, "base64url");
+  const actual = (await scrypt(password, salt, expected.length)) as Buffer;
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function hashUserAgent(value?: string) {
+  return value ? createHash("sha256").update(value.slice(0, 512)).digest("hex") : null;
+}
+
+async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
+  await ensureSchema();
+  const db = await dbClient();
+  const existing = await db.execute({ sql: "SELECT id FROM customer_accounts WHERE email = ? LIMIT 1", args: [input.email] });
+  if (existing.rows.length) return undefined;
+
+  const id = `cus_${randomBytes(16).toString("hex")}`;
+  const now = new Date().toISOString();
+  const storedPassword = await passwordHash(input.password);
+  await db.execute({
+    sql: `INSERT INTO customer_accounts (id, email, password_hash, full_name, phone, email_verified, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+    args: [id, input.email, storedPassword, input.fullName, input.phone || null, now, now],
+  });
+  return {
+    id,
+    email: input.email,
+    fullName: input.fullName,
+    phone: input.phone || undefined,
+    emailVerified: false,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies CustomerAccount;
+}
+
+async function authenticate(email: string, password: string) {
+  await ensureSchema();
+  const db = await dbClient();
+  const result = await db.execute({
+    sql: "SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at FROM customer_accounts WHERE email = ? LIMIT 1",
+    args: [email],
+  });
+  if (!result.rows.length) return undefined;
+  const row = result.rows[0] as unknown as Record<string, unknown>;
+  if (!(await passwordMatches(password, String(row.password_hash)))) return undefined;
+  return accountFromRow(row);
+}
+
+async function createSession(customer: CustomerAccount, userAgent?: string) {
+  await ensureSchema();
+  const db = await dbClient();
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
+  await db.execute({
+    sql: `INSERT INTO customer_sessions (id, customer_id, token_hash, created_at, expires_at, revoked_at, user_agent_hash)
+          VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+    args: [`ses_${randomBytes(16).toString("hex")}`, customer.id, hashToken(token), now.toISOString(), expiresAt, hashUserAgent(userAgent)],
+  });
+  return { token, expiresAt };
+}
+
+async function sessionCustomer(token?: string) {
+  if (!token) return undefined;
+  await ensureSchema();
+  const db = await dbClient();
+  const result = await db.execute({
+    sql: `SELECT c.id, c.email, c.full_name, c.phone, c.email_verified, c.created_at, c.updated_at
+          FROM customer_sessions s
+          JOIN customer_accounts c ON c.id = s.customer_id
+          WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?
+          LIMIT 1`,
+    args: [hashToken(token), new Date().toISOString()],
+  });
+  return result.rows.length ? accountFromRow(result.rows[0] as unknown as Record<string, unknown>) : undefined;
+}
+
+async function revokeSession(token?: string) {
+  if (!token) return;
+  await ensureSchema();
+  const db = await dbClient();
+  await db.execute({
+    sql: "UPDATE customer_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+    args: [new Date().toISOString(), hashToken(token)],
+  });
 }
 
 function clientKey(request: any, action: string) {
@@ -53,8 +220,7 @@ async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
     }
     chunks.push(buffer);
   }
-  const text = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(text || "{}") as T;
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as T;
 }
 
 function parseCookie(header?: string) {
@@ -104,13 +270,14 @@ export default async function handler(request: any, response: any) {
   response.setHeader("Content-Type", "application/json");
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "same-origin");
 
   const method = String(request.method || "GET").toUpperCase();
   const token = parseCookie(firstHeader(request.headers?.cookie))[COOKIE_NAME];
 
   try {
     if (method === "GET") {
-      const customer = token ? await getCustomerBySessionToken(token) : undefined;
+      const customer = await sessionCustomer(token);
       return send(response, 200, { authenticated: Boolean(customer), customer: customer || null });
     }
 
@@ -134,24 +301,17 @@ export default async function handler(request: any, response: any) {
       const phone = input.phone === undefined ? undefined : String(input.phone).trim();
 
       if (!validEmail(email) || !passwordAllowed(password) || fullName.length < 2 || fullName.length > 120 || (phone && phone.length > 40)) {
-        return send(response, 400, {
-          error: {
-            code: "INVALID_ACCOUNT_DETAILS",
-            message: "Use a valid email, a password of at least 10 characters, and your full name.",
-          },
-        });
+        return send(response, 400, { error: { code: "INVALID_ACCOUNT_DETAILS", message: "Use a valid email, a password of at least 10 characters, and your full name." } });
       }
 
-      const result = await createCustomerAccount({ email, password, fullName, phone });
-      if (!result.created) {
-        return send(response, 409, {
-          error: { code: "ACCOUNT_NOT_CREATED", message: "An account could not be created with those details." },
-        });
+      const customer = await createAccount({ email, password, fullName, phone });
+      if (!customer) {
+        return send(response, 409, { error: { code: "ACCOUNT_NOT_CREATED", message: "An account could not be created with those details." } });
       }
 
-      const session = await createCustomerSession(result.customer, firstHeader(request.headers?.["user-agent"]));
+      const session = await createSession(customer, firstHeader(request.headers?.["user-agent"]));
       response.setHeader("Set-Cookie", sessionCookie(session.token, session.expiresAt));
-      return send(response, 201, { authenticated: true, customer: session.customer });
+      return send(response, 201, { authenticated: true, customer });
     }
 
     if (action === "login") {
@@ -162,19 +322,19 @@ export default async function handler(request: any, response: any) {
         return send(response, 401, { error: { code: "INVALID_CREDENTIALS", message: "Email or password is incorrect." } });
       }
 
-      const customer = await authenticateCustomer(email, password);
+      const customer = await authenticate(email, password);
       if (!customer) {
         return send(response, 401, { error: { code: "INVALID_CREDENTIALS", message: "Email or password is incorrect." } });
       }
 
-      if (token) await revokeCustomerSession(token);
-      const session = await createCustomerSession(customer, firstHeader(request.headers?.["user-agent"]));
+      await revokeSession(token);
+      const session = await createSession(customer, firstHeader(request.headers?.["user-agent"]));
       response.setHeader("Set-Cookie", sessionCookie(session.token, session.expiresAt));
-      return send(response, 200, { authenticated: true, customer: session.customer });
+      return send(response, 200, { authenticated: true, customer });
     }
 
     if (action === "logout") {
-      if (token) await revokeCustomerSession(token);
+      await revokeSession(token);
       response.setHeader("Set-Cookie", clearSessionCookie());
       return send(response, 200, { authenticated: false, customer: null });
     }
@@ -194,8 +354,7 @@ export default async function handler(request: any, response: any) {
     }
 
     console.error("customer_account_error", {
-      name: error instanceof Error ? error.name : "unknown",
-      message: error instanceof Error && error.message.includes("database is not configured") ? "database_not_configured" : "account_request_failed",
+      code: error instanceof Error ? error.message : "ACCOUNT_REQUEST_FAILED",
     });
     return send(response, 503, {
       error: {
