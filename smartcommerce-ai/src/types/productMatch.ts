@@ -26,6 +26,7 @@ export type ProductMatchCandidate = {
 export type ProductMatchResult = {
   analysis: ProductVisualAnalysis;
   candidates: ProductMatchCandidate[];
+  branchNames: Record<string, string>;
   needsClarification: boolean;
   clarification?: string;
 };
