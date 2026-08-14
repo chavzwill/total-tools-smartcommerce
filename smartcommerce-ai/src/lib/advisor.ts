@@ -1,4 +1,3 @@
-import { createApiClient } from "../apiClient";
 import type {
   CommerceProduct,
   PlatformApiResult,
@@ -21,8 +20,6 @@ export type AdvisorUiResult = {
   rentals: RentalAsset[];
   nextActions: string[];
 };
-
-const api = createApiClient();
 
 function buildConfiguredContext(): PosAdapterContext | undefined {
   const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
@@ -60,26 +57,42 @@ export async function getAdvisorResponse(
     prompt,
     branchId: import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID,
   };
-  const result = await api.post<AssistantResult>("/platform/assistant", request, context);
 
-  if (!result.success) {
-    return result;
+  try {
+    const response = await fetch("/api/commerce-assistant", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Business-Account-Id": context.businessAccountId,
+        "X-Provider-Id": context.providerId,
+        "X-Request-Id": context.requestId || `${Date.now()}`,
+      },
+      body: JSON.stringify(request),
+    });
+    const result = (await response.json()) as PlatformApiResult<AssistantResult>;
+
+    if (!result.success) return result;
+
+    return {
+      success: true,
+      requestId: result.requestId,
+      data: {
+        summary: result.data.response,
+        products: result.data.recommendedProducts || [],
+        rentals: result.data.recommendedRentals || [],
+        nextActions: result.data.nextActions || [],
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        code: "COMMERCE_ASSISTANT_NETWORK_ERROR",
+        message:
+          error instanceof Error
+            ? error.message
+            : "SmartCommerce AI could not reach the server.",
+      },
+    };
   }
-
-  const products = result.data.recommendedProducts || [];
-  const rentals = result.data.recommendedRentals || [];
-  const hasRecommendations = products.length > 0 || rentals.length > 0;
-
-  return {
-    success: true,
-    requestId: result.requestId,
-    data: {
-      summary: hasRecommendations
-        ? result.data.response
-        : "The connected provider returned insufficient catalog or rental data for this request.",
-      products,
-      rentals,
-      nextActions: result.data.nextActions || [],
-    },
-  };
 }
