@@ -224,7 +224,13 @@ export async function runGroundedProductMatch(
   request: ProductMatchRequest
 ): Promise<PlatformApiResult<ProductMatchResult>> {
   try {
-    const analysis = await analyzeImage(request.imageDataUrl);
+    const [analysis, branchesResult] = await Promise.all([
+      analyzeImage(request.imageDataUrl),
+      adapter.listBranches(context),
+    ]);
+    const branchNames = branchesResult.success
+      ? Object.fromEntries(branchesResult.data.map((branch) => [String(branch.id), branch.name]))
+      : {};
     const queries = searchQueries(analysis);
 
     if (!queries.length) {
@@ -233,6 +239,7 @@ export async function runGroundedProductMatch(
         data: {
           analysis,
           candidates: [],
+          branchNames,
           needsClarification: true,
           clarification:
             "I could not identify enough visible product details. Try a clearer photo of the whole item, label, model plate, or packaging.",
@@ -283,6 +290,7 @@ export async function runGroundedProductMatch(
       data: {
         analysis,
         candidates,
+        branchNames,
         needsClarification,
         clarification: needsClarification
           ? "The image does not support a reliable exact match yet. Try a closer photo of the brand or model label, or add another angle."
