@@ -15,9 +15,9 @@ export default function IntentDiscovery() {
     <section className="sc-intent-discovery" aria-labelledby="sc-intent-discovery-title">
       <Container size="wide">
         <div className="sc-intent-discovery__heading">
-          <span>Start the way you think</span>
-          <h2 id="sc-intent-discovery-title">You do not need to know the exact product name.</h2>
-          <p>Search directly, browse, describe the job, use a photo, or ask for guidance.</p>
+          <span>Find it faster</span>
+          <h2 id="sc-intent-discovery-title">Start With the Job.</h2>
+          <p>Search directly, browse a category, describe the work, use a photo, or ask SmartCommerce.</p>
         </div>
         <div className="sc-intent-discovery__grid">
           {paths.map(([title, description, href, Icon]) => (
