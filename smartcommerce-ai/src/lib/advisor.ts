@@ -1,7 +1,6 @@
 import type {
   CommerceProduct,
   PlatformApiResult,
-  PosAdapterContext,
   RentalAsset,
 } from "../platform";
 import type { AssistantRequest, AssistantResult } from "../backend";
@@ -21,52 +20,30 @@ export type AdvisorUiResult = {
   nextActions: string[];
 };
 
-function buildConfiguredContext(): PosAdapterContext | undefined {
-  const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
-  const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
-
-  if (!businessAccountId || !providerId) return undefined;
-
-  return {
-    businessAccountId,
-    providerId,
-    requestId:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  };
-}
-
 export async function getAdvisorResponse(
   prompt: string
 ): Promise<PlatformApiResult<AdvisorUiResult>> {
-  const context = buildConfiguredContext();
-
-  if (!context) {
-    return {
-      success: false,
-      error: {
-        code: "PLATFORM_CONTEXT_REQUIRED",
-        message:
-          "AI assistant requires configured business and provider context before serving recommendations.",
-      },
-    };
-  }
-
   const request: AssistantRequest = {
     prompt,
     branchId: import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID,
   };
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Request-Id":
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    };
+    const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
+    const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
+    if (businessAccountId) headers["X-Business-Account-Id"] = businessAccountId;
+    if (providerId) headers["X-Provider-Id"] = providerId;
+
     const response = await fetch("/api/commerce-assistant", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Business-Account-Id": context.businessAccountId,
-        "X-Provider-Id": context.providerId,
-        "X-Request-Id": context.requestId || `${Date.now()}`,
-      },
+      headers,
       body: JSON.stringify(request),
     });
     const result = (await response.json()) as PlatformApiResult<AssistantResult>;
