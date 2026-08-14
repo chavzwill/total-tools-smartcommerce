@@ -44,31 +44,22 @@ export async function matchProductPhoto(
   imageDataUrl: string,
   branchId?: string
 ): Promise<PlatformApiResult<ProductMatchResult>> {
-  const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
-  const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
-
-  if (!businessAccountId || !providerId) {
-    return {
-      success: false,
-      error: {
-        code: "PLATFORM_CONTEXT_REQUIRED",
-        message: "Product Match requires a connected SmartCommerce provider.",
-      },
-    };
-  }
-
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Request-Id":
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    };
+    const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
+    const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
+    if (businessAccountId) headers["X-Business-Account-Id"] = businessAccountId;
+    if (providerId) headers["X-Provider-Id"] = providerId;
+
     const response = await fetch("/api/product-match", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Business-Account-Id": businessAccountId,
-        "X-Provider-Id": providerId,
-        "X-Request-Id":
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      },
+      headers,
       body: JSON.stringify({
         imageDataUrl,
         branchId: branchId || import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined,
