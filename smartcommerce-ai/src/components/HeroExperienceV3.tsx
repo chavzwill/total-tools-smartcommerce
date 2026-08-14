@@ -8,10 +8,10 @@ import { routeHref } from "../lib/router";
 import HeroAdvisor from "./HeroAdvisor";
 
 const scenes = [
-  { id: "shop", label: "SHOP", title: "Find the right tool. Fast.", detail: "Search by product, model, specification, or the job you need to finish.", href: "/products", cta: "Shop products", image: shopImage },
-  { id: "rent", label: "RENT", title: "Need the machine, not the ownership?", detail: "Plan equipment around the job, dates, branch, pickup, or delivery.", href: "/rentals", cta: "Plan a rental", image: rentalImage },
-  { id: "repair", label: "REPAIR", title: "Get the equipment moving again.", detail: "Identify the machine, describe the problem, and start a service request.", href: "/repairs", cta: "Start a repair", image: repairImage },
-  { id: "ai", label: "ASK AI", title: "Don’t know the exact item? Start with the job.", detail: "Describe what you are trying to accomplish, use a photo, or ask for guidance.", href: "/assistant", cta: "Ask SmartCommerce", image: mascot },
+  { id: "shop", label: "SHOP", title: "The Right Tool. Right Now.", detail: "Search by product, model, specification, or the job you need to finish.", href: "/products", cta: "Shop products", image: shopImage },
+  { id: "rent", label: "RENT", title: "Rent the Right Machine.", detail: "Plan equipment around the job, dates, branch, pickup, or delivery.", href: "/rentals", cta: "Plan a rental", image: rentalImage },
+  { id: "repair", label: "REPAIR", title: "Fix What You Own.", detail: "Identify the machine, describe the problem, and start a service request.", href: "/repairs", cta: "Start a repair", image: repairImage },
+  { id: "ai", label: "ASK AI", title: "Tell Us the Job.", detail: "Describe what you are trying to accomplish, use a photo, or ask for guidance.", href: "/assistant", cta: "Ask SmartCommerce", image: mascot },
 ] as const;
 
 const examples = [
@@ -53,8 +53,8 @@ export default function HeroExperienceV3() {
       <div className="v3-hero__inner">
         <div className="v3-hero__content">
           <span className="v3-hero__eyebrow"><Sparkles size={15} /> TOTAL TOOLS × SMARTCOMMERCE</span>
-          <h1>One job.<br /><em>Every way forward.</em></h1>
-          <p>Buy it. Rent it. Repair it. Or simply tell SmartCommerce what you are trying to get done.</p>
+          <h1>One Job.<br /><em>Every Option.</em></h1>
+          <p>Buy it. Rent it. Fix it. Or tell SmartCommerce what needs doing.</p>
           <HeroAdvisor prompt={prompt} setPrompt={setPrompt} onCommandFocusChange={setFocused} />
           <div className="v3-hero__examples">
             {examples.map(([text, Icon]) => <button type="button" key={text} onClick={() => setPrompt(text)}><Icon size={15} />{text}</button>)}
