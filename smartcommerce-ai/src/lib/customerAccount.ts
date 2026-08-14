@@ -17,6 +17,12 @@ type AccountErrorPayload = {
   error?: { code?: string; message?: string; retryable?: boolean };
 };
 
+export const CUSTOMER_ACCOUNT_CHANGED_EVENT = "smartcommerce:account-changed";
+
+function announceAccountChange(state: CustomerAccountState) {
+  window.dispatchEvent(new CustomEvent(CUSTOMER_ACCOUNT_CHANGED_EVENT, { detail: state }));
+}
+
 async function readResponse(response: Response) {
   const payload = (await response.json()) as CustomerAccountState & AccountErrorPayload;
   if (!response.ok) {
@@ -46,7 +52,9 @@ export async function signUpCustomer(input: {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ action: "signup", ...input }),
   });
-  return readResponse(response);
+  const state = await readResponse(response);
+  announceAccountChange(state);
+  return state;
 }
 
 export async function loginCustomer(input: { email: string; password: string }) {
@@ -56,7 +64,9 @@ export async function loginCustomer(input: { email: string; password: string }) 
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ action: "login", ...input }),
   });
-  return readResponse(response);
+  const state = await readResponse(response);
+  announceAccountChange(state);
+  return state;
 }
 
 export async function logoutCustomer() {
@@ -66,5 +76,7 @@ export async function logoutCustomer() {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ action: "logout" }),
   });
-  return readResponse(response);
+  const state = await readResponse(response);
+  announceAccountChange(state);
+  return state;
 }
