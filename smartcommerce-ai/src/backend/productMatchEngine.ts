@@ -1,40 +1,22 @@
 import type {
   CommerceProduct,
-  InventoryAvailability,
   PlatformApiResult,
   PosAdapter,
   PosAdapterContext,
 } from "../platform";
+import type {
+  ProductMatchCandidate,
+  ProductMatchRequest,
+  ProductMatchResult,
+  ProductVisualAnalysis,
+} from "../types/productMatch";
 
-export type ProductMatchRequest = {
-  imageDataUrl: string;
-  branchId?: string;
-};
-
-export type ProductVisualAnalysis = {
-  productType: string;
-  brand: string;
-  model: string;
-  visibleText: string[];
-  attributes: string[];
-  searchTerms: string[];
-  confidence: number;
-  notes: string;
-};
-
-export type ProductMatchCandidate = {
-  product: CommerceProduct;
-  confidence: number;
-  reasons: string[];
-  availability: InventoryAvailability[];
-};
-
-export type ProductMatchResult = {
-  analysis: ProductVisualAnalysis;
-  candidates: ProductMatchCandidate[];
-  needsClarification: boolean;
-  clarification?: string;
-};
+export type {
+  ProductMatchCandidate,
+  ProductMatchRequest,
+  ProductMatchResult,
+  ProductVisualAnalysis,
+} from "../types/productMatch";
 
 type OpenAIResponse = {
   output?: Array<{
@@ -59,13 +41,19 @@ const tokens = (value: unknown) =>
     .filter((token) => token.length > 1);
 
 function productSearchText(product: CommerceProduct) {
+  const attributes = Object.entries(product.attributes || {}).flatMap(([key, value]) => [key, value]);
+  const metadata = Object.entries(product.metadata || {}).flatMap(([key, value]) => [key, value]);
+
   return normalize([
     product.name,
     product.sku,
-    product.category,
+    product.barcode,
+    product.brand,
     product.description,
+    ...(product.categoryIds || []),
     ...(product.tags || []),
-    ...Object.entries(product.specs || {}).flatMap(([key, value]) => [key, value]),
+    ...attributes,
+    ...metadata,
   ].join(" "));
 }
 
@@ -76,10 +64,10 @@ function scoreCandidate(product: CommerceProduct, analysis: ProductVisualAnalysi
   let possible = 0;
 
   const addExactSignal = (label: string, value: string, weight: number) => {
-    const normalized = normalize(value);
-    if (!normalized) return;
+    const normalizedValue = normalize(value);
+    if (!normalizedValue) return;
     possible += weight;
-    if (haystack.includes(normalized)) {
+    if (haystack.includes(normalizedValue)) {
       score += weight;
       reasons.push(`${label} matches: ${value}`);
     }
@@ -105,10 +93,13 @@ function scoreCandidate(product: CommerceProduct, analysis: ProductVisualAnalysi
     }
   }
 
-  const normalized = possible > 0 ? score / possible : 0;
+  const normalizedScore = possible > 0 ? score / possible : 0;
   const visionReliability = Math.max(0.2, Math.min(1, analysis.confidence || 0));
   return {
-    confidence: Math.max(0, Math.min(0.99, normalized * (0.75 + visionReliability * 0.25))),
+    confidence: Math.max(
+      0,
+      Math.min(0.99, normalizedScore * (0.75 + visionReliability * 0.25))
+    ),
     reasons,
   };
 }
@@ -146,7 +137,7 @@ async function analyzeImage(imageDataUrl: string): Promise<ProductVisualAnalysis
           content: [
             {
               type: "input_text",
-              text: "Analyze product/tool/equipment photos for catalogue matching. Extract only clues visible or strongly supported by the image. Never invent a brand, model, specification, or text. If uncertain, use an empty string/array and lower confidence.",
+              text: "Analyze product, tool, part, and equipment photos for catalogue matching. Extract only clues visible or strongly supported by the image. Never invent a brand, model, specification, label, or text. If uncertain, use an empty string or array and lower confidence.",
             },
           ],
         },
@@ -201,7 +192,9 @@ async function analyzeImage(imageDataUrl: string): Promise<ProductVisualAnalysis
 
   const payload = (await response.json()) as OpenAIResponse;
   if (!response.ok) {
-    throw new Error(payload.error?.message || `Vision analysis failed with HTTP ${response.status}.`);
+    throw new Error(
+      payload.error?.message || `Vision analysis failed with HTTP ${response.status}.`
+    );
   }
 
   const text = outputText(payload);
@@ -241,7 +234,8 @@ export async function runGroundedProductMatch(
           analysis,
           candidates: [],
           needsClarification: true,
-          clarification: "I could not identify enough visible product details. Try a clearer photo of the whole item, label, model plate, or packaging.",
+          clarification:
+            "I could not identify enough visible product details. Try a clearer photo of the whole item, label, model plate, or packaging.",
         },
       };
     }
@@ -291,7 +285,7 @@ export async function runGroundedProductMatch(
         candidates,
         needsClarification,
         clarification: needsClarification
-          ? "The image does not support a reliable exact match yet. Try a closer photo of the brand/model label or add another angle."
+          ? "The image does not support a reliable exact match yet. Try a closer photo of the brand or model label, or add another angle."
           : undefined,
       },
     };
