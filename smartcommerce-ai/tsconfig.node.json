@@ -8,6 +8,7 @@
   "include": [
     "vite.config.ts",
     "src/backend/**/*.ts",
+    "src/integrations/**/*.ts",
     "src/platform/**/*.ts",
     "src/types.ts"
   ]
