@@ -1,0 +1,51 @@
+.sc-account-real {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 72px);
+  border-radius: 32px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,249,247,.98));
+  border: 1px solid rgba(19, 54, 35, .09);
+  box-shadow: 0 28px 70px rgba(20, 34, 26, .10);
+}
+
+.sc-account-real--signed-out { max-width: 760px; }
+.sc-account-real__intro, .sc-account-real__identity { display: grid; gap: 10px; }
+.sc-account-real__identity { grid-template-columns: auto 1fr; align-items: start; gap: 18px; }
+.sc-account-real__intro > svg, .sc-account-real__identity > svg { color: var(--green, #0b6b3a); }
+.sc-account-real h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 4.5rem); letter-spacing: -.055em; line-height: .96; }
+.sc-account-real p { color: rgba(22, 34, 28, .72); }
+
+.sc-account-real__tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 32px 0 20px; padding: 6px; border-radius: 18px; background: rgba(20, 42, 29, .055); }
+.sc-account-real__tabs button { min-height: 48px; border: 0; border-radius: 14px; background: transparent; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; cursor: pointer; }
+.sc-account-real__tabs button.is-active { background: #fff; box-shadow: 0 8px 24px rgba(21, 38, 27, .08); color: #0b6b3a; }
+
+.sc-account-real__form { margin-top: 0; }
+.sc-account-real__form label { font-weight: 750; }
+.sc-account-real__form label span, .sc-account-real__form small { color: rgba(22, 34, 28, .58); font-weight: 500; }
+.sc-account-real__form input { min-height: 50px; border-radius: 14px; }
+.sc-account-real__form button { min-height: 52px; border-radius: 15px; font-weight: 850; }
+
+.sc-account-real__security { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; margin: 28px 0; padding: 18px; border-radius: 18px; background: rgba(11, 107, 58, .07); }
+.sc-account-real__security svg { color: #0b6b3a; }
+.sc-account-real__security div { display: grid; gap: 4px; }
+.sc-account-real__security span { color: rgba(22, 34, 28, .66); }
+
+.sc-account-real__future { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 24px 0 30px; }
+.sc-account-real__future article { min-height: 130px; padding: 20px; border-radius: 20px; background: #fff; border: 1px solid rgba(20, 42, 29, .08); display: grid; align-content: start; gap: 8px; }
+.sc-account-real__future article strong { font-size: 1.05rem; }
+.sc-account-real__future article span { color: rgba(22, 34, 28, .62); line-height: 1.5; }
+
+.sc-account-real__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sc-account-real__actions a, .sc-account-real__actions button { min-height: 46px; border-radius: 14px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; text-decoration: none; }
+.sc-account-real__actions a { background: #0b6b3a; color: #fff; }
+.sc-account-real__actions button { border: 1px solid rgba(20, 42, 29, .14); background: #fff; cursor: pointer; }
+.sc-account-real__error { padding: 12px 14px; border-radius: 12px; background: rgba(176, 34, 34, .08); color: #8e1f1f !important; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .sc-account-real { padding: 28px 18px; border-radius: 22px; }
+  .sc-account-real h1 { font-size: clamp(2.15rem, 13vw, 3.3rem); }
+  .sc-account-real__identity { grid-template-columns: 1fr; }
+  .sc-account-real__future { grid-template-columns: 1fr; }
+  .sc-account-real__tabs { position: sticky; top: 0; z-index: 2; }
+  .sc-account-real__actions { display: grid; }
+}
