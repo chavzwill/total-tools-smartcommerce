@@ -1,6 +1,7 @@
 import { KeyRound, LockKeyhole, LogIn, LogOut, MailCheck, ShieldCheck, UserRound, UserRoundPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
+import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
 import {
   getCustomerAccount,
   loginCustomer,
@@ -231,6 +232,8 @@ export default function CustomerAccountPage() {
               <div><strong>Email verified</strong><span>Your account email has been confirmed.</span></div>
             </div>
           )}
+
+          {customer.emailVerified && <AccountPasskeyPanel />}
 
           <div className="sc-account-real__future">
             <article><strong>Orders</strong><span>Provider-backed order history will appear here when connected.</span></article>
