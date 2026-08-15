@@ -1,9 +1,17 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
+import {
+  enforceDurableRateLimit,
+  recordSecurityEvent,
+  requestIp,
+} from "../src/server/securityInfrastructure";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 24_000;
 const QUOTE_TTL_MS = 10 * 60 * 1000;
+const CART_MUTATION_LIMIT = 120;
+const QUOTE_CUSTOMER_LIMIT = 12;
+const QUOTE_IP_LIMIT = 40;
 let sqlClient: ReturnType<typeof neon> | undefined;
 
 type CartItemRow = {
@@ -64,6 +72,10 @@ function sql() {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function stableHash(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 function parseCookie(header?: string) {
@@ -246,9 +258,11 @@ async function createQuote(request: any, customerId: string, cartId: string) {
 
   const subtotalMinor = Math.round(subtotal * 100);
   const totalMinor = subtotalMinor + taxMinor;
-  const id = `qte_${randomBytes(16).toString("hex")}`;
-  const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString();
-  const snapshot = JSON.stringify({ items: snapshotItems, revalidatedAt: new Date().toISOString() });
+  const quoteBucket = Math.floor(Date.now() / QUOTE_TTL_MS);
+  const quoteFingerprint = stableHash({ customerId, cartId, quoteBucket, snapshotItems, subtotalMinor, taxMinor, totalMinor });
+  const id = `qte_${quoteFingerprint.slice(0, 32)}`;
+  const expiresAt = new Date((quoteBucket + 1) * QUOTE_TTL_MS).toISOString();
+  const snapshot = JSON.stringify({ items: snapshotItems, revalidatedAt: new Date().toISOString(), quoteFingerprint });
   await sql()`
     INSERT INTO checkout_quotes (
       id, customer_id, cart_id, currency, subtotal_minor, tax_minor, delivery_minor,
@@ -257,6 +271,7 @@ async function createQuote(request: any, customerId: string, cartId: string) {
       ${id}, ${customerId}, ${cartId}, ${currency || "JMD"}, ${subtotalMinor}, ${taxMinor}, 0,
       0, ${totalMinor}, 'provider_revalidated', ${snapshot}::jsonb, ${expiresAt}
     )
+    ON CONFLICT (id) DO NOTHING
   `;
   return { id, currency: currency || "JMD", subtotalMinor, taxMinor, deliveryMinor: 0, serviceMinor: 0, totalMinor, expiresAt, items: snapshotItems, paymentAvailable: false };
 }
@@ -272,9 +287,11 @@ export default async function handler(request: any, response: any) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "same-origin");
   const method = String(request.method || "GET").toUpperCase();
+  let customerIdForAudit: string | undefined;
 
   try {
     const customerId = await currentCustomerId(request);
+    customerIdForAudit = customerId;
     if (!customerId) return send(response, 401, { error: { code: "AUTH_REQUIRED", message: "Sign in to use your persistent cart." } });
 
     const cart = await activeCart(customerId, true);
@@ -293,6 +310,10 @@ export default async function handler(request: any, response: any) {
 
     const input = await readJsonBody<{ action?: string; itemType?: string; providerItemId?: string; providerId?: string; quantity?: number; itemId?: string }>(request);
     const action = String(input.action || "");
+
+    if (["add_item", "set_quantity", "remove_item"].includes(action)) {
+      await enforceDurableRateLimit({ request, action: "commerce_cart_mutation", subject: customerId, limit: CART_MUTATION_LIMIT, windowSeconds: 300 });
+    }
 
     if (action === "add_item") {
       const itemType = input.itemType === "rental" ? "rental" : "product";
@@ -328,7 +349,10 @@ export default async function handler(request: any, response: any) {
     }
 
     if (action === "create_quote") {
+      await enforceDurableRateLimit({ request, action: "commerce_quote_customer", subject: customerId, limit: QUOTE_CUSTOMER_LIMIT, windowSeconds: 600 });
+      await enforceDurableRateLimit({ request, action: "commerce_quote_ip", subject: requestIp(request), limit: QUOTE_IP_LIMIT, windowSeconds: 600 });
       const quote = await createQuote(request, customerId, cart.id);
+      await recordSecurityEvent({ request, eventType: "commerce_quote_created", eventStatus: "created_or_replayed", riskLevel: "info", customerId, metadata: { quoteId: quote.id, cartId: cart.id, totalMinor: quote.totalMinor, currency: quote.currency } });
       return send(response, 201, { quote });
     }
 
@@ -337,6 +361,14 @@ export default async function handler(request: any, response: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     const status = Number((error as any)?.status || 500);
     const code = error instanceof Error ? error.message : "COMMERCE_REQUEST_FAILED";
+    if (code === "RATE_LIMITED") {
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 60));
+      response.setHeader("Retry-After", String(retryAfter));
+      try {
+        await recordSecurityEvent({ request, eventType: "commerce_velocity_blocked", eventStatus: "rate_limited", riskLevel: "medium", customerId: customerIdForAudit || null, metadata: { retryAfterSeconds: retryAfter } });
+      } catch {}
+      return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many commerce requests. Please wait and try again.", retryAfterSeconds: retryAfter } });
+    }
     const publicErrors: Record<string, string> = {
       CART_EMPTY: "Your cart is empty.",
       RENTAL_CHECKOUT_NOT_READY: "Rental checkout requires rental verification before payment.",
