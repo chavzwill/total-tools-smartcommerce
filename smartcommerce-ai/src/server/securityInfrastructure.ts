@@ -1,9 +1,14 @@
 import { neon } from "@neondatabase/serverless";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
+let auditIntegritySchemaReady = false;
 
 export type SecurityRiskLevel = "info" | "low" | "medium" | "high" | "critical";
+
+const AUDIT_CHAIN_ID = "security_events_v1";
+const AUDIT_GENESIS_HASH = "GENESIS";
+const AUDIT_INTEGRITY_KEY_ENV = "SMARTCOMMERCE_AUDIT_INTEGRITY_KEY";
 
 function sql() {
   if (!sqlClient) {
@@ -12,6 +17,88 @@ function sql() {
     sqlClient = neon(url);
   }
   return sqlClient;
+}
+
+function auditIntegrityKey() {
+  const value = process.env[AUDIT_INTEGRITY_KEY_ENV]?.trim() || "";
+  return value.length >= 32 ? value : null;
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, stableValue(child)])
+    );
+  }
+  return value;
+}
+
+function stableJson(value: unknown) {
+  return JSON.stringify(stableValue(value));
+}
+
+function securityEventChainPayload(input: {
+  id: string;
+  eventType: string;
+  eventStatus: string;
+  customerId: string | null;
+  commercialAccountId: string | null;
+  sessionId: string | null;
+  subjectHash: string | null;
+  ipHash: string | null;
+  userAgentHash: string | null;
+  riskLevel: SecurityRiskLevel;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  previousHash: string;
+}) {
+  return stableJson({
+    version: 1,
+    chainId: AUDIT_CHAIN_ID,
+    previousHash: input.previousHash,
+    id: input.id,
+    eventType: input.eventType,
+    eventStatus: input.eventStatus,
+    customerId: input.customerId,
+    commercialAccountId: input.commercialAccountId,
+    sessionId: input.sessionId,
+    subjectHash: input.subjectHash,
+    ipHash: input.ipHash,
+    userAgentHash: input.userAgentHash,
+    riskLevel: input.riskLevel,
+    metadata: input.metadata,
+    createdAt: input.createdAt,
+  });
+}
+
+function securityEventChainHash(key: string, payload: string) {
+  return createHmac("sha256", key).update(payload).digest("hex");
+}
+
+async function ensureAuditIntegritySchema() {
+  if (auditIntegritySchemaReady) return;
+  await sql()`ALTER TABLE security_events ADD COLUMN IF NOT EXISTS chain_id TEXT`;
+  await sql()`ALTER TABLE security_events ADD COLUMN IF NOT EXISTS chain_version INTEGER`;
+  await sql()`ALTER TABLE security_events ADD COLUMN IF NOT EXISTS chain_prev_hash TEXT`;
+  await sql()`ALTER TABLE security_events ADD COLUMN IF NOT EXISTS chain_hash TEXT`;
+  await sql()`CREATE UNIQUE INDEX IF NOT EXISTS security_events_chain_hash_uidx ON security_events(chain_hash) WHERE chain_hash IS NOT NULL`;
+  await sql()`
+    CREATE TABLE IF NOT EXISTS security_event_chain_state (
+      chain_id TEXT PRIMARY KEY,
+      head_hash TEXT NOT NULL,
+      event_count BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql()`
+    INSERT INTO security_event_chain_state (chain_id, head_hash, event_count, updated_at)
+    VALUES (${AUDIT_CHAIN_ID}, ${AUDIT_GENESIS_HASH}, 0, NOW())
+    ON CONFLICT (chain_id) DO NOTHING
+  `;
+  auditIntegritySchemaReady = true;
 }
 
 export function firstHeader(value: string | string[] | undefined) {
@@ -93,18 +180,233 @@ export async function recordSecurityEvent(input: {
   const ipHash = input.request ? securityHash(requestIp(input.request)) : null;
   const userAgentHash = input.request ? securityHash(requestUserAgent(input.request)) : null;
   const subjectHash = securityHash(input.subject || null);
+  const riskLevel = input.riskLevel || "info";
+  const metadata = input.metadata || {};
+  const customerId = input.customerId || null;
+  const commercialAccountId = input.commercialAccountId || null;
+  const sessionId = input.sessionId || null;
+  const createdAt = new Date().toISOString();
+  const integrityKey = auditIntegrityKey();
 
-  await sql()`
-    INSERT INTO security_events (
-      id, event_type, event_status, customer_id, commercial_account_id, session_id,
-      subject_hash, ip_hash, user_agent_hash, risk_level, metadata, created_at
-    ) VALUES (
-      ${id}, ${input.eventType}, ${input.eventStatus}, ${input.customerId || null},
-      ${input.commercialAccountId || null}, ${input.sessionId || null}, ${subjectHash},
-      ${ipHash}, ${userAgentHash}, ${input.riskLevel || "info"},
-      ${JSON.stringify(input.metadata || {})}::jsonb, NOW()
-    )
-  `;
+  if (!integrityKey) {
+    await sql()`
+      INSERT INTO security_events (
+        id, event_type, event_status, customer_id, commercial_account_id, session_id,
+        subject_hash, ip_hash, user_agent_hash, risk_level, metadata, created_at
+      ) VALUES (
+        ${id}, ${input.eventType}, ${input.eventStatus}, ${customerId},
+        ${commercialAccountId}, ${sessionId}, ${subjectHash},
+        ${ipHash}, ${userAgentHash}, ${riskLevel},
+        ${JSON.stringify(metadata)}::jsonb, ${createdAt}
+      )
+    `;
+    return;
+  }
+
+  await ensureAuditIntegritySchema();
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const stateRows = await sql()`
+      SELECT head_hash
+      FROM security_event_chain_state
+      WHERE chain_id = ${AUDIT_CHAIN_ID}
+      LIMIT 1
+    ` as Array<{ head_hash: string }>;
+    const previousHash = stateRows[0]?.head_hash || AUDIT_GENESIS_HASH;
+    const payload = securityEventChainPayload({
+      id,
+      eventType: input.eventType,
+      eventStatus: input.eventStatus,
+      customerId,
+      commercialAccountId,
+      sessionId,
+      subjectHash,
+      ipHash,
+      userAgentHash,
+      riskLevel,
+      metadata,
+      createdAt,
+      previousHash,
+    });
+    const chainHash = securityEventChainHash(integrityKey, payload);
+
+    const inserted = await sql()`
+      WITH advanced AS (
+        UPDATE security_event_chain_state
+        SET head_hash = ${chainHash},
+            event_count = event_count + 1,
+            updated_at = NOW()
+        WHERE chain_id = ${AUDIT_CHAIN_ID}
+          AND head_hash = ${previousHash}
+        RETURNING chain_id
+      )
+      INSERT INTO security_events (
+        id, event_type, event_status, customer_id, commercial_account_id, session_id,
+        subject_hash, ip_hash, user_agent_hash, risk_level, metadata, created_at,
+        chain_id, chain_version, chain_prev_hash, chain_hash
+      )
+      SELECT
+        ${id}, ${input.eventType}, ${input.eventStatus}, ${customerId},
+        ${commercialAccountId}, ${sessionId}, ${subjectHash}, ${ipHash}, ${userAgentHash},
+        ${riskLevel}, ${JSON.stringify(metadata)}::jsonb, ${createdAt},
+        ${AUDIT_CHAIN_ID}, 1, ${previousHash}, ${chainHash}
+      FROM advanced
+      RETURNING id
+    ` as Array<{ id: string }>;
+
+    if (inserted.length === 1) return;
+  }
+
+  throw new Error("SECURITY_AUDIT_CHAIN_CONTENTION");
+}
+
+export async function verifySecurityEventIntegrity() {
+  const integrityKey = auditIntegrityKey();
+  if (!integrityKey) {
+    return {
+      configured: false,
+      valid: false,
+      code: "AUDIT_INTEGRITY_NOT_CONFIGURED",
+      checkedEvents: 0,
+    };
+  }
+
+  await ensureAuditIntegritySchema();
+  const stateRows = await sql()`
+    SELECT head_hash, event_count
+    FROM security_event_chain_state
+    WHERE chain_id = ${AUDIT_CHAIN_ID}
+    LIMIT 1
+  ` as Array<{ head_hash: string; event_count: string | number }>;
+  const state = stateRows[0];
+  if (!state) {
+    return { configured: true, valid: false, code: "AUDIT_CHAIN_STATE_MISSING", checkedEvents: 0 };
+  }
+
+  const rows = await sql()`
+    SELECT id, event_type, event_status, customer_id, commercial_account_id, session_id,
+           subject_hash, ip_hash, user_agent_hash, risk_level, metadata, created_at,
+           chain_prev_hash, chain_hash
+    FROM security_events
+    WHERE chain_id = ${AUDIT_CHAIN_ID}
+      AND chain_version = 1
+    ORDER BY created_at ASC, id ASC
+  ` as Array<{
+    id: string;
+    event_type: string;
+    event_status: string;
+    customer_id: string | null;
+    commercial_account_id: string | null;
+    session_id: string | null;
+    subject_hash: string | null;
+    ip_hash: string | null;
+    user_agent_hash: string | null;
+    risk_level: SecurityRiskLevel;
+    metadata: Record<string, unknown> | null;
+    created_at: string | Date;
+    chain_prev_hash: string;
+    chain_hash: string;
+  }>;
+
+  const byPreviousHash = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const bucket = byPreviousHash.get(row.chain_prev_hash) || [];
+    bucket.push(row);
+    byPreviousHash.set(row.chain_prev_hash, bucket);
+  }
+
+  let currentHash = AUDIT_GENESIS_HASH;
+  let checkedEvents = 0;
+  const visited = new Set<string>();
+
+  while (true) {
+    const nextRows = byPreviousHash.get(currentHash) || [];
+    if (nextRows.length === 0) break;
+    if (nextRows.length !== 1) {
+      return {
+        configured: true,
+        valid: false,
+        code: "AUDIT_CHAIN_FORK_DETECTED",
+        checkedEvents,
+      };
+    }
+
+    const row = nextRows[0];
+    if (visited.has(row.id)) {
+      return { configured: true, valid: false, code: "AUDIT_CHAIN_CYCLE_DETECTED", checkedEvents };
+    }
+    visited.add(row.id);
+
+    const createdAt = new Date(row.created_at).toISOString();
+    const expected = securityEventChainHash(
+      integrityKey,
+      securityEventChainPayload({
+        id: row.id,
+        eventType: row.event_type,
+        eventStatus: row.event_status,
+        customerId: row.customer_id,
+        commercialAccountId: row.commercial_account_id,
+        sessionId: row.session_id,
+        subjectHash: row.subject_hash,
+        ipHash: row.ip_hash,
+        userAgentHash: row.user_agent_hash,
+        riskLevel: row.risk_level,
+        metadata: row.metadata || {},
+        createdAt,
+        previousHash: row.chain_prev_hash,
+      })
+    );
+
+    if (expected !== row.chain_hash) {
+      return {
+        configured: true,
+        valid: false,
+        code: "AUDIT_EVENT_HASH_MISMATCH",
+        checkedEvents,
+        eventId: row.id,
+      };
+    }
+
+    currentHash = row.chain_hash;
+    checkedEvents += 1;
+  }
+
+  if (checkedEvents !== rows.length) {
+    return {
+      configured: true,
+      valid: false,
+      code: "AUDIT_CHAIN_DISCONNECTED_EVENTS",
+      checkedEvents,
+      totalEvents: rows.length,
+    };
+  }
+
+  if (currentHash !== state.head_hash) {
+    return {
+      configured: true,
+      valid: false,
+      code: "AUDIT_CHAIN_HEAD_MISMATCH",
+      checkedEvents,
+    };
+  }
+
+  if (checkedEvents !== Number(state.event_count)) {
+    return {
+      configured: true,
+      valid: false,
+      code: "AUDIT_CHAIN_COUNT_MISMATCH",
+      checkedEvents,
+      recordedEventCount: Number(state.event_count),
+    };
+  }
+
+  return {
+    configured: true,
+    valid: true,
+    code: "AUDIT_CHAIN_VALID",
+    checkedEvents,
+    headHash: state.head_hash,
+  };
 }
 
 export async function touchSessionSecurity(input: {
