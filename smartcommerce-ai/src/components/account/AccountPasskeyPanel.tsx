@@ -1,5 +1,6 @@
 import { Fingerprint, KeyRound, Laptop, LogOut, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
+import AccountMfaPanel from "./AccountMfaPanel";
 import {
   confirmSensitiveAction,
   listCustomerPasskeys,
@@ -115,6 +116,8 @@ export default function AccountPasskeyPanel() {
           )}
         </div>
       </section>
+
+      <AccountMfaPanel />
 
       <section className="sc-account-real__security" aria-labelledby="sc-sessions-title">
         <Laptop size={22} />
