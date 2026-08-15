@@ -155,3 +155,64 @@ export async function sessionRequiresStepUp(input: {
   if (!row.last_authenticated_at) return true;
   return Date.now() - new Date(row.last_authenticated_at).getTime() > maxAgeSeconds * 1000;
 }
+
+export async function assessSensitiveActionRisk(input: {
+  request: any;
+  customerId: string;
+  sessionId: string;
+  sessionIpHash?: string | null;
+}) {
+  const currentIpHash = securityHash(requestIp(input.request));
+  const currentUserAgentHash = securityHash(requestUserAgent(input.request));
+  const networkChanged = Boolean(input.sessionIpHash && currentIpHash && input.sessionIpHash !== currentIpHash);
+
+  const trustedAuthRows = await sql()`
+    SELECT ip_hash, user_agent_hash, created_at
+    FROM security_events
+    WHERE customer_id = ${input.customerId}
+      AND session_id = ${input.sessionId}
+      AND created_at > NOW() - INTERVAL '20 minutes'
+      AND (
+        (event_type = 'totp_step_up_succeeded' AND event_status = 'success') OR
+        (event_type = 'recovery_code_used' AND event_status = 'success') OR
+        (event_type = 'totp_enabled' AND event_status = 'success') OR
+        (event_type = 'passkey_step_up' AND event_status = 'success')
+      )
+    ORDER BY created_at DESC
+    LIMIT 1
+  ` as Array<{ ip_hash: string | null; user_agent_hash: string | null; created_at: string | Date }>;
+
+  const trustedAuth = trustedAuthRows[0];
+  const strongAuthBoundToRequest = Boolean(
+    trustedAuth &&
+    currentIpHash &&
+    currentUserAgentHash &&
+    trustedAuth.ip_hash === currentIpHash &&
+    trustedAuth.user_agent_hash === currentUserAgentHash
+  );
+
+  const recentThreatRows = await sql()`
+    SELECT created_at
+    FROM security_events
+    WHERE customer_id = ${input.customerId}
+      AND created_at > NOW() - INTERVAL '30 minutes'
+      AND risk_level IN ('high', 'critical')
+      AND event_status NOT IN ('success', 'allowed', 'recorded', 'pending_manual_review')
+    ORDER BY created_at DESC
+    LIMIT 1
+  ` as Array<{ created_at: string | Date }>;
+
+  const recentThreat = recentThreatRows[0];
+  const threatAfterStrongAuth = Boolean(
+    recentThreat &&
+    (!trustedAuth || new Date(recentThreat.created_at).getTime() > new Date(trustedAuth.created_at).getTime())
+  );
+  const requiresFreshStrongStepUp = !strongAuthBoundToRequest || threatAfterStrongAuth;
+
+  return {
+    requiresFreshStrongStepUp,
+    networkChanged,
+    strongAuthBoundToRequest,
+    recentThreatAfterStrongAuth: threatAfterStrongAuth,
+  };
+}
