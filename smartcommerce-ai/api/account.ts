@@ -1,14 +1,21 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import {
+  enforceDurableRateLimit,
+  firstHeader,
+  recordSecurityEvent,
+  requestIp,
+  requestUserAgent,
+  securityHash,
+  touchSessionSecurity,
+} from "../src/server/securityInfrastructure";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
-const WINDOW_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const scrypt = promisify(scryptCallback);
 
-type Bucket = { count: number; resetAt: number };
 type CustomerAccount = {
   id: string;
   email: string;
@@ -30,12 +37,7 @@ type AccountRow = {
   updated_at: string | Date;
 };
 
-const buckets = new Map<string, Bucket>();
 let sqlClient: ReturnType<typeof neon> | undefined;
-
-function firstHeader(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function sql() {
   if (!sqlClient) {
@@ -81,10 +83,6 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function hashUserAgent(value?: string) {
-  return value ? createHash("sha256").update(value.slice(0, 512)).digest("hex") : null;
-}
-
 async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
   const db = sql();
   const existing = (await db`SELECT id FROM customer_accounts WHERE email = ${input.email} LIMIT 1`) as Record<string, unknown>[];
@@ -102,8 +100,7 @@ async function createAccount(input: { email: string; password: string; fullName:
 }
 
 async function authenticate(email: string, password: string) {
-  const db = sql();
-  const rows = (await db`
+  const rows = (await sql()`
     SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at
     FROM customer_accounts
     WHERE email = ${email}
@@ -117,22 +114,28 @@ async function authenticate(email: string, password: string) {
   return (await passwordMatches(password, row.password_hash)) ? accountFromRow(row) : undefined;
 }
 
-async function createSession(customer: CustomerAccount, userAgent?: string) {
-  const db = sql();
+async function createSession(customer: CustomerAccount, request: any) {
   const token = randomBytes(32).toString("base64url");
+  const sessionId = `ses_${randomBytes(16).toString("hex")}`;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
-  await db`
-    INSERT INTO customer_sessions (id, customer_id, token_hash, created_at, expires_at, revoked_at, user_agent_hash)
-    VALUES (${`ses_${randomBytes(16).toString("hex")}`}, ${customer.id}, ${hashToken(token)}, ${now.toISOString()}, ${expiresAt}, NULL, ${hashUserAgent(userAgent)})
+  const tokenHash = hashToken(token);
+  await sql()`
+    INSERT INTO customer_sessions (
+      id, customer_id, token_hash, created_at, expires_at, revoked_at,
+      user_agent_hash, auth_level, last_authenticated_at, last_activity_at, ip_hash
+    ) VALUES (
+      ${sessionId}, ${customer.id}, ${tokenHash}, ${now.toISOString()}, ${expiresAt}, NULL,
+      ${securityHash(requestUserAgent(request))}, 'password', ${now.toISOString()}, ${now.toISOString()},
+      ${securityHash(requestIp(request))}
+    )
   `;
-  return { token, expiresAt };
+  return { token, tokenHash, sessionId, expiresAt };
 }
 
 async function sessionCustomer(token?: string) {
   if (!token) return undefined;
-  const db = sql();
-  const rows = (await db`
+  const rows = (await sql()`
     SELECT c.id, c.email, c.full_name, c.phone, c.email_verified, c.created_at, c.updated_at
     FROM customer_sessions s
     JOIN customer_accounts c ON c.id = s.customer_id
@@ -146,34 +149,22 @@ async function sessionCustomer(token?: string) {
 
 async function revokeSession(token?: string) {
   if (!token) return;
-  const db = sql();
-  await db`
+  await sql()`
     UPDATE customer_sessions
     SET revoked_at = NOW()
     WHERE token_hash = ${hashToken(token)} AND revoked_at IS NULL
   `;
 }
 
-function clientKey(request: any, action: string) {
-  const forwarded = firstHeader(request.headers?.["x-forwarded-for"]);
-  const ip = forwarded?.split(",")[0]?.trim() || request.socket?.remoteAddress || "unknown";
-  return `${action}:${ip}`;
-}
-
-function enforceRateLimit(request: any, action: string, limit: number) {
-  const key = clientKey(request, action);
-  const now = Date.now();
-  const current = buckets.get(key);
-  if (!current || current.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
+async function authRateLimits(request: any, action: "signup" | "login", email: string) {
+  const ip = requestIp(request);
+  if (action === "signup") {
+    await enforceDurableRateLimit({ request, action: "signup_ip", subject: ip, limit: 20 });
+    if (email) await enforceDurableRateLimit({ request, action: "signup_identity", subject: `${ip}:${email}`, limit: 5 });
     return;
   }
-  if (current.count >= limit) {
-    const error = new Error("RATE_LIMITED") as Error & { status?: number };
-    error.status = 429;
-    throw error;
-  }
-  current.count += 1;
+  await enforceDurableRateLimit({ request, action: "login_ip", subject: ip, limit: 40 });
+  if (email) await enforceDurableRateLimit({ request, action: "login_identity", subject: `${ip}:${email}`, limit: 10 });
 }
 
 async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
@@ -248,6 +239,9 @@ export default async function handler(request: any, response: any) {
   try {
     if (method === "GET") {
       const customer = await sessionCustomer(token);
+      if (customer && token) {
+        await touchSessionSecurity({ tokenHash: hashToken(token), request });
+      }
       return send(response, 200, { authenticated: Boolean(customer), customer: customer || null });
     }
 
@@ -257,6 +251,7 @@ export default async function handler(request: any, response: any) {
     }
 
     if (!sameOrigin(request)) {
+      await recordSecurityEvent({ request, eventType: "account_origin_rejected", eventStatus: "blocked", riskLevel: "medium" });
       return send(response, 403, { error: { code: "ORIGIN_REJECTED", message: "This request was rejected." } });
     }
 
@@ -264,47 +259,55 @@ export default async function handler(request: any, response: any) {
     const action = String(input.action || "");
 
     if (action === "signup") {
-      enforceRateLimit(request, "signup", 5);
       const email = String(input.email || "").trim().toLowerCase();
+      await authRateLimits(request, "signup", email);
       const password = String(input.password || "");
       const fullName = String(input.fullName || "").trim();
       const phone = input.phone === undefined ? undefined : String(input.phone).trim();
 
       if (!validEmail(email) || !passwordAllowed(password) || fullName.length < 2 || fullName.length > 120 || (phone && phone.length > 40)) {
+        await recordSecurityEvent({ request, eventType: "signup_rejected", eventStatus: "invalid_input", riskLevel: "low", subject: email || null });
         return send(response, 400, { error: { code: "INVALID_ACCOUNT_DETAILS", message: "Use a valid email, a password of at least 10 characters, and your full name." } });
       }
 
       const customer = await createAccount({ email, password, fullName, phone });
       if (!customer) {
+        await recordSecurityEvent({ request, eventType: "signup_rejected", eventStatus: "account_exists_or_conflict", riskLevel: "low", subject: email });
         return send(response, 409, { error: { code: "ACCOUNT_NOT_CREATED", message: "An account could not be created with those details." } });
       }
 
-      const session = await createSession(customer, firstHeader(request.headers?.["user-agent"]));
+      const session = await createSession(customer, request);
+      await recordSecurityEvent({ request, eventType: "signup_succeeded", eventStatus: "success", riskLevel: "info", customerId: customer.id, sessionId: session.sessionId, subject: email });
       response.setHeader("Set-Cookie", sessionCookie(session.token, session.expiresAt));
       return send(response, 201, { authenticated: true, customer });
     }
 
     if (action === "login") {
-      enforceRateLimit(request, "login", 10);
       const email = String(input.email || "").trim().toLowerCase();
+      await authRateLimits(request, "login", email);
       const password = String(input.password || "");
       if (!validEmail(email) || !password || password.length > 128) {
+        await recordSecurityEvent({ request, eventType: "login_failed", eventStatus: "invalid_credentials", riskLevel: "medium", subject: email || null });
         return send(response, 401, { error: { code: "INVALID_CREDENTIALS", message: "Email or password is incorrect." } });
       }
 
       const customer = await authenticate(email, password);
       if (!customer) {
+        await recordSecurityEvent({ request, eventType: "login_failed", eventStatus: "invalid_credentials", riskLevel: "medium", subject: email });
         return send(response, 401, { error: { code: "INVALID_CREDENTIALS", message: "Email or password is incorrect." } });
       }
 
       await revokeSession(token);
-      const session = await createSession(customer, firstHeader(request.headers?.["user-agent"]));
+      const session = await createSession(customer, request);
+      await recordSecurityEvent({ request, eventType: "login_succeeded", eventStatus: "success", riskLevel: "info", customerId: customer.id, sessionId: session.sessionId, subject: email });
       response.setHeader("Set-Cookie", sessionCookie(session.token, session.expiresAt));
       return send(response, 200, { authenticated: true, customer });
     }
 
     if (action === "logout") {
+      const customer = await sessionCustomer(token);
       await revokeSession(token);
+      await recordSecurityEvent({ request, eventType: "logout", eventStatus: "success", riskLevel: "info", customerId: customer?.id || null });
       response.setHeader("Set-Cookie", clearSessionCookie());
       return send(response, 200, { authenticated: false, customer: null });
     }
@@ -316,7 +319,9 @@ export default async function handler(request: any, response: any) {
     }
     const status = Number((error as { status?: number })?.status || 500);
     if (status === 429) {
-      response.setHeader("Retry-After", "900");
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 900));
+      response.setHeader("Retry-After", String(retryAfter));
+      await recordSecurityEvent({ request, eventType: "auth_rate_limited", eventStatus: "blocked", riskLevel: "high" }).catch(() => undefined);
       return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many attempts. Try again later." } });
     }
     if (status === 413) {
