@@ -20,7 +20,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Platform order, invoice, and checkout creation require durable idempotency keys. Replays with the same request return the stored response, while reuse of a key for a changed request is rejected.
 - Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
 - Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
-- Security CI installs from the synchronized lockfile, runs production builds, fails on high/critical production dependency vulnerabilities, and runs GitHub CodeQL analysis for JavaScript/TypeScript on security branches, pull requests, and main.
+- Security CI installs from the synchronized lockfile, runs production builds, and fails on high/critical production dependency vulnerabilities. CodeQL analysis is retained as an advisory job until GitHub code scanning is enabled for this repository.
 - Security events support an HMAC-SHA-256 append-only integrity chain. Each protected event commits its predecessor hash and event hash through an atomic compare-and-advance database statement, and an internal-only verifier detects changed events, deleted/disconnected events, forks, cycles, count mismatches, and chain-head mismatches.
 
 ### Closed findings
@@ -59,7 +59,9 @@ Future payment-method changes, refund-destination changes, direct payment chargi
 
 #### SC-OPS-001 — Automated dependency and static-analysis gate
 
-Closed in code. The repository dependency lockfile is synchronized with the current server dependencies and both normal CI and security CI use `npm ci`. The security workflow builds the production application, fails for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also runs on `security/**` branches so security changes receive normal compilation checks before merge. During this gate, the stale lockfile exposed two high-severity transitive dependency findings; the lockfile was regenerated/fixed and the dependency-audit job subsequently passed.
+Closed for the mandatory build and dependency-vulnerability gates. The repository dependency lockfile is synchronized with the current server dependencies and both normal CI and security CI use `npm ci`. The security workflow builds the production application and fails for high/critical vulnerabilities in production dependencies. The primary build workflow also runs on `security/**` branches so security changes receive normal compilation checks before merge. During this gate, the stale lockfile exposed two high-severity transitive dependency findings; the lockfile was regenerated/fixed and the dependency-audit job subsequently passed.
+
+CodeQL successfully initializes, builds and executes JavaScript/TypeScript analysis in Actions and produces SARIF, but GitHub cannot register the analysis because repository code scanning is not currently enabled. The CodeQL job is therefore advisory rather than a required merge gate until that repository setting/capability is enabled. This is an operational GitHub configuration limitation, not evidence that the application passed or failed every CodeQL query.
 
 #### SC-OPS-002 — Tamper-evident security event integrity
 
@@ -72,6 +74,7 @@ The integrity key must remain server-only, independent from customer MFA secrets
 - Refund/credit/promo abuse controls once those write paths are enabled.
 - Security-event retention policy plus automated external alert delivery when the integrity verifier fails or critical security events occur.
 - Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
+- Enable GitHub repository code scanning if CodeQL result publication and repository-native alerts are desired as a required gate.
 - Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
 - Deployment and live integrity-chain verification after hosting build capacity is available and `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` is configured.
 
