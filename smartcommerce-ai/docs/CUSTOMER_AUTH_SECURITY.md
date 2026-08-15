@@ -4,19 +4,19 @@
 
 The customer account foundation provides real signup, login, logout, and persistent server-side sessions. It replaces the previous demo account state.
 
-The persistent production datastore is a dedicated SmartCommerce Neon Postgres project. The customer/account schema has been applied and verified on the production database branch.
+This feature must remain fail-closed until the dedicated SmartCommerce Neon Postgres database is configured.
 
 ## Runtime configuration
 
-Set the pooled Neon Postgres connection string in Vercel for Preview and Production:
+Set the server-only Neon connection string in Vercel for Preview and Production as appropriate:
 
 ```text
 SMARTCOMMERCE_DATABASE_URL=
 ```
 
-`DATABASE_URL` is also accepted by the server runtime as a fallback.
+`DATABASE_URL` is also accepted as a fallback.
 
-Do not expose the database URL through any `VITE_*` variable or client-side code.
+Do not expose the database URL through any `VITE_*` variable and do not commit it to the repository. After adding or changing the environment variable, redeploy the relevant Vercel environment so the function receives the new value.
 
 ## Security controls implemented
 
@@ -37,22 +37,12 @@ Do not expose the database URL through any `VITE_*` variable or client-side code
 
 ## Database schema
 
-The dedicated SmartCommerce database currently owns:
+The dedicated SmartCommerce Neon database contains:
 
 - `customer_accounts`
 - `customer_sessions`
 
-The production schema was introduced through the Neon migration workflow and verified before application to the main database branch.
-
-## Verified database behavior
-
-A disposable acceptance transaction verified:
-
-- account creation
-- session creation linked to the customer
-- account/session retrieval through the relationship
-- cascade cleanup of sessions when the test customer was removed
-- zero leftover acceptance records
+Schema changes must use the database migration workflow rather than runtime DDL.
 
 ## Not implemented yet
 
@@ -75,7 +65,7 @@ The following are intentionally not represented as complete:
 
 ## Production acceptance gate
 
-Do not merge/enable customer accounts for public traffic until all of the following have been verified through the deployed application using the configured Neon database:
+Do not merge/enable customer accounts for public traffic until all of the following have been verified against the configured persistent database:
 
 1. Create account.
 2. Refresh and remain signed in.
