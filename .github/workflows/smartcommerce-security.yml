@@ -36,8 +36,8 @@ jobs:
           cache: npm
           cache-dependency-path: smartcommerce-ai/package-lock.json
 
-      - name: Install dependencies
-        run: npm install --no-fund
+      - name: Install locked dependencies
+        run: npm ci --no-fund
 
       - name: Production build
         run: npm run build
