@@ -5,7 +5,10 @@ export type CommercialAccountSummary = {
   account_type: string;
   tax_identifier?: string | null;
   status: string;
+  verification_status: string;
+  privilege_status: string;
   role: string;
+  authority_status: string;
   mapping_status?: string | null;
   provider_id?: string | null;
   provider_account_id?: string | null;
@@ -21,12 +24,33 @@ export type CommercialAccountDetails = {
     account_type: string;
     tax_identifier?: string | null;
     status: string;
+    verification_status: string;
+    privilege_status: string;
+    verified_at?: string | null;
+    verification_reference?: string | null;
   };
   role: string;
+  authorityStatus: string;
+  providerVerified: boolean;
+  privilegedAccess: boolean;
   sites: Array<{ id: string; name: string; city?: string | null; region?: string | null; line1?: string | null }>;
   projects: Array<{ id: string; site_id?: string | null; name: string; reference_code?: string | null; description?: string | null; status: string }>;
   approvalRules: Array<{ id: string; rule_type: string; currency?: string | null; threshold_minor?: number | string | null; threshold_days?: number | null; approver_role: string }>;
-  members: Array<{ id: string; customer_id: string; role: string; status: string; full_name: string; email: string }>;
+  members: Array<{ id: string; customer_id: string; role: string; status: string; authority_status: string; full_name: string; email: string }>;
+  verificationApplications: Array<{
+    id: string;
+    claimed_account_type: string;
+    legal_name: string;
+    registration_identifier?: string | null;
+    tax_identifier?: string | null;
+    work_email?: string | null;
+    official_domain?: string | null;
+    application_status: string;
+    risk_flags?: string[];
+    submitted_at?: string | null;
+    reviewed_at?: string | null;
+    review_reference?: string | null;
+  }>;
 };
 
 type ApiError = { error?: { code?: string; message?: string } };
@@ -55,7 +79,14 @@ export async function getCommercialAccount(accountId: string) {
   return request<{ details: CommercialAccountDetails }>(`/api/commercial-account?accountId=${encodeURIComponent(accountId)}`);
 }
 
-export async function createCommercialAccount(input: { displayName: string; legalName?: string; taxIdentifier?: string; accountType: string }) {
+export async function createCommercialAccount(input: {
+  displayName: string;
+  legalName?: string;
+  taxIdentifier?: string;
+  registrationIdentifier?: string;
+  workEmail?: string;
+  accountType: string;
+}) {
   return request<{ details: CommercialAccountDetails }>("/api/commercial-account", {
     method: "POST",
     body: JSON.stringify({ action: "create_account", ...input }),
@@ -73,5 +104,12 @@ export async function createCommercialProject(input: { accountId: string; name: 
   return request<{ details: CommercialAccountDetails }>("/api/commercial-account", {
     method: "POST",
     body: JSON.stringify({ action: "create_project", ...input }),
+  });
+}
+
+export async function checkCommercialPrivilegedAccess(accountId: string) {
+  return request<{ allowed: true }>("/api/commercial-account", {
+    method: "POST",
+    body: JSON.stringify({ action: "check_privileged_access", accountId }),
   });
 }
