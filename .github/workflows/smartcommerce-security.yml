@@ -44,7 +44,8 @@ jobs:
       - name: Dependency vulnerability gate
         run: npm audit --audit-level=high --omit=dev
 
-  codeql:
+  codeql-advisory:
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -63,3 +64,7 @@ jobs:
         with:
           category: '/language:javascript-typescript'
           upload: never
+
+      - name: Explain advisory status
+        if: failure()
+        run: echo "CodeQL is advisory until GitHub code scanning is enabled for this repository. Build and dependency-audit gates remain mandatory."
