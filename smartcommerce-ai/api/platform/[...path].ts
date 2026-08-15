@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { handlePlatformRestRequest } from "../../src/backend/platformRestApi";
 import { createConfiguredTotalToolsPlatformService } from "../../src/integrations/totalToolsPlatformRuntime";
+import { executeIdempotentPlatformWrite } from "../../src/server/platformIdempotency";
 
 const service = createConfiguredTotalToolsPlatformService();
 const MAX_BODY_BYTES = 64 * 1024;
@@ -42,6 +43,15 @@ const isPublicPlatformPath = (method: string, path: string) => {
   if (/^\/api\/platform\/products\/[^/]+$/.test(path)) return true;
   if (/^\/api\/platform\/rentals\/assets\/[^/]+$/.test(path)) return true;
   return false;
+};
+
+const idempotentOperation = (method: string, path: string) => {
+  if (method !== "POST") return undefined;
+  if (path === "/api/platform/orders") return { operation: "platform.order.create", keyHeader: "idempotency-key" };
+  if (path === "/api/platform/invoices") return { operation: "platform.invoice.create", keyHeader: "idempotency-key" };
+  if (path === "/api/platform/checkout") return { operation: "platform.checkout.create", keyHeader: "idempotency-key" };
+  if (path === "/api/platform/integrations/webhooks") return { operation: "platform.webhook.process", keyHeader: "x-provider-event-id" };
+  return undefined;
 };
 
 const internalAuthorization = (request: any) => {
@@ -150,7 +160,16 @@ export default async function handler(request: any, response: any) {
 
   try {
     const platformRequest = await toRequest(request, authorization.authorized);
-    const platformResponse = await handlePlatformRestRequest(platformRequest, service);
+    const protectedWrite = idempotentOperation(method, path);
+    const platformResponse = protectedWrite
+      ? await executeIdempotentPlatformWrite({
+          request: platformRequest,
+          operation: protectedWrite.operation,
+          keyHeader: protectedWrite.keyHeader,
+          ttlHours: path === "/api/platform/integrations/webhooks" ? 72 : 24,
+          execute: () => handlePlatformRestRequest(platformRequest.clone(), service),
+        })
+      : await handlePlatformRestRequest(platformRequest, service);
     await sendResponse(response, platformResponse);
   } catch (error) {
     if (Number((error as any)?.status) === 413) {
