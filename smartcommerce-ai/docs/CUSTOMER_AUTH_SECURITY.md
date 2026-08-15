@@ -4,25 +4,19 @@
 
 The customer account foundation provides real signup, login, logout, and persistent server-side sessions. It replaces the previous demo account state.
 
-This feature must remain fail-closed until a persistent libSQL/Turso database is configured.
+The persistent production datastore is a dedicated SmartCommerce Neon Postgres project. The customer/account schema has been applied and verified on the production database branch.
 
 ## Runtime configuration
 
-Set one of the following database pairs in Vercel for Preview/Production as appropriate:
+Set the pooled Neon Postgres connection string in Vercel for Preview and Production:
 
 ```text
 SMARTCOMMERCE_DATABASE_URL=
-SMARTCOMMERCE_DATABASE_AUTH_TOKEN=
 ```
 
-or the compatible Turso names:
+`DATABASE_URL` is also accepted by the server runtime as a fallback.
 
-```text
-TURSO_DATABASE_URL=
-TURSO_AUTH_TOKEN=
-```
-
-Do not expose these values through `VITE_*` variables.
+Do not expose the database URL through any `VITE_*` variable or client-side code.
 
 ## Security controls implemented
 
@@ -43,12 +37,22 @@ Do not expose these values through `VITE_*` variables.
 
 ## Database schema
 
-The account function initializes only the tables it owns:
+The dedicated SmartCommerce database currently owns:
 
 - `customer_accounts`
 - `customer_sessions`
 
-Future migrations should move to a dedicated migration workflow before broad production rollout.
+The production schema was introduced through the Neon migration workflow and verified before application to the main database branch.
+
+## Verified database behavior
+
+A disposable acceptance transaction verified:
+
+- account creation
+- session creation linked to the customer
+- account/session retrieval through the relationship
+- cascade cleanup of sessions when the test customer was removed
+- zero leftover acceptance records
 
 ## Not implemented yet
 
@@ -71,7 +75,7 @@ The following are intentionally not represented as complete:
 
 ## Production acceptance gate
 
-Do not merge/enable customer accounts for public traffic until all of the following have been verified against the configured persistent database:
+Do not merge/enable customer accounts for public traffic until all of the following have been verified through the deployed application using the configured Neon database:
 
 1. Create account.
 2. Refresh and remain signed in.
