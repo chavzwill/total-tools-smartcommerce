@@ -22,6 +22,14 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function normalizeName(value: string) {
+  return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function normalizeIdentifier(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 function parseCookie(header?: string) {
   const result: Record<string, string> = {};
   for (const part of (header || "").split(";")) {
@@ -71,20 +79,66 @@ async function currentCustomerId(request: any) {
 
 async function membership(customerId: string, accountId: string) {
   const rows = await sql()`
-    SELECT role, status
+    SELECT role, status, authority_status
     FROM commercial_account_members
     WHERE customer_id = ${customerId}
       AND commercial_account_id = ${accountId}
       AND status = 'active'
     LIMIT 1
-  ` as Array<{ role: string; status: string }>;
+  ` as Array<{ role: string; status: string; authority_status: string }>;
   return rows[0];
+}
+
+async function accountTrust(accountId: string) {
+  const rows = await sql()`
+    SELECT verification_status, privilege_status, account_type
+    FROM commercial_accounts
+    WHERE id = ${accountId}
+    LIMIT 1
+  ` as Array<{ verification_status: string; privilege_status: string; account_type: string }>;
+  return rows[0];
+}
+
+async function providerVerified(accountId: string) {
+  const rows = await sql()`
+    SELECT 1
+    FROM commercial_provider_mappings
+    WHERE commercial_account_id = ${accountId}
+      AND mapping_status = 'verified'
+    LIMIT 1
+  ` as Array<{ '?column?': number }>;
+  return Boolean(rows[0]);
+}
+
+async function privilegedCommercialAccess(customerId: string, accountId: string) {
+  const [member, trust, providerOk] = await Promise.all([
+    membership(customerId, accountId),
+    accountTrust(accountId),
+    providerVerified(accountId),
+  ]);
+  return Boolean(
+    member &&
+    member.authority_status === 'verified' &&
+    trust?.verification_status === 'verified' &&
+    trust?.privilege_status === 'enabled' &&
+    providerOk,
+  );
+}
+
+async function audit(accountId: string | null, customerId: string | null, eventType: string, eventStatus: 'recorded' | 'blocked' | 'review_required', metadata: Record<string, unknown> = {}) {
+  const id = `cae_${randomBytes(16).toString("hex")}`;
+  await sql()`
+    INSERT INTO commercial_audit_events (id, commercial_account_id, actor_customer_id, event_type, event_status, metadata)
+    VALUES (${id}, ${accountId}, ${customerId}, ${eventType}, ${eventStatus}, ${JSON.stringify(metadata)}::jsonb)
+  `;
 }
 
 async function listAccounts(customerId: string) {
   return await sql()`
     SELECT a.id, a.display_name, a.legal_name, a.account_type, a.tax_identifier, a.status,
-           m.role, m.status AS membership_status, a.created_at, a.updated_at,
+           a.verification_status, a.privilege_status,
+           m.role, m.status AS membership_status, m.authority_status,
+           a.created_at, a.updated_at,
            pm.provider_id, pm.provider_customer_id, pm.provider_account_id,
            pm.provider_price_list_id, pm.payment_terms_code, pm.mapping_status
     FROM commercial_account_members m
@@ -99,14 +153,16 @@ async function listAccounts(customerId: string) {
 async function accountDetails(customerId: string, accountId: string) {
   const member = await membership(customerId, accountId);
   if (!member) return undefined;
-  const [accounts, sites, projects, rules, members] = await Promise.all([
-    sql()`SELECT id, display_name, legal_name, account_type, tax_identifier, status, created_at, updated_at FROM commercial_accounts WHERE id = ${accountId} LIMIT 1`,
+  const [accounts, sites, projects, rules, members, applications] = await Promise.all([
+    sql()`SELECT id, display_name, legal_name, account_type, tax_identifier, status, verification_status, privilege_status, verified_at, verification_reference, created_at, updated_at FROM commercial_accounts WHERE id = ${accountId} LIMIT 1`,
     sql()`SELECT id, name, line1, line2, city, region, postal_code, country_code, contact_name, contact_phone, active FROM commercial_sites WHERE commercial_account_id = ${accountId} AND active = true ORDER BY name`,
     sql()`SELECT id, site_id, name, reference_code, description, status, start_date, target_end_date, created_at, updated_at FROM commercial_projects WHERE commercial_account_id = ${accountId} ORDER BY updated_at DESC`,
     sql()`SELECT id, rule_type, currency, threshold_minor, threshold_days, approver_role, active FROM commercial_approval_rules WHERE commercial_account_id = ${accountId} AND active = true ORDER BY created_at`,
-    sql()`SELECT m.id, m.customer_id, m.role, m.status, c.full_name, c.email FROM commercial_account_members m JOIN customer_accounts c ON c.id = m.customer_id WHERE m.commercial_account_id = ${accountId} AND m.status <> 'removed' ORDER BY m.created_at`,
+    sql()`SELECT m.id, m.customer_id, m.role, m.status, m.authority_status, c.full_name, c.email FROM commercial_account_members m JOIN customer_accounts c ON c.id = m.customer_id WHERE m.commercial_account_id = ${accountId} AND m.status <> 'removed' ORDER BY m.created_at`,
+    sql()`SELECT id, claimed_account_type, legal_name, registration_identifier, tax_identifier, work_email, official_domain, application_status, risk_flags, submitted_at, reviewed_at, review_reference FROM commercial_verification_applications WHERE commercial_account_id = ${accountId} ORDER BY created_at DESC`,
   ]);
-  return { account: (accounts as any[])[0], role: member.role, sites, projects, approvalRules: rules, members };
+  const providerOk = await providerVerified(accountId);
+  return { account: (accounts as any[])[0], role: member.role, authorityStatus: member.authority_status, providerVerified: providerOk, privilegedAccess: await privilegedCommercialAccess(customerId, accountId), sites, projects, approvalRules: rules, members, verificationApplications: applications };
 }
 
 function send(response: any, status: number, payload: unknown) {
@@ -146,24 +202,65 @@ export default async function handler(request: any, response: any) {
 
     if (action === "create_account") {
       const displayName = String(input.displayName || "").trim();
-      const legalName = String(input.legalName || "").trim();
+      const legalName = String(input.legalName || displayName).trim();
       const taxIdentifier = String(input.taxIdentifier || "").trim();
+      const registrationIdentifier = String(input.registrationIdentifier || "").trim();
+      const workEmail = String(input.workEmail || "").trim().toLowerCase();
       const accountType = ["business", "contractor", "government", "organisation"].includes(input.accountType) ? input.accountType : "business";
-      if (displayName.length < 2 || displayName.length > 160 || legalName.length > 200 || taxIdentifier.length > 80) {
-        return send(response, 400, { error: { code: "INVALID_COMMERCIAL_ACCOUNT", message: "Enter valid commercial account details." } });
+      if (displayName.length < 2 || displayName.length > 160 || legalName.length < 2 || legalName.length > 200 || taxIdentifier.length > 80 || registrationIdentifier.length > 80 || workEmail.length > 200) {
+        return send(response, 400, { error: { code: "INVALID_COMMERCIAL_ACCOUNT", message: "Enter valid commercial account application details." } });
       }
+
+      const normalized = normalizeName(legalName);
+      const normalizedTax = taxIdentifier ? normalizeIdentifier(taxIdentifier) : null;
+      const exactMatches = await sql()`
+        SELECT id, display_name, verification_status
+        FROM commercial_accounts
+        WHERE normalized_name = ${normalized}
+           OR (${normalizedTax} IS NOT NULL AND normalized_tax_identifier = ${normalizedTax})
+        ORDER BY verification_status = 'verified' DESC, created_at ASC
+        LIMIT 5
+      ` as Array<{ id: string; display_name: string; verification_status: string }>;
+      if (exactMatches.some((row) => row.verification_status === 'verified')) {
+        await audit(null, customerId, 'commercial_duplicate_verified_organisation_claim', 'blocked', { normalizedName: normalized, accountType });
+        return send(response, 409, { error: { code: "COMMERCIAL_ORGANISATION_EXISTS", message: "A verified organisation with matching details already exists. Request access to the existing organisation instead." } });
+      }
+
       const accountId = `com_${randomBytes(16).toString("hex")}`;
       const memberId = `cmm_${randomBytes(16).toString("hex")}`;
+      const applicationId = `cva_${randomBytes(16).toString("hex")}`;
+      const governmentClaim = accountType === 'government';
+      const riskFlags = [
+        ...(governmentClaim ? ['government_manual_review_required'] : []),
+        ...(exactMatches.length ? ['possible_duplicate_organisation'] : []),
+      ];
+      const applicationStatus = governmentClaim || exactMatches.length ? 'under_review' : 'submitted';
+
       await sql()`
         WITH created_account AS (
-          INSERT INTO commercial_accounts (id, display_name, legal_name, account_type, tax_identifier, status, created_by_customer_id)
-          VALUES (${accountId}, ${displayName}, ${legalName || null}, ${accountType}, ${taxIdentifier || null}, 'pending', ${customerId})
+          INSERT INTO commercial_accounts (
+            id, display_name, legal_name, account_type, tax_identifier, status, created_by_customer_id,
+            normalized_name, normalized_tax_identifier, verification_status, privilege_status
+          ) VALUES (
+            ${accountId}, ${displayName}, ${legalName}, ${accountType}, ${taxIdentifier || null}, 'pending', ${customerId},
+            ${normalized}, ${normalizedTax}, ${governmentClaim || exactMatches.length ? 'pending_review' : 'unverified'}, 'locked'
+          )
           RETURNING id
+        ), created_member AS (
+          INSERT INTO commercial_account_members (id, commercial_account_id, customer_id, role, status, authority_status, invited_by_customer_id)
+          SELECT ${memberId}, id, ${customerId}, 'owner', 'active', 'pending', ${customerId}
+          FROM created_account
+          RETURNING commercial_account_id
         )
-        INSERT INTO commercial_account_members (id, commercial_account_id, customer_id, role, status, invited_by_customer_id)
-        SELECT ${memberId}, id, ${customerId}, 'owner', 'active', ${customerId}
-        FROM created_account
+        INSERT INTO commercial_verification_applications (
+          id, commercial_account_id, applicant_customer_id, claimed_account_type, legal_name,
+          registration_identifier, tax_identifier, work_email, application_status, risk_flags, submitted_at
+        )
+        SELECT ${applicationId}, commercial_account_id, ${customerId}, ${accountType}, ${legalName},
+               ${registrationIdentifier || null}, ${taxIdentifier || null}, ${workEmail || null}, ${applicationStatus}, ${JSON.stringify(riskFlags)}::jsonb, NOW()
+        FROM created_member
       `;
+      await audit(accountId, customerId, governmentClaim ? 'government_account_application_created' : 'commercial_account_application_created', governmentClaim || exactMatches.length ? 'review_required' : 'recorded', { applicationId, riskFlags });
       return send(response, 201, { details: await accountDetails(customerId, accountId) });
     }
 
@@ -175,6 +272,7 @@ export default async function handler(request: any, response: any) {
       if (name.length < 2 || name.length > 160) return send(response, 400, { error: { code: "INVALID_SITE", message: "Enter a valid site name." } });
       const id = `site_${randomBytes(16).toString("hex")}`;
       await sql()`INSERT INTO commercial_sites (id, commercial_account_id, name, line1, line2, city, region, postal_code, country_code, contact_name, contact_phone) VALUES (${id}, ${accountId}, ${name}, ${String(input.line1 || "").trim() || null}, ${String(input.line2 || "").trim() || null}, ${String(input.city || "").trim() || null}, ${String(input.region || "").trim() || null}, ${String(input.postalCode || "").trim() || null}, ${String(input.countryCode || "JM").trim().slice(0, 2).toUpperCase()}, ${String(input.contactName || "").trim() || null}, ${String(input.contactPhone || "").trim() || null})`;
+      await audit(accountId, customerId, 'commercial_site_created', 'recorded', { siteId: id });
       return send(response, 201, { details: await accountDetails(customerId, accountId) });
     }
 
@@ -191,7 +289,19 @@ export default async function handler(request: any, response: any) {
       }
       const id = `prj_${randomBytes(16).toString("hex")}`;
       await sql()`INSERT INTO commercial_projects (id, commercial_account_id, site_id, name, reference_code, description, status, start_date, target_end_date, created_by_customer_id) VALUES (${id}, ${accountId}, ${siteId}, ${name}, ${String(input.referenceCode || "").trim() || null}, ${String(input.description || "").trim() || null}, 'active', ${String(input.startDate || "").trim() || null}, ${String(input.targetEndDate || "").trim() || null}, ${customerId})`;
+      await audit(accountId, customerId, 'commercial_project_created', 'recorded', { projectId: id });
       return send(response, 201, { details: await accountDetails(customerId, accountId) });
+    }
+
+    if (action === "check_privileged_access") {
+      const accountId = String(input.accountId || "");
+      const allowed = await privilegedCommercialAccess(customerId, accountId);
+      if (!allowed) {
+        await audit(accountId || null, customerId, 'commercial_privileged_access_check', 'blocked');
+        return send(response, 403, { error: { code: "COMMERCIAL_VERIFICATION_REQUIRED", message: "Commercial pricing, account terms, purchase-order privileges and charge-to-account access remain locked until the organisation, your authority, and the provider mapping are verified." } });
+      }
+      await audit(accountId, customerId, 'commercial_privileged_access_check', 'recorded');
+      return send(response, 200, { allowed: true });
     }
 
     return send(response, 400, { error: { code: "INVALID_ACTION", message: "That commercial action is not supported." } });
