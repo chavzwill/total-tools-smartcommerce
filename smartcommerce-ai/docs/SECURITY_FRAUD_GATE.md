@@ -9,7 +9,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Customer sessions use server-side session lookup and customer scoping.
 - Persistent cart mutations are scoped to the authenticated customer's active cart.
 - Commercial account detail lookup requires active membership in the requested commercial account.
-- Commercial financial controls require authenticated membership, verified organisation/member authority, enabled privileges, a verified provider mapping, strong step-up authentication, and explicit role authorization for protected actions.
+- Commercial financial controls require authenticated membership, verified organisation/member authority, enabled privileges, a verified provider mapping, strong step-up authentication, explicit role authorization, and request-context binding for protected actions.
 - Commercial administrative data is minimized by role; sensitive verification, member-contact, provider-account, and organisation-identifier data is restricted to administrative roles.
 - Generic `/api/platform/*` sensitive operations are protected by the server-only `SMARTCOMMERCE_PLATFORM_INTERNAL_TOKEN` boundary; public reads are separated from privileged operations.
 - Platform gateway request bodies are bounded and raw internal exception details are no longer returned to callers.
@@ -19,6 +19,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Commercial account applications are velocity-limited by authenticated customer and network signal; repeat applications and duplicate organisation claims are escalated to review.
 - Platform order, invoice, and checkout creation require durable idempotency keys. Replays with the same request return the stored response, while reuse of a key for a changed request is rejected.
 - Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
+- Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
 
 ### Closed findings
 
@@ -48,24 +49,18 @@ No direct payment-processor charge endpoint is currently enabled. When one is in
 
 Closed in code for the current commercial-account application surface. Application creation is rate-limited per authenticated customer and IP/network signal. Government claims, duplicate organisation identifiers/names, and repeated applicant behavior are routed to manual review while account privileges remain locked. Review signals are stored in commercial verification/audit data and the security event stream, which are not exposed to ordinary non-administrative commercial members.
 
-### Open: high priority fraud controls
-
 #### SC-FRAUD-005 — Account takeover transaction escalation
 
-Authentication security is strong, but transactional risk should also consider session/device change and recent security events.
+Closed in code for the currently implemented high-risk commercial financial actions. SmartCommerce now binds an active strong-authentication window to the IP and user-agent context of the successful TOTP, recovery-code, or passkey event. If the sensitive request arrives from a different context, lacks a recent matching strong-auth event, or a newer high/critical security event exists after that authentication, the existing step-up window is invalidated and a fresh passkey/authenticator/recovery-code confirmation is required. Customer-visible responses remain generic; detailed signals are stored only in the security event stream.
 
-Required remediation:
-
-- Require fresh strong step-up for high-risk future actions such as payment-method change, refund destination change, high-value order, credit use, or commercial privilege change.
-- Add risk escalation for new-device/new-network activity combined with sensitive transactions.
-- Keep customer-visible messaging generic so fraud rules cannot be easily reverse engineered.
+Future payment-method changes, refund-destination changes, direct payment charging, and other newly introduced high-risk transaction paths must call the same sensitive-action risk boundary rather than implementing weaker local checks.
 
 ### Open: operational assurance
 
 - Refund/credit/promo abuse controls once those write paths are enabled.
 - Tamper-resistant audit/event retention and operational alerting.
 - Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
-- Production telemetry review and threshold tuning for all durable rate limits.
+- Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
 - Deployment verification for security changes currently blocked by hosting build-rate limits.
 
 ## Release rule
