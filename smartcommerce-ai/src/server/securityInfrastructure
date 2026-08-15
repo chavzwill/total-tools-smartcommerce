@@ -1,4 +1,14 @@
 // Runtime compatibility shim for Vercel's Node ESM resolver.
 // Some serverless entrypoints still import this module without a file extension.
-// Keep this shim until all callers use the explicit .js specifier.
-export * from "./securityInfrastructure.js";
+// Explicit named exports are required because Vercel compiles this shim to CommonJS,
+// and Node cannot infer named exports from a dynamic `export *` bridge.
+import * as securityInfrastructure from "./securityInfrastructure.js";
+
+export const enforceDurableRateLimit = securityInfrastructure.enforceDurableRateLimit;
+export const firstHeader = securityInfrastructure.firstHeader;
+export const recordSecurityEvent = securityInfrastructure.recordSecurityEvent;
+export const requestIp = securityInfrastructure.requestIp;
+export const requestUserAgent = securityInfrastructure.requestUserAgent;
+export const securityHash = securityInfrastructure.securityHash;
+export const sessionRequiresStepUp = securityInfrastructure.sessionRequiresStepUp;
+export const touchSessionSecurity = securityInfrastructure.touchSessionSecurity;
