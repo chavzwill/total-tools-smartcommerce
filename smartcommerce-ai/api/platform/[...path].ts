@@ -23,7 +23,8 @@ const requestPath = (request: any) => {
   }
 };
 
-const isPublicReadPath = (method: string, path: string) => {
+const isPublicPlatformPath = (method: string, path: string) => {
+  if (method === "POST" && path === "/api/platform/assistant") return true;
   if (method !== "GET") return false;
   if (
     path === "/api/platform/integrations/health" ||
@@ -121,10 +122,10 @@ const sendResponse = async (response: any, platformResponse: Response) => {
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const path = requestPath(request);
-  const publicRead = isPublicReadPath(method, path);
+  const publicPath = isPublicPlatformPath(method, path);
   const authorization = internalAuthorization(request);
 
-  if (!publicRead) {
+  if (!publicPath) {
     if (!authorization.configured) {
       return sendJson(response, 503, {
         success: false,
