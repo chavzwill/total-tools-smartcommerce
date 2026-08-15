@@ -17,6 +17,8 @@ This document tracks security and fraud-control findings discovered during the p
 - Quote creation is replay-resistant within a quote window: identical authenticated customer/cart/pricing state produces the same quote identifier instead of creating duplicate quote records.
 - Commerce velocity blocks and quote creation/replay events are recorded in the security event stream.
 - Commercial account applications are velocity-limited by authenticated customer and network signal; repeat applications and duplicate organisation claims are escalated to review.
+- Platform order, invoice, and checkout creation require durable idempotency keys. Replays with the same request return the stored response, while reuse of a key for a changed request is rejected.
+- Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
 
 ### Closed findings
 
@@ -36,22 +38,17 @@ Closed in code for the current cart/quote surface. Authenticated cart mutations 
 
 Closed in code for current checkout quote creation. Quote IDs are deterministically derived from authenticated customer, cart, revalidated provider pricing, totals, and the active quote window. Repeated submission of the same state uses `ON CONFLICT DO NOTHING`, preventing duplicate quote records from retries/double taps while allowing a new quote after the quote window or pricing/cart state changes.
 
+#### SC-FRAUD-003 — Order/payment idempotency
+
+Closed in code for the currently implemented platform order/invoice/checkout boundary and provider webhook gateway. Protected writes require a server-enforced idempotency key, persisted with business/provider scope, operation, request fingerprint, stored response, and expiry. Reuse of a key with a different request fingerprint is rejected. Concurrent duplicates fail closed while the original request is processing. Provider webhooks require `X-Provider-Event-Id` and are replay-protected independently from normal request idempotency.
+
+No direct payment-processor charge endpoint is currently enabled. When one is introduced, it must use the same durable boundary plus the payment provider's own idempotency facility and a database uniqueness constraint on the provider transaction/reference ID.
+
 #### SC-FRAUD-004 — Commercial application velocity and identity abuse
 
 Closed in code for the current commercial-account application surface. Application creation is rate-limited per authenticated customer and IP/network signal. Government claims, duplicate organisation identifiers/names, and repeated applicant behavior are routed to manual review while account privileges remain locked. Review signals are stored in commercial verification/audit data and the security event stream, which are not exposed to ordinary non-administrative commercial members.
 
 ### Open: high priority fraud controls
-
-#### SC-FRAUD-003 — Order/payment idempotency
-
-Before a payment-capable order write path is enabled, every order/payment creation request must require a server-enforced idempotency boundary. A retry, browser double-submit, network replay, or webhook retry must never create a second financial transaction or duplicate fulfillment obligation.
-
-Required remediation:
-
-- Persist idempotency keys with authenticated actor/customer, operation, request fingerprint, response reference, and expiry.
-- Reject reuse of a key with a different request fingerprint.
-- Make provider/webhook handling idempotent by provider event ID.
-- Add database uniqueness constraints at the final order/payment boundary, not only application checks.
 
 #### SC-FRAUD-005 — Account takeover transaction escalation
 
