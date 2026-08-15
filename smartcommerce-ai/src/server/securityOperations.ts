@@ -7,6 +7,12 @@ const ALERT_WEBHOOK_TOKEN_ENV = "SMARTCOMMERCE_SECURITY_ALERT_WEBHOOK_TOKEN";
 let sqlClient: ReturnType<typeof neon> | undefined;
 let monitorSchemaReady = false;
 
+type AlertDelivery = {
+  configured: boolean;
+  delivered: boolean;
+  status?: number;
+};
+
 function sql() {
   if (!sqlClient) {
     const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.DATABASE_URL;
@@ -49,7 +55,7 @@ function configuredWebhook() {
   }
 }
 
-async function deliverAlert(payload: Record<string, unknown>) {
+async function deliverAlert(payload: Record<string, unknown>): Promise<AlertDelivery> {
   const url = configuredWebhook();
   if (!url) return { configured: false, delivered: false };
 
@@ -127,7 +133,7 @@ export async function runSecurityOperationsMonitor() {
   const state = stateRows[0] || null;
 
   const integrity = await verifySecurityEventIntegrity();
-  let integrityAlert = { configured: Boolean(configuredWebhook()), delivered: false, status: undefined as number | undefined };
+  let integrityAlert: AlertDelivery = { configured: Boolean(configuredWebhook()), delivered: false };
   if (!integrity.configured || !integrity.valid) {
     integrityAlert = await deliverAlert({
       severity: "critical",
@@ -141,7 +147,7 @@ export async function runSecurityOperationsMonitor() {
     state?.last_critical_event_at || null,
     state?.last_critical_event_id || null,
   );
-  let criticalAlert = { configured: Boolean(configuredWebhook()), delivered: false, status: undefined as number | undefined };
+  let criticalAlert: AlertDelivery = { configured: Boolean(configuredWebhook()), delivered: false };
   if (criticalEvents.length > 0) {
     criticalAlert = await deliverAlert({
       severity: "critical",
