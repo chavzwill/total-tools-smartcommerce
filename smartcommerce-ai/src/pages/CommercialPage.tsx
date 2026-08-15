@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Building2, CheckCircle2, FolderKanban, Loader2, MapPin } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, Building2, CheckCircle2, FolderKanban, Loader2, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import rentalImage from "../assets/services/equipment-rentals.jpg";
@@ -21,6 +21,14 @@ const getProviderContext = () => {
   return businessAccountId && providerId ? { businessAccountId, providerId } : undefined;
 };
 
+function verificationLabel(status?: string) {
+  if (status === "verified") return "Verified organisation";
+  if (status === "pending_review") return "Pending review";
+  if (status === "rejected") return "Verification rejected";
+  if (status === "suspended") return "Verification suspended";
+  return "Organisation not verified";
+}
+
 export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   const [businessName, setBusinessName] = useState("");
   const [contactName, setContactName] = useState("");
@@ -35,6 +43,10 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   const [accountState, setAccountState] = useState<"loading" | "ready" | "signed-out" | "error">("loading");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
+  const [newLegalName, setNewLegalName] = useState("");
+  const [newRegistrationId, setNewRegistrationId] = useState("");
+  const [newTaxId, setNewTaxId] = useState("");
+  const [newWorkEmail, setNewWorkEmail] = useState("");
   const [newAccountType, setNewAccountType] = useState("business");
   const [newSiteName, setNewSiteName] = useState("");
   const [newSiteCity, setNewSiteCity] = useState("");
@@ -84,12 +96,25 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
     setWorkspaceBusy(true);
     setWorkspaceMessage("");
     try {
-      const { details: created } = await createCommercialAccount({ displayName: newAccountName, accountType: newAccountType });
+      const { details: created } = await createCommercialAccount({
+        displayName: newAccountName,
+        legalName: newLegalName || newAccountName,
+        registrationIdentifier: newRegistrationId,
+        taxIdentifier: newTaxId,
+        workEmail: newWorkEmail,
+        accountType: newAccountType,
+      });
       setNewAccountName("");
+      setNewLegalName("");
+      setNewRegistrationId("");
+      setNewTaxId("");
+      setNewWorkEmail("");
       await refreshAccount(created.account.id);
-      setWorkspaceMessage("Commercial account created. Provider verification is still required before account-specific pricing or terms can appear.");
+      setWorkspaceMessage(newAccountType === "government"
+        ? "Government account application submitted for manual verification. No government privileges are active."
+        : "Commercial account application submitted. Pricing, credit, purchase-order and account-term privileges remain locked until verification is complete.");
     } catch (error) {
-      setWorkspaceMessage(error instanceof Error ? error.message : "Commercial account could not be created.");
+      setWorkspaceMessage(error instanceof Error ? error.message : "Commercial account application could not be submitted.");
     } finally {
       setWorkspaceBusy(false);
     }
@@ -105,7 +130,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       setAccountDetails(refreshed);
       setNewSiteName("");
       setNewSiteCity("");
-      setWorkspaceMessage("Job site added.");
+      setWorkspaceMessage("Job site added as planning information.");
     } catch (error) {
       setWorkspaceMessage(error instanceof Error ? error.message : "Job site could not be added.");
     } finally {
@@ -123,7 +148,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       setAccountDetails(refreshed);
       setNewProjectName("");
       setNewProjectSiteId("");
-      setWorkspaceMessage("Project created.");
+      setWorkspaceMessage("Project created as planning information.");
     } catch (error) {
       setWorkspaceMessage(error instanceof Error ? error.message : "Project could not be created.");
     } finally {
@@ -156,14 +181,17 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
     setMessage(`Request ${result.data.id} was accepted with status “${result.data.status}”.`);
   }
 
+  const trust = accountDetails?.account;
+  const verified = trust?.verification_status === "verified";
+
   return (
     <div className="demo-page sc-commercial-page">
       <section className="demo-commercial-page sc-commercial-page__hero">
         <Container>
           <div>
             <span>Total Tools Commercial</span>
-            <h1>Move the whole project, not just one item.</h1>
-            <p>Run business purchasing, projects, rentals, quotes, and job-site planning from one commercial workspace.</p>
+            <h1>Built for serious projects. Protected like serious money.</h1>
+            <p>Apply for a commercial account, plan jobs and projects, then unlock commercial privileges only after organisation, authority and provider verification.</p>
             <div className="sc-commercial-hero-actions"><a href="#commercial-account">Commercial account</a><a href="#commercial-request">Request a quote</a><a href={routeHref("/rentals")}>Plan rentals</a></div>
           </div>
           <img src={rentalImage} alt="Professional equipment for commercial projects" />
@@ -173,27 +201,39 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       <Container className="demo-commercial-body sc-commercial-page__body">
         <section id="commercial-account">
           <span className="sc-flow-kicker">Commercial workspace</span>
-          <h2>Your business, projects and buying team.</h2>
+          <h2>Apply, verify, then transact.</h2>
           {accountState === "loading" ? <p><Loader2 size={16} /> Loading commercial access…</p> : null}
-          {accountState === "signed-out" ? <div className="sc-commercial-contact"><strong>Sign in to manage a commercial account.</strong><a href={routeHref("/account")}>Sign in or create an account</a></div> : null}
+          {accountState === "signed-out" ? <div className="sc-commercial-contact"><strong>Sign in to apply for or manage a commercial account.</strong><a href={routeHref("/account")}>Sign in or create an account</a></div> : null}
           {accountState === "error" ? <p className="sc-flow-status is-error">Commercial accounts are temporarily unavailable.</p> : null}
 
           {accountState === "ready" ? <>
-            {accounts.length ? <label>Commercial account<select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {account.role}</option>)}</select></label> : null}
+            {accounts.length ? <label>Commercial account<select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {verificationLabel(account.verification_status)}</option>)}</select></label> : null}
 
-            {accountDetails ? <div className="sc-commercial-capabilities">
-              <article><Building2 size={22} /><strong>{accountDetails.account.display_name}</strong><p>{accountDetails.account.account_type} · {accountDetails.role} · {accountDetails.account.status}</p></article>
-              <article><MapPin size={22} /><strong>{accountDetails.sites.length} job site{accountDetails.sites.length === 1 ? "" : "s"}</strong><p>Saved delivery and project locations.</p></article>
-              <article><FolderKanban size={22} /><strong>{accountDetails.projects.length} project{accountDetails.projects.length === 1 ? "" : "s"}</strong><p>Organise quotes, products, rentals and deliveries by job.</p></article>
-              <article><BriefcaseBusiness size={22} /><strong>{accountDetails.members.length} member{accountDetails.members.length === 1 ? "" : "s"}</strong><p>Roles are enforced server-side. Provider pricing and terms remain unavailable until verified.</p></article>
-            </div> : null}
+            {accountDetails ? <>
+              <div className={`sc-flow-status ${verified ? "is-success" : "is-error"}`} role="status">
+                {verified ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
+                <strong>{verificationLabel(trust?.verification_status)}</strong>
+                {!verified ? " — Commercial pricing, credit, purchase orders, charge-to-account and provider terms are locked." : " — Organisation verification is complete."}
+              </div>
+              <div className="sc-commercial-capabilities">
+                <article><Building2 size={22} /><strong>{accountDetails.account.display_name}</strong><p>{accountDetails.account.account_type} · {accountDetails.role} · authority {accountDetails.authorityStatus}</p></article>
+                <article><LockKeyhole size={22} /><strong>{accountDetails.account.privilege_status}</strong><p>{accountDetails.privilegedAccess ? "Verified commercial privileges are available." : "Privileged commercial actions remain blocked."}</p></article>
+                <article><MapPin size={22} /><strong>{accountDetails.sites.length} job site{accountDetails.sites.length === 1 ? "" : "s"}</strong><p>Planning data only until commercial verification is complete.</p></article>
+                <article><FolderKanban size={22} /><strong>{accountDetails.projects.length} project{accountDetails.projects.length === 1 ? "" : "s"}</strong><p>Projects can be organised without granting financial authority.</p></article>
+              </div>
+            </> : null}
 
             {!accounts.length ? <form className="demo-flow-form" onSubmit={createAccount}>
               <Building2 size={28} />
-              <h3>Create a commercial account</h3>
-              <label>Business or organisation name<input required value={newAccountName} onChange={(event) => setNewAccountName(event.target.value)} /></label>
-              <label>Account type<select value={newAccountType} onChange={(event) => setNewAccountType(event.target.value)}><option value="business">Business</option><option value="contractor">Contractor</option><option value="government">Government</option><option value="organisation">Organisation</option></select></label>
-              <button type="submit" disabled={workspaceBusy}>{workspaceBusy ? "Creating…" : "Create commercial account"}</button>
+              <h3>Apply for a commercial account</h3>
+              <p>Selecting an account type does not verify the organisation or activate commercial privileges.</p>
+              <label>Trading / display name<input required value={newAccountName} onChange={(event) => setNewAccountName(event.target.value)} /></label>
+              <label>Legal organisation name<input required value={newLegalName} onChange={(event) => setNewLegalName(event.target.value)} /></label>
+              <label>Registration number<input value={newRegistrationId} onChange={(event) => setNewRegistrationId(event.target.value)} /></label>
+              <label>Tax identifier<input value={newTaxId} onChange={(event) => setNewTaxId(event.target.value)} /></label>
+              <label>Work email<input type="email" value={newWorkEmail} onChange={(event) => setNewWorkEmail(event.target.value)} /></label>
+              <label>Application type<select value={newAccountType} onChange={(event) => setNewAccountType(event.target.value)}><option value="business">Business</option><option value="contractor">Contractor</option><option value="government">Government — manual verification required</option><option value="organisation">Organisation</option></select></label>
+              <button type="submit" disabled={workspaceBusy}>{workspaceBusy ? "Submitting…" : "Submit commercial application"}</button>
             </form> : null}
 
             {accountDetails ? <>
@@ -202,13 +242,13 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
                   <MapPin size={24} /><h3>Add job site</h3>
                   <label>Site name<input required value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} placeholder="Kingston warehouse" /></label>
                   <label>City / area<input value={newSiteCity} onChange={(event) => setNewSiteCity(event.target.value)} /></label>
-                  <button type="submit" disabled={workspaceBusy}>Add site</button>
+                  <button type="submit" disabled={workspaceBusy}>Add planning site</button>
                 </form>
                 <form className="demo-flow-form" onSubmit={createProject}>
                   <FolderKanban size={24} /><h3>Create project</h3>
                   <label>Project name<input required value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} placeholder="Bathroom renovation" /></label>
                   <label>Job site<select value={newProjectSiteId} onChange={(event) => setNewProjectSiteId(event.target.value)}><option value="">No site yet</option>{accountDetails.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
-                  <button type="submit" disabled={workspaceBusy}>Create project</button>
+                  <button type="submit" disabled={workspaceBusy}>Create planning project</button>
                 </form>
               </div>
               {accountDetails.projects.length ? <div className="sc-commercial-capabilities">{accountDetails.projects.map((project) => <article key={project.id}><strong>{project.name}</strong><p>{project.reference_code ? `${project.reference_code} · ` : ""}{project.status}</p></article>)}</div> : null}
@@ -224,8 +264,8 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
           <div className="sc-commercial-capabilities">
             <article><strong>Project and bulk enquiries</strong><p>Describe products, quantities, dates, and site requirements together.</p></article>
             <article><strong>Rental planning</strong><p>Move directly into equipment, dates, branches, and availability.</p></article>
-            <article><strong>Provider-backed quote path</strong><p>Structured requests are sent only when the connected provider supports them.</p></article>
-            <article><strong>Human assistance</strong><p>Phone, WhatsApp, and email remain visible when a workflow needs a person.</p></article>
+            <article><strong>Verification-aware commerce</strong><p>Account-specific pricing and terms stay locked until the connected provider confirms them.</p></article>
+            <article><strong>Human assistance</strong><p>Phone, WhatsApp, and email remain visible when verification or a workflow needs a person.</p></article>
           </div>
           <div className="sc-commercial-contact"><strong>Contact Total Tools</strong><a href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>{company.phone}</a><a href={`mailto:${company.email}`}>{company.email}</a><a href={`https://wa.me/${company.whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer">WhatsApp</a></div>
         </section>
