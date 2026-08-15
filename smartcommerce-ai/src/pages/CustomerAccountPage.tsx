@@ -2,6 +2,7 @@ import { BadgeCheck, BriefcaseBusiness, KeyRound, LockKeyhole, LogIn, LogOut, Ma
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
+import "../styles/accountTabs.css";
 import {
   getCustomerAccount,
   loginCustomer,
@@ -16,12 +17,14 @@ import {
 import { getRoute, routeHref } from "../lib/router";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
+type AccountTab = "overview" | "orders" | "rentals" | "repairs" | "commercial" | "security";
 
 export default function CustomerAccountPage() {
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<Mode>("login");
+  const [accountTab, setAccountTab] = useState<AccountTab>("overview");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [resetToken, setResetToken] = useState("");
@@ -45,7 +48,7 @@ export default function CustomerAccountPage() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSubmitting(true); setError(""); setNotice(""); const form = new FormData(event.currentTarget);
-    try { const state = await loginCustomer({ email: String(form.get("email") || ""), password: String(form.get("password") || "") }); setCustomer(state.customer); }
+    try { const state = await loginCustomer({ email: String(form.get("email") || ""), password: String(form.get("password") || "") }); setCustomer(state.customer); setAccountTab("overview"); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Sign in failed."); }
     finally { setSubmitting(false); }
   }
@@ -56,7 +59,7 @@ export default function CustomerAccountPage() {
     if (password !== confirmation) { setError("Passwords do not match."); setSubmitting(false); return; }
     try {
       const state = await signUpCustomer({ fullName: String(form.get("fullName") || ""), email: String(form.get("email") || ""), phone: String(form.get("phone") || ""), password });
-      setCustomer(state.customer); setNotice("Account created. Verify your email to complete your account security setup.");
+      setCustomer(state.customer); setAccountTab("overview"); setNotice("Account created. Verify your email to complete your account security setup.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Account creation failed."); }
     finally { setSubmitting(false); }
   }
@@ -89,7 +92,7 @@ export default function CustomerAccountPage() {
 
   async function handleLogout() {
     setSubmitting(true); setError(""); setNotice("");
-    try { await logoutCustomer(); setCustomer(null); setMode("login"); }
+    try { await logoutCustomer(); setCustomer(null); setMode("login"); setAccountTab("overview"); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Sign out failed."); }
     finally { setSubmitting(false); }
   }
@@ -98,45 +101,72 @@ export default function CustomerAccountPage() {
 
   if (customer && mode !== "reset") {
     const firstName = customer.fullName.split(/\s+/)[0];
+    const tabTitle: Record<AccountTab, string> = {
+      overview: "Account overview",
+      orders: "Orders",
+      rentals: "Rentals",
+      repairs: "Repairs",
+      commercial: "Commercial account",
+      security: "Security",
+    };
+
     return (
       <div className="demo-page sc-account-page">
         <Container className="demo-account sc-account-real sc-account-dashboard">
           <header className="sc-account-hero">
             <div className="sc-account-avatar" aria-hidden="true">{firstName.slice(0, 1).toUpperCase()}</div>
             <div className="sc-account-hero__copy">
-              <span className="sc-eyebrow">SmartCommerce account</span>
+              <span className="sc-eyebrow">My account</span>
               <h1>Good to see you, {firstName}.</h1>
               <p>{customer.email}{customer.phone ? ` · ${customer.phone}` : ""}</p>
             </div>
             <button className="sc-signout-button" type="button" disabled={submitting} onClick={handleLogout}><LogOut size={17} /> Sign out</button>
           </header>
 
-          <div className="sc-account-summary">
-            <article><div className="sc-summary-icon"><ShieldCheck size={20} /></div><div><span>Session</span><strong>Protected</strong><small>HttpOnly secure session</small></div></article>
-            <article><div className="sc-summary-icon"><MailCheck size={20} /></div><div><span>Email</span><strong>{customer.emailVerified ? "Verified" : "Action needed"}</strong><small>{customer.emailVerified ? "Identity confirmed" : "Verification required"}</small></div></article>
-            <article><div className="sc-summary-icon"><BadgeCheck size={20} /></div><div><span>Security</span><strong>Security center</strong><small>Passkeys, MFA & sessions</small></div></article>
-          </div>
+          <nav className="sc-account-nav" aria-label="Account sections">
+            {(["overview", "orders", "rentals", "repairs", "commercial", "security"] as AccountTab[]).map((tab) => (
+              <button key={tab} type="button" className={accountTab === tab ? "is-active" : ""} aria-current={accountTab === tab ? "page" : undefined} onClick={() => { setAccountTab(tab); setError(""); setNotice(""); }}>
+                {tabTitle[tab]}
+              </button>
+            ))}
+          </nav>
 
-          {!customer.emailVerified && <section className="sc-account-alert"><MailCheck size={21} /><div><strong>Verify your email to unlock sensitive features</strong><span>We use email verification before enabling stronger security and commercial account controls.</span></div><button type="button" disabled={submitting} onClick={handleVerificationRequest}>{submitting ? "Sending…" : "Send verification email"}</button></section>}
+          {!customer.emailVerified && <section className="sc-account-alert"><MailCheck size={21} /><div><strong>Verify your email</strong><span>Verify your address to unlock sensitive account and commercial features.</span></div><button type="button" disabled={submitting} onClick={handleVerificationRequest}>{submitting ? "Sending…" : "Send verification email"}</button></section>}
 
-          <section className="sc-account-section">
-            <div className="sc-account-section__heading"><span className="sc-eyebrow">Security center</span><h2>Protect your account</h2><p>Manage the methods SmartCommerce can use to verify that it is really you.</p></div>
-            {customer.emailVerified ? <AccountPasskeyPanel /> : <div className="sc-empty-state">Verify your email to configure passkeys, authenticator MFA and session controls.</div>}
-          </section>
+          {accountTab === "overview" && (
+            <section className="sc-account-tab-panel">
+              <div className="sc-account-section__heading"><span className="sc-eyebrow">Overview</span><h2>Your SmartCommerce account</h2><p>Orders, rentals, repairs and business purchasing stay organized here without putting security controls in the way of everyday activity.</p></div>
+              <div className="sc-account-overview-grid">
+                <article className="sc-account-overview-card"><div className="sc-service-icon"><PackageCheck size={20} /></div><div><strong>Orders</strong><span>Purchases, fulfilment and order history.</span></div><em>Coming online</em></article>
+                <article className="sc-account-overview-card"><div className="sc-service-icon"><BriefcaseBusiness size={20} /></div><div><strong>Rentals</strong><span>Agreements, extensions and returns.</span></div><em>Coming online</em></article>
+                <article className="sc-account-overview-card"><div className="sc-service-icon"><Wrench size={20} /></div><div><strong>Repairs</strong><span>Status, approvals and service history.</span></div><em>Coming online</em></article>
+                <article className="sc-account-overview-card"><div className="sc-service-icon"><BadgeCheck size={20} /></div><div><strong>Commercial</strong><span>Business verification, credit and purchasing controls.</span></div><em>Restricted</em></article>
+              </div>
+              <div className="sc-account-security-entry">
+                <div className="sc-summary-icon"><ShieldCheck size={20} /></div>
+                <div><strong>Account security</strong><span>{customer.emailVerified ? "Security controls are available under the Security tab." : "Verify your email before configuring stronger security."}</span></div>
+                <button type="button" onClick={() => setAccountTab("security")}>Open security</button>
+              </div>
+            </section>
+          )}
 
-          <section className="sc-account-section">
-            <div className="sc-account-section__heading"><span className="sc-eyebrow">Your activity</span><h2>Everything in one place</h2><p>Your account becomes the secure home for purchases, rentals, repairs and commercial access as each service connects.</p></div>
-            <div className="sc-account-services">
-              <article><div className="sc-service-icon"><PackageCheck size={20} /></div><div><strong>Orders</strong><span>Purchases, fulfilment and order history.</span></div><em>Coming online</em></article>
-              <article><div className="sc-service-icon"><BriefcaseBusiness size={20} /></div><div><strong>Rentals</strong><span>Rental agreements, extensions and returns.</span></div><em>Coming online</em></article>
-              <article><div className="sc-service-icon"><Wrench size={20} /></div><div><strong>Repairs</strong><span>Repair status, approvals and service history.</span></div><em>Coming online</em></article>
-              <article><div className="sc-service-icon"><BadgeCheck size={20} /></div><div><strong>Commercial</strong><span>Business verification, credit and purchasing controls.</span></div><em>Restricted</em></article>
-            </div>
-          </section>
+          {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
+
+          {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage rental agreements, active equipment, extensions and returns.</p></div><div className="sc-account-placeholder"><BriefcaseBusiness size={28} /><h3>Rental history is coming online</h3><p>Connected rental agreements and active rental status will appear here.</p></div></section>}
+
+          {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
+
+          {accountTab === "commercial" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Commercial</span><h2>Business account</h2><p>Manage business verification, purchasing authority, credit and commercial controls.</p></div><div className="sc-account-placeholder"><BadgeCheck size={28} /><h3>Commercial access is restricted</h3><p>Approved organizations and authorized members will use this area for business purchasing features.</p></div></section>}
+
+          {accountTab === "security" && (
+            <section className="sc-account-tab-panel">
+              <div className="sc-account-section__heading"><span className="sc-eyebrow">Security</span><h2>Sign-in & security</h2><p>Passkeys, authenticator MFA and active sessions live here, separate from everyday account activity.</p></div>
+              {customer.emailVerified ? <AccountPasskeyPanel /> : <div className="sc-empty-state">Verify your email to configure passkeys, authenticator MFA and session controls.</div>}
+            </section>
+          )}
 
           {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
           {error && <p role="alert" className="sc-account-real__error">{error}</p>}
-          <div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div>
         </Container>
       </div>
     );
