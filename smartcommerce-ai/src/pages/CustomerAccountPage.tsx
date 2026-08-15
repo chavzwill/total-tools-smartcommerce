@@ -1,16 +1,20 @@
-import { LockKeyhole, LogIn, LogOut, ShieldCheck, UserRound, UserRoundPlus } from "lucide-react";
+import { KeyRound, LockKeyhole, LogIn, LogOut, MailCheck, ShieldCheck, UserRound, UserRoundPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import {
   getCustomerAccount,
   loginCustomer,
   logoutCustomer,
+  requestEmailVerification,
+  requestPasswordReset,
+  resetCustomerPassword,
   signUpCustomer,
+  verifyCustomerEmail,
   type CustomerAccount,
 } from "../lib/customerAccount";
-import { routeHref } from "../lib/router";
+import { getRoute, routeHref } from "../lib/router";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "signup" | "forgot" | "reset";
 
 export default function CustomerAccountPage() {
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
@@ -18,19 +22,37 @@ export default function CustomerAccountPage() {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<Mode>("login");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [resetToken, setResetToken] = useState("");
 
   useEffect(() => {
     let active = true;
-    getCustomerAccount()
-      .then((state) => {
+    const query = getRoute().query;
+    const verifyToken = query.get("verify") || "";
+    const passwordResetToken = query.get("reset") || "";
+
+    async function initialize() {
+      try {
+        if (verifyToken) {
+          await verifyCustomerEmail(verifyToken);
+          if (active) setNotice("Email verified. Your SmartCommerce account is now confirmed.");
+        }
+        if (passwordResetToken) {
+          if (active) {
+            setResetToken(passwordResetToken);
+            setMode("reset");
+          }
+        }
+        const state = await getCustomerAccount();
         if (active) setCustomer(state.customer);
-      })
-      .catch(() => {
-        if (active) setError("Customer accounts are temporarily unavailable.");
-      })
-      .finally(() => {
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Customer accounts are temporarily unavailable.");
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    }
+
+    initialize();
     return () => { active = false; };
   }, []);
 
@@ -38,6 +60,7 @@ export default function CustomerAccountPage() {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setNotice("");
     const form = new FormData(event.currentTarget);
     try {
       const state = await loginCustomer({
@@ -56,6 +79,7 @@ export default function CustomerAccountPage() {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setNotice("");
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") || "");
     const confirmation = String(form.get("confirmPassword") || "");
@@ -72,8 +96,70 @@ export default function CustomerAccountPage() {
         password,
       });
       setCustomer(state.customer);
+      setNotice("Account created. Verify your email to complete your account security setup.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Account creation failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await requestPasswordReset(String(form.get("email") || ""));
+      setNotice(response.message || "If that account exists, a reset link will be sent.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Password reset request failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") || "");
+    const confirmation = String(form.get("confirmPassword") || "");
+    if (password !== confirmation) {
+      setError("Passwords do not match.");
+      setSubmitting(false);
+      return;
+    }
+    try {
+      await resetCustomerPassword(resetToken, password);
+      setNotice("Password updated. Sign in again with your new password.");
+      setResetToken("");
+      setCustomer(null);
+      setMode("login");
+      window.location.hash = "/account";
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Password reset failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleVerificationRequest() {
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await requestEmailVerification();
+      setNotice(response.alreadyVerified ? "Your email is already verified." : (response.message || "Verification email sent."));
+      if (response.alreadyVerified) {
+        const state = await getCustomerAccount();
+        setCustomer(state.customer);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Verification request failed.");
     } finally {
       setSubmitting(false);
     }
@@ -82,6 +168,7 @@ export default function CustomerAccountPage() {
   async function handleLogout() {
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       await logoutCustomer();
       setCustomer(null);
@@ -106,7 +193,7 @@ export default function CustomerAccountPage() {
     );
   }
 
-  if (customer) {
+  if (customer && mode !== "reset") {
     return (
       <div className="demo-page">
         <Container className="demo-account sc-account-real">
@@ -127,6 +214,24 @@ export default function CustomerAccountPage() {
             </div>
           </div>
 
+          {!customer.emailVerified && (
+            <div className="sc-account-real__security sc-account-real__security--attention">
+              <MailCheck size={22} />
+              <div>
+                <strong>Verify your email</strong>
+                <span>Confirm your email before sensitive account features are enabled.</span>
+                <button type="button" disabled={submitting} onClick={handleVerificationRequest}>{submitting ? "Sending…" : "Send verification email"}</button>
+              </div>
+            </div>
+          )}
+
+          {customer.emailVerified && (
+            <div className="sc-account-real__security">
+              <MailCheck size={22} />
+              <div><strong>Email verified</strong><span>Your account email has been confirmed.</span></div>
+            </div>
+          )}
+
           <div className="sc-account-real__future">
             <article><strong>Orders</strong><span>Provider-backed order history will appear here when connected.</span></article>
             <article><strong>Rentals</strong><span>Verified rental history will appear here when connected.</span></article>
@@ -134,6 +239,7 @@ export default function CustomerAccountPage() {
             <article><strong>Commercial</strong><span>Commercial account linkage will appear here when connected.</span></article>
           </div>
 
+          {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
           {error && <p role="alert" className="sc-account-real__error">{error}</p>}
           <div className="sc-account-real__actions">
             <a href={routeHref("/products")}>Continue shopping</a>
@@ -148,25 +254,31 @@ export default function CustomerAccountPage() {
     <div className="demo-page">
       <Container className="demo-account sc-account-real sc-account-real--signed-out">
         <div className="sc-account-real__intro">
-          <LockKeyhole size={42} />
+          {mode === "reset" ? <KeyRound size={42} /> : <LockKeyhole size={42} />}
           <span>SmartCommerce Account</span>
-          <h1>{mode === "login" ? "Welcome Back." : "Create Your Account."}</h1>
-          <p>{mode === "login" ? "Sign in to continue your shopping, rental, repair, and commercial journeys." : "Create one secure SmartCommerce identity for future orders, rentals, repairs, quotes, and commercial access."}</p>
+          <h1>{mode === "login" ? "Welcome Back." : mode === "signup" ? "Create Your Account." : mode === "forgot" ? "Reset Your Password." : "Choose a New Password."}</h1>
+          <p>{mode === "login" ? "Sign in to continue your shopping, rental, repair, and commercial journeys." : mode === "signup" ? "Create one secure SmartCommerce identity for future orders, rentals, repairs, quotes, and commercial access." : mode === "forgot" ? "Enter your account email. If an account exists, we’ll send a secure reset link." : "Set a new password. Every existing session will be revoked when the reset succeeds."}</p>
         </div>
 
-        <div className="sc-account-real__tabs" role="tablist" aria-label="Customer account">
-          <button type="button" className={mode === "login" ? "is-active" : ""} onClick={() => { setMode("login"); setError(""); }}><LogIn size={17} /> Sign in</button>
-          <button type="button" className={mode === "signup" ? "is-active" : ""} onClick={() => { setMode("signup"); setError(""); }}><UserRoundPlus size={17} /> Create account</button>
-        </div>
+        {mode !== "forgot" && mode !== "reset" && (
+          <div className="sc-account-real__tabs" role="tablist" aria-label="Customer account">
+            <button type="button" className={mode === "login" ? "is-active" : ""} onClick={() => { setMode("login"); setError(""); setNotice(""); }}><LogIn size={17} /> Sign in</button>
+            <button type="button" className={mode === "signup" ? "is-active" : ""} onClick={() => { setMode("signup"); setError(""); setNotice(""); }}><UserRoundPlus size={17} /> Create account</button>
+          </div>
+        )}
 
-        {mode === "login" ? (
+        {mode === "login" && (
           <form className="demo-flow-form sc-account-real__form" onSubmit={handleLogin}>
             <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
             <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={128} /></label>
+            <button type="button" className="sc-account-real__text-action" onClick={() => { setMode("forgot"); setError(""); setNotice(""); }}>Forgot password?</button>
+            {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
             {error && <p role="alert" className="sc-account-real__error">{error}</p>}
             <button disabled={submitting}>{submitting ? "Signing in…" : "Sign in securely"}</button>
           </form>
-        ) : (
+        )}
+
+        {mode === "signup" && (
           <form className="demo-flow-form sc-account-real__form" onSubmit={handleSignup}>
             <label>Full name<input name="fullName" autoComplete="name" required minLength={2} maxLength={120} /></label>
             <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
@@ -174,8 +286,29 @@ export default function CustomerAccountPage() {
             <label>Password<input name="password" type="password" autoComplete="new-password" required minLength={10} maxLength={128} aria-describedby="sc-password-help" /></label>
             <small id="sc-password-help">Use at least 10 characters. A password manager is recommended.</small>
             <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" required minLength={10} maxLength={128} /></label>
+            {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
             {error && <p role="alert" className="sc-account-real__error">{error}</p>}
             <button disabled={submitting}>{submitting ? "Creating account…" : "Create secure account"}</button>
+          </form>
+        )}
+
+        {mode === "forgot" && (
+          <form className="demo-flow-form sc-account-real__form" onSubmit={handleForgotPassword}>
+            <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
+            {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
+            {error && <p role="alert" className="sc-account-real__error">{error}</p>}
+            <button disabled={submitting}>{submitting ? "Sending…" : "Send reset link"}</button>
+            <button type="button" className="sc-account-real__text-action" onClick={() => { setMode("login"); setError(""); setNotice(""); }}>Back to sign in</button>
+          </form>
+        )}
+
+        {mode === "reset" && (
+          <form className="demo-flow-form sc-account-real__form" onSubmit={handleResetPassword}>
+            <label>New password<input name="password" type="password" autoComplete="new-password" required minLength={10} maxLength={128} /></label>
+            <label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" required minLength={10} maxLength={128} /></label>
+            {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
+            {error && <p role="alert" className="sc-account-real__error">{error}</p>}
+            <button disabled={submitting}>{submitting ? "Updating…" : "Set new password"}</button>
           </form>
         )}
       </Container>
