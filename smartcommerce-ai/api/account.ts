@@ -9,7 +9,7 @@ import {
   requestUserAgent,
   securityHash,
   touchSessionSecurity,
-} from "../src/server/securityInfrastructure";
+} from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
