@@ -6,7 +6,7 @@ import {
   firstHeader,
   recordSecurityEvent,
   requestIp,
-} from "../src/server/securityInfrastructure";
+} from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 8_000;
