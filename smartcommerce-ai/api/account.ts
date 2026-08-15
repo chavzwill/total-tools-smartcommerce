@@ -87,28 +87,28 @@ function hashUserAgent(value?: string) {
 
 async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
   const db = sql();
-  const existing = await db`SELECT id FROM customer_accounts WHERE email = ${input.email} LIMIT 1`;
+  const existing = (await db`SELECT id FROM customer_accounts WHERE email = ${input.email} LIMIT 1`) as Record<string, unknown>[];
   if (existing.length) return undefined;
 
   const id = `cus_${randomBytes(16).toString("hex")}`;
   const now = new Date().toISOString();
   const storedPassword = await passwordHash(input.password);
-  const rows = await db<AccountRow[]>`
+  const rows = (await db`
     INSERT INTO customer_accounts (id, email, password_hash, full_name, phone, email_verified, created_at, updated_at)
     VALUES (${id}, ${input.email}, ${storedPassword}, ${input.fullName}, ${input.phone || null}, false, ${now}, ${now})
     RETURNING id, email, full_name, phone, email_verified, created_at, updated_at
-  `;
+  `) as AccountRow[];
   return rows[0] ? accountFromRow(rows[0]) : undefined;
 }
 
 async function authenticate(email: string, password: string) {
   const db = sql();
-  const rows = await db<AccountRow[]>`
+  const rows = (await db`
     SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at
     FROM customer_accounts
     WHERE email = ${email}
     LIMIT 1
-  `;
+  `) as AccountRow[];
   const row = rows[0];
   if (!row?.password_hash) {
     await scrypt(password, Buffer.alloc(16), 64);
@@ -132,7 +132,7 @@ async function createSession(customer: CustomerAccount, userAgent?: string) {
 async function sessionCustomer(token?: string) {
   if (!token) return undefined;
   const db = sql();
-  const rows = await db<AccountRow[]>`
+  const rows = (await db`
     SELECT c.id, c.email, c.full_name, c.phone, c.email_verified, c.created_at, c.updated_at
     FROM customer_sessions s
     JOIN customer_accounts c ON c.id = s.customer_id
@@ -140,7 +140,7 @@ async function sessionCustomer(token?: string) {
       AND s.revoked_at IS NULL
       AND s.expires_at > NOW()
     LIMIT 1
-  `;
+  `) as AccountRow[];
   return rows[0] ? accountFromRow(rows[0]) : undefined;
 }
 
