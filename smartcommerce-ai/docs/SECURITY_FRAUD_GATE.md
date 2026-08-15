@@ -22,6 +22,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
 - Security CI installs from the synchronized lockfile, runs production builds, and fails on high/critical production dependency vulnerabilities. CodeQL analysis is retained as an advisory job until GitHub code scanning is enabled for this repository.
 - Security events support an HMAC-SHA-256 append-only integrity chain. Each protected event commits its predecessor hash and event hash through an atomic compare-and-advance database statement, and an internal-only verifier detects changed events, deleted/disconnected events, forks, cycles, count mismatches, and chain-head mismatches.
+- Authorization regression checks run in CI and fail if customer-session, cart, quote, commercial-account membership, commercial financial trust, or override-request ownership scoping is removed from the protected source paths.
 
 ### Closed findings
 
@@ -69,11 +70,16 @@ Closed in code, configuration pending. When `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` 
 
 The integrity key must remain server-only, independent from customer MFA secrets and frontend configuration, and must never use a `VITE_` environment variable. Key rotation requires a deliberate new chain/version rather than silently re-signing history.
 
+#### SC-OPS-003 — Authorization and IDOR regression gate
+
+Closed for the currently protected customer-commerce and commercial-account surfaces. A zero-dependency Node regression suite now verifies that authenticated identity continues to originate from a live server-side session; active carts remain customer-scoped; cart mutations remain bound to the authenticated customer's active cart; quote creation receives the authenticated customer and active cart; commercial account detail access requires an active membership matching both customer and account; financial-policy access resolves trust from the authenticated session customer and requested account; and commercial financial override requests persist the authenticated customer as requester.
+
+The suite runs before the production build in normal CI and therefore blocks merges if these authorization invariants are accidentally removed. It is a source-level authorization contract gate, not a substitute for production penetration testing or future database-backed end-to-end adversarial testing as new protected surfaces are introduced.
+
 ### Open: operational assurance
 
 - Refund/credit/promo abuse controls once those write paths are enabled.
 - Security-event retention policy plus automated external alert delivery when the integrity verifier fails or critical security events occur.
-- Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
 - Enable GitHub repository code scanning if CodeQL result publication and repository-native alerts are desired as a required gate.
 - Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
 - Deployment and live integrity-chain verification after hosting build capacity is available and `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` is configured.
