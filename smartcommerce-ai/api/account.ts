@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client";
+import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
@@ -19,68 +19,46 @@ type CustomerAccount = {
   updatedAt: string;
 };
 
+type AccountRow = {
+  id: string;
+  email: string;
+  password_hash?: string;
+  full_name: string;
+  phone: string | null;
+  email_verified: boolean;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
 const buckets = new Map<string, Bucket>();
-let clientPromise: Promise<Client> | undefined;
-let schemaPromise: Promise<void> | undefined;
+let sqlClient: ReturnType<typeof neon> | undefined;
 
 function firstHeader(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function databaseConfig() {
-  const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.SMARTCOMMERCE_DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
-  if (!url) throw new Error("CUSTOMER_DATABASE_NOT_CONFIGURED");
-  return { url, authToken };
-}
-
-async function dbClient() {
-  if (!clientPromise) clientPromise = Promise.resolve(createClient(databaseConfig()));
-  return clientPromise;
-}
-
-async function ensureSchema() {
-  if (!schemaPromise) {
-    schemaPromise = (async () => {
-      const db = await dbClient();
-      await db.batch([
-        `CREATE TABLE IF NOT EXISTS customer_accounts (
-          id TEXT PRIMARY KEY,
-          email TEXT NOT NULL UNIQUE,
-          password_hash TEXT NOT NULL,
-          full_name TEXT NOT NULL,
-          phone TEXT,
-          email_verified INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        )`,
-        `CREATE TABLE IF NOT EXISTS customer_sessions (
-          id TEXT PRIMARY KEY,
-          customer_id TEXT NOT NULL,
-          token_hash TEXT NOT NULL UNIQUE,
-          created_at TEXT NOT NULL,
-          expires_at TEXT NOT NULL,
-          revoked_at TEXT,
-          user_agent_hash TEXT,
-          FOREIGN KEY(customer_id) REFERENCES customer_accounts(id)
-        )`,
-        `CREATE INDEX IF NOT EXISTS idx_customer_sessions_customer ON customer_sessions(customer_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_customer_sessions_token ON customer_sessions(token_hash)`,
-      ], "write");
-    })();
+function sql() {
+  if (!sqlClient) {
+    const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.DATABASE_URL;
+    if (!url) throw new Error("CUSTOMER_DATABASE_NOT_CONFIGURED");
+    sqlClient = neon(url);
   }
-  return schemaPromise;
+  return sqlClient;
 }
 
-function accountFromRow(row: Record<string, unknown>): CustomerAccount {
+function toIso(value: string | Date) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function accountFromRow(row: AccountRow): CustomerAccount {
   return {
-    id: String(row.id),
-    email: String(row.email),
-    fullName: String(row.full_name),
-    phone: row.phone ? String(row.phone) : undefined,
-    emailVerified: Number(row.email_verified) === 1,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    phone: row.phone || undefined,
+    emailVerified: Boolean(row.email_verified),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
   };
 }
 
@@ -108,80 +86,72 @@ function hashUserAgent(value?: string) {
 }
 
 async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
-  await ensureSchema();
-  const db = await dbClient();
-  const existing = await db.execute({ sql: "SELECT id FROM customer_accounts WHERE email = ? LIMIT 1", args: [input.email] });
-  if (existing.rows.length) return undefined;
+  const db = sql();
+  const existing = await db`SELECT id FROM customer_accounts WHERE email = ${input.email} LIMIT 1`;
+  if (existing.length) return undefined;
 
   const id = `cus_${randomBytes(16).toString("hex")}`;
   const now = new Date().toISOString();
   const storedPassword = await passwordHash(input.password);
-  await db.execute({
-    sql: `INSERT INTO customer_accounts (id, email, password_hash, full_name, phone, email_verified, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
-    args: [id, input.email, storedPassword, input.fullName, input.phone || null, now, now],
-  });
-  return {
-    id,
-    email: input.email,
-    fullName: input.fullName,
-    phone: input.phone || undefined,
-    emailVerified: false,
-    createdAt: now,
-    updatedAt: now,
-  } satisfies CustomerAccount;
+  const rows = await db<AccountRow[]>`
+    INSERT INTO customer_accounts (id, email, password_hash, full_name, phone, email_verified, created_at, updated_at)
+    VALUES (${id}, ${input.email}, ${storedPassword}, ${input.fullName}, ${input.phone || null}, false, ${now}, ${now})
+    RETURNING id, email, full_name, phone, email_verified, created_at, updated_at
+  `;
+  return rows[0] ? accountFromRow(rows[0]) : undefined;
 }
 
 async function authenticate(email: string, password: string) {
-  await ensureSchema();
-  const db = await dbClient();
-  const result = await db.execute({
-    sql: "SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at FROM customer_accounts WHERE email = ? LIMIT 1",
-    args: [email],
-  });
-  if (!result.rows.length) return undefined;
-  const row = result.rows[0] as unknown as Record<string, unknown>;
-  if (!(await passwordMatches(password, String(row.password_hash)))) return undefined;
-  return accountFromRow(row);
+  const db = sql();
+  const rows = await db<AccountRow[]>`
+    SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at
+    FROM customer_accounts
+    WHERE email = ${email}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row?.password_hash) {
+    await scrypt(password, Buffer.alloc(16), 64);
+    return undefined;
+  }
+  return (await passwordMatches(password, row.password_hash)) ? accountFromRow(row) : undefined;
 }
 
 async function createSession(customer: CustomerAccount, userAgent?: string) {
-  await ensureSchema();
-  const db = await dbClient();
+  const db = sql();
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
-  await db.execute({
-    sql: `INSERT INTO customer_sessions (id, customer_id, token_hash, created_at, expires_at, revoked_at, user_agent_hash)
-          VALUES (?, ?, ?, ?, ?, NULL, ?)`,
-    args: [`ses_${randomBytes(16).toString("hex")}`, customer.id, hashToken(token), now.toISOString(), expiresAt, hashUserAgent(userAgent)],
-  });
+  await db`
+    INSERT INTO customer_sessions (id, customer_id, token_hash, created_at, expires_at, revoked_at, user_agent_hash)
+    VALUES (${`ses_${randomBytes(16).toString("hex")}`}, ${customer.id}, ${hashToken(token)}, ${now.toISOString()}, ${expiresAt}, NULL, ${hashUserAgent(userAgent)})
+  `;
   return { token, expiresAt };
 }
 
 async function sessionCustomer(token?: string) {
   if (!token) return undefined;
-  await ensureSchema();
-  const db = await dbClient();
-  const result = await db.execute({
-    sql: `SELECT c.id, c.email, c.full_name, c.phone, c.email_verified, c.created_at, c.updated_at
-          FROM customer_sessions s
-          JOIN customer_accounts c ON c.id = s.customer_id
-          WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?
-          LIMIT 1`,
-    args: [hashToken(token), new Date().toISOString()],
-  });
-  return result.rows.length ? accountFromRow(result.rows[0] as unknown as Record<string, unknown>) : undefined;
+  const db = sql();
+  const rows = await db<AccountRow[]>`
+    SELECT c.id, c.email, c.full_name, c.phone, c.email_verified, c.created_at, c.updated_at
+    FROM customer_sessions s
+    JOIN customer_accounts c ON c.id = s.customer_id
+    WHERE s.token_hash = ${hashToken(token)}
+      AND s.revoked_at IS NULL
+      AND s.expires_at > NOW()
+    LIMIT 1
+  `;
+  return rows[0] ? accountFromRow(rows[0]) : undefined;
 }
 
 async function revokeSession(token?: string) {
   if (!token) return;
-  await ensureSchema();
-  const db = await dbClient();
-  await db.execute({
-    sql: "UPDATE customer_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
-    args: [new Date().toISOString(), hashToken(token)],
-  });
+  const db = sql();
+  await db`
+    UPDATE customer_sessions
+    SET revoked_at = NOW()
+    WHERE token_hash = ${hashToken(token)} AND revoked_at IS NULL
+  `;
 }
 
 function clientKey(request: any, action: string) {
@@ -354,7 +324,7 @@ export default async function handler(request: any, response: any) {
     }
 
     console.error("customer_account_error", {
-      code: error instanceof Error ? error.message : "ACCOUNT_REQUEST_FAILED",
+      code: error instanceof Error && error.message === "CUSTOMER_DATABASE_NOT_CONFIGURED" ? "database_not_configured" : "account_request_failed",
     });
     return send(response, 503, {
       error: {
