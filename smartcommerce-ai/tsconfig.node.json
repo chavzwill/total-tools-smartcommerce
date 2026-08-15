@@ -10,6 +10,7 @@
     "src/backend/**/*.ts",
     "src/integrations/**/*.ts",
     "src/platform/**/*.ts",
+    "src/server/**/*.ts",
     "src/types.ts"
   ]
 }

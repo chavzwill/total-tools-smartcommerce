@@ -1,6 +1,7 @@
 import { createPlatformBackendService } from "../backend/platformBackendService";
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
+import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch";
 import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter";
 
 const unsupported = <T>(operation: string): PlatformApiResult<T> => ({
@@ -36,8 +37,16 @@ export const unsupportedPlatformAdapter: PosAdapter = {
 };
 
 export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
-  const baseUrl = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
-  if (!baseUrl) return unsupportedPlatformAdapter;
+  const configuredBaseUrl = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
+  if (!configuredBaseUrl) return unsupportedPlatformAdapter;
+
+  let baseUrl: string;
+  try {
+    baseUrl = validateServerIntegrationBaseUrl(configuredBaseUrl).toString().replace(/\/$/, "");
+  } catch {
+    console.error("total_tools_pos_configuration_rejected", { code: "unsafe_pos_endpoint" });
+    return unsupportedPlatformAdapter;
+  }
 
   return createTotalToolsPosReadAdapter({
     baseUrl,
@@ -47,6 +56,7 @@ export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
       "X-API-Key",
     defaultCurrency:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_CURRENCY?.trim() || "JMD",
+    fetchImpl: createHardenedServerFetch({ timeoutMs: 7000, maxResponseBytes: 2_000_000 }),
   });
 };
 
