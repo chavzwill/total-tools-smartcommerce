@@ -17,6 +17,14 @@ type AccountErrorPayload = {
   error?: { code?: string; message?: string; retryable?: boolean };
 };
 
+type SecurityResponse = {
+  ok: boolean;
+  message?: string;
+  verified?: boolean;
+  passwordReset?: boolean;
+  alreadyVerified?: boolean;
+};
+
 export const CUSTOMER_ACCOUNT_CHANGED_EVENT = "smartcommerce:account-changed";
 
 function announceAccountChange(state: CustomerAccountState) {
@@ -29,6 +37,24 @@ async function readResponse(response: Response) {
     throw new Error(payload.error?.message || "Customer account request failed.");
   }
   return payload as CustomerAccountState;
+}
+
+async function readSecurityResponse(response: Response) {
+  const payload = (await response.json()) as SecurityResponse & AccountErrorPayload;
+  if (!response.ok) {
+    throw new Error(payload.error?.message || "Account security request failed.");
+  }
+  return payload as SecurityResponse;
+}
+
+async function postSecurity(body: Record<string, unknown>) {
+  const response = await fetch("/api/account-security", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readSecurityResponse(response);
 }
 
 export async function getCustomerAccount() {
@@ -79,4 +105,20 @@ export async function logoutCustomer() {
   const state = await readResponse(response);
   announceAccountChange(state);
   return state;
+}
+
+export function requestEmailVerification() {
+  return postSecurity({ action: "request_verification" });
+}
+
+export function verifyCustomerEmail(token: string) {
+  return postSecurity({ action: "verify_email", token });
+}
+
+export function requestPasswordReset(email: string) {
+  return postSecurity({ action: "request_password_reset", email });
+}
+
+export function resetCustomerPassword(token: string, password: string) {
+  return postSecurity({ action: "reset_password", token, password });
 }
