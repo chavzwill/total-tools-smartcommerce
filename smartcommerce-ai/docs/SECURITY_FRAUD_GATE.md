@@ -21,6 +21,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
 - Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
 - Security CI runs production builds from the lockfile, fails on high/critical production dependency vulnerabilities, and runs GitHub CodeQL analysis for JavaScript/TypeScript on security branches, pull requests, and main.
+- Security events support an HMAC-SHA-256 append-only integrity chain. Each protected event commits its predecessor hash and event hash through an atomic compare-and-advance database statement, and an internal-only verifier detects changed events, deleted/disconnected events, forks, cycles, count mismatches, and chain-head mismatches.
 
 ### Closed findings
 
@@ -58,15 +59,21 @@ Future payment-method changes, refund-destination changes, direct payment chargi
 
 #### SC-OPS-001 — Automated dependency and static-analysis gate
 
-Closed in code. A dedicated GitHub security workflow now installs dependencies from `package-lock.json` with `npm ci`, builds the production application, fails the workflow for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also uses the lockfile and runs on `security/**` branches so security changes receive normal compilation checks before merge.
+Closed in code. A dedicated GitHub security workflow installs dependencies from `package-lock.json` with `npm ci`, builds the production application, fails the workflow for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also uses the lockfile and runs on `security/**` branches so security changes receive normal compilation checks before merge.
+
+#### SC-OPS-002 — Tamper-evident security event integrity
+
+Closed in code, configuration pending. When `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` is configured with at least 32 characters, every new `security_events` record is HMAC chained to the previous protected event. The chain head and event count are advanced atomically with the event insert, preventing concurrent writers from creating an accepted fork. `/api/security-integrity` is protected by `SMARTCOMMERCE_PLATFORM_INTERNAL_TOKEN` and verifies the complete protected chain without exposing event contents. Existing historical events created before integrity-key activation remain outside the v1 chain.
+
+The integrity key must remain server-only, independent from customer MFA secrets and frontend configuration, and must never use a `VITE_` environment variable. Key rotation requires a deliberate new chain/version rather than silently re-signing history.
 
 ### Open: operational assurance
 
 - Refund/credit/promo abuse controls once those write paths are enabled.
-- Tamper-evident audit/event integrity, retention policy, and operational alerting.
+- Security-event retention policy plus automated external alert delivery when the integrity verifier fails or critical security events occur.
 - Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
 - Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
-- Deployment verification for security changes currently blocked by hosting build-rate limits.
+- Deployment and live integrity-chain verification after hosting build capacity is available and `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` is configured.
 
 ## Release rule
 
