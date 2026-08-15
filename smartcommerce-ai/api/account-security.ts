@@ -1,23 +1,24 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { promisify } from "node:util";
+import {
+  enforceDurableRateLimit,
+  firstHeader,
+  recordSecurityEvent,
+  requestIp,
+  requestUserAgent,
+  securityHash,
+} from "../src/server/securityInfrastructure";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
-const WINDOW_MS = 15 * 60 * 1000;
 const VERIFY_TTL_MS = 1000 * 60 * 60 * 24;
 const RESET_TTL_MS = 1000 * 60 * 30;
 const scrypt = promisify(scryptCallback);
 
-type Bucket = { count: number; resetAt: number };
 type CustomerRow = { id: string; email: string; full_name: string; email_verified: boolean };
 
-const buckets = new Map<string, Bucket>();
 let sqlClient: ReturnType<typeof neon> | undefined;
-
-function firstHeader(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function sql() {
   if (!sqlClient) {
@@ -30,10 +31,6 @@ function sql() {
 
 function hashToken(value: string) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function hashValue(value?: string) {
-  return value ? createHash("sha256").update(value.slice(0, 512)).digest("hex") : null;
 }
 
 function parseCookie(header?: string) {
@@ -54,27 +51,6 @@ function sameOrigin(request: any) {
   const host = firstHeader(request.headers?.host);
   if (!host) return false;
   try { return new URL(origin).host === host; } catch { return false; }
-}
-
-function clientIp(request: any) {
-  const forwarded = firstHeader(request.headers?.["x-forwarded-for"]);
-  return forwarded?.split(",")[0]?.trim() || request.socket?.remoteAddress || "unknown";
-}
-
-function enforceRateLimit(request: any, action: string, limit: number) {
-  const key = `${action}:${clientIp(request)}`;
-  const now = Date.now();
-  const current = buckets.get(key);
-  if (!current || current.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return;
-  }
-  if (current.count >= limit) {
-    const error = new Error("RATE_LIMITED") as Error & { status?: number };
-    error.status = 429;
-    throw error;
-  }
-  current.count += 1;
 }
 
 async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
@@ -133,26 +109,25 @@ async function customerByEmail(email: string) {
 }
 
 async function issueToken(customerId: string, purpose: "email_verification" | "password_reset", request: any) {
-  const db = sql();
   const raw = randomBytes(32).toString("base64url");
   const id = `sec_${randomBytes(16).toString("hex")}`;
   const now = new Date();
   const ttl = purpose === "email_verification" ? VERIFY_TTL_MS : RESET_TTL_MS;
   const expiresAt = new Date(now.getTime() + ttl).toISOString();
 
-  await db`
+  await sql()`
     UPDATE customer_security_tokens
     SET consumed_at = NOW()
     WHERE customer_id = ${customerId}
       AND purpose = ${purpose}
       AND consumed_at IS NULL
   `;
-  await db`
+  await sql()`
     INSERT INTO customer_security_tokens
       (id, customer_id, purpose, token_hash, created_at, expires_at, consumed_at, request_ip_hash, user_agent_hash)
     VALUES
       (${id}, ${customerId}, ${purpose}, ${hashToken(raw)}, ${now.toISOString()}, ${expiresAt}, NULL,
-       ${hashValue(clientIp(request))}, ${hashValue(firstHeader(request.headers?.["user-agent"]))})
+       ${securityHash(requestIp(request))}, ${securityHash(requestUserAgent(request))})
   `;
   return { raw, id };
 }
@@ -234,7 +209,7 @@ async function consumeVerification(rawToken: string) {
     WHERE id IN (SELECT customer_id FROM consumed)
     RETURNING id
   `) as { id: string }[];
-  return Boolean(rows[0]);
+  return rows[0]?.id;
 }
 
 async function consumePasswordReset(rawToken: string, newPassword: string) {
@@ -262,7 +237,11 @@ async function consumePasswordReset(rawToken: string, newPassword: string) {
     )
     SELECT id FROM updated LIMIT 1
   `) as { id: string }[];
-  return Boolean(rows[0]);
+  return rows[0]?.id;
+}
+
+async function ipRateLimit(request: any, action: string, limit: number) {
+  await enforceDurableRateLimit({ request, action: `${action}_ip`, subject: requestIp(request), limit });
 }
 
 function send(response: any, status: number, payload: unknown) {
@@ -281,6 +260,7 @@ export default async function handler(request: any, response: any) {
     return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "POST is required." } });
   }
   if (!sameOrigin(request)) {
+    await recordSecurityEvent({ request, eventType: "security_origin_rejected", eventStatus: "blocked", riskLevel: "medium" }).catch(() => undefined);
     return send(response, 403, { error: { code: "ORIGIN_REJECTED", message: "This request was rejected." } });
   }
 
@@ -290,47 +270,68 @@ export default async function handler(request: any, response: any) {
     const sessionToken = parseCookie(firstHeader(request.headers?.cookie))[COOKIE_NAME];
 
     if (action === "request_verification") {
-      enforceRateLimit(request, action, 5);
+      await ipRateLimit(request, action, 20);
       const customer = await currentCustomer(sessionToken);
       if (!customer) return send(response, 401, { error: { code: "AUTH_REQUIRED", message: "Sign in to verify your email." } });
+      await enforceDurableRateLimit({ request, action: "verification_customer", subject: customer.id, limit: 5 });
       if (customer.email_verified) return send(response, 200, { ok: true, alreadyVerified: true });
       await sendVerification(customer, request);
+      await recordSecurityEvent({ request, eventType: "verification_requested", eventStatus: "email_sent", riskLevel: "info", customerId: customer.id, subject: customer.email });
       return send(response, 202, { ok: true, message: "Verification email sent." });
     }
 
     if (action === "verify_email") {
-      enforceRateLimit(request, action, 12);
+      await ipRateLimit(request, action, 30);
       const rawToken = String(input.token || "");
       if (rawToken.length < 32 || rawToken.length > 128) {
+        await recordSecurityEvent({ request, eventType: "email_verification_failed", eventStatus: "invalid_token", riskLevel: "medium" });
         return send(response, 400, { error: { code: "INVALID_TOKEN", message: "That verification link is invalid or expired." } });
       }
-      const verified = await consumeVerification(rawToken);
-      if (!verified) return send(response, 400, { error: { code: "INVALID_TOKEN", message: "That verification link is invalid or expired." } });
+      await enforceDurableRateLimit({ request, action: "verification_token", subject: rawToken, limit: 8 });
+      const customerId = await consumeVerification(rawToken);
+      if (!customerId) {
+        await recordSecurityEvent({ request, eventType: "email_verification_failed", eventStatus: "invalid_or_expired", riskLevel: "medium", subject: rawToken });
+        return send(response, 400, { error: { code: "INVALID_TOKEN", message: "That verification link is invalid or expired." } });
+      }
+      await recordSecurityEvent({ request, eventType: "email_verified", eventStatus: "success", riskLevel: "info", customerId });
       return send(response, 200, { ok: true, verified: true });
     }
 
     if (action === "request_password_reset") {
-      enforceRateLimit(request, action, 5);
+      await ipRateLimit(request, action, 20);
       const email = String(input.email || "").trim().toLowerCase();
-      if (validEmail(email)) {
-        const customer = await customerByEmail(email);
-        if (customer) {
-          try { await sendPasswordReset(customer, request); }
-          catch (error) { console.error("password_reset_delivery_failed", { code: "delivery_failed" }); }
+      if (email) await enforceDurableRateLimit({ request, action: "password_reset_identity", subject: `${requestIp(request)}:${email}`, limit: 5 });
+      let customer: CustomerRow | undefined;
+      if (validEmail(email)) customer = await customerByEmail(email);
+      if (customer) {
+        try {
+          await sendPasswordReset(customer, request);
+          await recordSecurityEvent({ request, eventType: "password_reset_requested", eventStatus: "email_sent", riskLevel: "low", customerId: customer.id, subject: email });
+        } catch {
+          console.error("password_reset_delivery_failed", { code: "delivery_failed" });
+          await recordSecurityEvent({ request, eventType: "password_reset_requested", eventStatus: "delivery_failed", riskLevel: "medium", customerId: customer.id, subject: email }).catch(() => undefined);
         }
+      } else {
+        await recordSecurityEvent({ request, eventType: "password_reset_requested", eventStatus: "unknown_account", riskLevel: "low", subject: email || null });
       }
       return send(response, 202, { ok: true, message: "If that account exists, a reset link will be sent." });
     }
 
     if (action === "reset_password") {
-      enforceRateLimit(request, action, 8);
+      await ipRateLimit(request, action, 20);
       const rawToken = String(input.token || "");
       const password = String(input.password || "");
+      if (rawToken) await enforceDurableRateLimit({ request, action: "password_reset_token", subject: rawToken, limit: 8 });
       if (rawToken.length < 32 || rawToken.length > 128 || !passwordAllowed(password)) {
+        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_reset", riskLevel: "medium", subject: rawToken || null });
         return send(response, 400, { error: { code: "INVALID_RESET", message: "That reset link is invalid or expired, or the new password does not meet requirements." } });
       }
-      const changed = await consumePasswordReset(rawToken, password);
-      if (!changed) return send(response, 400, { error: { code: "INVALID_RESET", message: "That reset link is invalid or expired." } });
+      const customerId = await consumePasswordReset(rawToken, password);
+      if (!customerId) {
+        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_or_expired", riskLevel: "high", subject: rawToken });
+        return send(response, 400, { error: { code: "INVALID_RESET", message: "That reset link is invalid or expired." } });
+      }
+      await recordSecurityEvent({ request, eventType: "password_reset_succeeded", eventStatus: "success_sessions_revoked", riskLevel: "medium", customerId });
       return send(response, 200, { ok: true, passwordReset: true });
     }
 
@@ -339,7 +340,9 @@ export default async function handler(request: any, response: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     const status = Number((error as { status?: number })?.status || 500);
     if (status === 429) {
-      response.setHeader("Retry-After", "900");
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 900));
+      response.setHeader("Retry-After", String(retryAfter));
+      await recordSecurityEvent({ request, eventType: "account_security_rate_limited", eventStatus: "blocked", riskLevel: "high" }).catch(() => undefined);
       return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many attempts. Try again later." } });
     }
     if (status === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The request is too large." } });
