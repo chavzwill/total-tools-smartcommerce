@@ -1,5 +1,6 @@
 import Container from "../shared/Container";
 import { company } from "../../styles/theme";
+import "../../styles/utilityBar.css";
 
 export default function UtilityBar() {
   return (
@@ -9,6 +10,7 @@ export default function UtilityBar() {
           <span className="tt-utility__label">Branches</span>
           {company.branches.map((branch) => (
             <a
+              className="tt-utility__item"
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`Total Tools ${branch.name} Jamaica`)}`}
               target="_blank"
               rel="noreferrer"
@@ -19,10 +21,10 @@ export default function UtilityBar() {
             </a>
           ))}
         </div>
-        <div className="tt-utility__links">
-          <a href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>Call {company.phone}</a>
-          <a href={`https://wa.me/${company.whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer">WhatsApp {company.whatsapp}</a>
-          <a href="#/commercial">Commercial Support</a>
+        <div className="tt-utility__links" aria-label="Contact options">
+          <a className="tt-utility__item" href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>Call {company.phone}</a>
+          <a className="tt-utility__item" href={`https://wa.me/${company.whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer">WhatsApp {company.whatsapp}</a>
+          <a className="tt-utility__item" href="#/commercial">Commercial Support</a>
         </div>
       </Container>
     </div>
