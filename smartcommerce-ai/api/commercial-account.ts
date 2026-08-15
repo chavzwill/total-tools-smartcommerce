@@ -3,6 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 24_000;
+const ADMIN_ROLES = new Set(["owner", "admin"]);
+const APPROVAL_RULE_ROLES = new Set(["owner", "admin", "approver", "buyer"]);
 let sqlClient: ReturnType<typeof neon> | undefined;
 
 function firstHeader(value: string | string[] | undefined) {
@@ -135,12 +137,17 @@ async function audit(accountId: string | null, customerId: string | null, eventT
 
 async function listAccounts(customerId: string) {
   return await sql()`
-    SELECT a.id, a.display_name, a.legal_name, a.account_type, a.tax_identifier, a.status,
-           a.verification_status, a.privilege_status,
+    SELECT a.id, a.display_name, a.legal_name, a.account_type,
+           CASE WHEN m.role IN ('owner','admin') THEN a.tax_identifier ELSE NULL END AS tax_identifier,
+           a.status, a.verification_status, a.privilege_status,
            m.role, m.status AS membership_status, m.authority_status,
            a.created_at, a.updated_at,
-           pm.provider_id, pm.provider_customer_id, pm.provider_account_id,
-           pm.provider_price_list_id, pm.payment_terms_code, pm.mapping_status
+           pm.provider_id,
+           CASE WHEN m.role IN ('owner','admin') THEN pm.provider_customer_id ELSE NULL END AS provider_customer_id,
+           CASE WHEN m.role IN ('owner','admin') THEN pm.provider_account_id ELSE NULL END AS provider_account_id,
+           CASE WHEN m.role IN ('owner','admin','approver','buyer') THEN pm.provider_price_list_id ELSE NULL END AS provider_price_list_id,
+           CASE WHEN m.role IN ('owner','admin','approver','buyer') THEN pm.payment_terms_code ELSE NULL END AS payment_terms_code,
+           pm.mapping_status
     FROM commercial_account_members m
     JOIN commercial_accounts a ON a.id = m.commercial_account_id
     LEFT JOIN commercial_provider_mappings pm ON pm.commercial_account_id = a.id
@@ -153,16 +160,45 @@ async function listAccounts(customerId: string) {
 async function accountDetails(customerId: string, accountId: string) {
   const member = await membership(customerId, accountId);
   if (!member) return undefined;
+
+  const isAdmin = ADMIN_ROLES.has(member.role);
+  const canViewApprovalRules = APPROVAL_RULE_ROLES.has(member.role);
+
   const [accounts, sites, projects, rules, members, applications] = await Promise.all([
-    sql()`SELECT id, display_name, legal_name, account_type, tax_identifier, status, verification_status, privilege_status, verified_at, verification_reference, created_at, updated_at FROM commercial_accounts WHERE id = ${accountId} LIMIT 1`,
+    isAdmin
+      ? sql()`SELECT id, display_name, legal_name, account_type, tax_identifier, status, verification_status, privilege_status, verified_at, verification_reference, created_at, updated_at FROM commercial_accounts WHERE id = ${accountId} LIMIT 1`
+      : sql()`SELECT id, display_name, legal_name, account_type, status, verification_status, privilege_status, verified_at, created_at, updated_at FROM commercial_accounts WHERE id = ${accountId} LIMIT 1`,
     sql()`SELECT id, name, line1, line2, city, region, postal_code, country_code, contact_name, contact_phone, active FROM commercial_sites WHERE commercial_account_id = ${accountId} AND active = true ORDER BY name`,
     sql()`SELECT id, site_id, name, reference_code, description, status, start_date, target_end_date, created_at, updated_at FROM commercial_projects WHERE commercial_account_id = ${accountId} ORDER BY updated_at DESC`,
-    sql()`SELECT id, rule_type, currency, threshold_minor, threshold_days, approver_role, active FROM commercial_approval_rules WHERE commercial_account_id = ${accountId} AND active = true ORDER BY created_at`,
-    sql()`SELECT m.id, m.customer_id, m.role, m.status, m.authority_status, c.full_name, c.email FROM commercial_account_members m JOIN customer_accounts c ON c.id = m.customer_id WHERE m.commercial_account_id = ${accountId} AND m.status <> 'removed' ORDER BY m.created_at`,
-    sql()`SELECT id, claimed_account_type, legal_name, registration_identifier, tax_identifier, work_email, official_domain, application_status, risk_flags, submitted_at, reviewed_at, review_reference FROM commercial_verification_applications WHERE commercial_account_id = ${accountId} ORDER BY created_at DESC`,
+    canViewApprovalRules
+      ? sql()`SELECT id, rule_type, currency, threshold_minor, threshold_days, approver_role, active FROM commercial_approval_rules WHERE commercial_account_id = ${accountId} AND active = true ORDER BY created_at`
+      : Promise.resolve([]),
+    isAdmin
+      ? sql()`SELECT m.id, m.customer_id, m.role, m.status, m.authority_status, c.full_name, c.email FROM commercial_account_members m JOIN customer_accounts c ON c.id = m.customer_id WHERE m.commercial_account_id = ${accountId} AND m.status <> 'removed' ORDER BY m.created_at`
+      : sql()`SELECT m.id, m.customer_id, m.role, m.status, m.authority_status, c.full_name FROM commercial_account_members m JOIN customer_accounts c ON c.id = m.customer_id WHERE m.commercial_account_id = ${accountId} AND m.status = 'active' ORDER BY m.created_at`,
+    isAdmin
+      ? sql()`SELECT id, claimed_account_type, legal_name, registration_identifier, tax_identifier, work_email, official_domain, application_status, risk_flags, submitted_at, reviewed_at, review_reference FROM commercial_verification_applications WHERE commercial_account_id = ${accountId} ORDER BY created_at DESC`
+      : Promise.resolve([]),
   ]);
   const providerOk = await providerVerified(accountId);
-  return { account: (accounts as any[])[0], role: member.role, authorityStatus: member.authority_status, providerVerified: providerOk, privilegedAccess: await privilegedCommercialAccess(customerId, accountId), sites, projects, approvalRules: rules, members, verificationApplications: applications };
+  return {
+    account: (accounts as any[])[0],
+    role: member.role,
+    authorityStatus: member.authority_status,
+    providerVerified: providerOk,
+    privilegedAccess: await privilegedCommercialAccess(customerId, accountId),
+    sites,
+    projects,
+    approvalRules: rules,
+    members,
+    verificationApplications: applications,
+    visibility: {
+      sensitiveOrganisationIdentifiers: isAdmin,
+      memberEmails: isAdmin,
+      verificationApplications: isAdmin,
+      approvalRules: canViewApprovalRules,
+    },
+  };
 }
 
 function send(response: any, status: number, payload: unknown) {
