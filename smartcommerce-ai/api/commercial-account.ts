@@ -1,10 +1,17 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
+import {
+  enforceDurableRateLimit,
+  recordSecurityEvent,
+  requestIp,
+} from "../src/server/securityInfrastructure";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 24_000;
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 const APPROVAL_RULE_ROLES = new Set(["owner", "admin", "approver", "buyer"]);
+const APPLICATION_CUSTOMER_DAILY_LIMIT = 3;
+const APPLICATION_IP_DAILY_LIMIT = 10;
 let sqlClient: ReturnType<typeof neon> | undefined;
 
 function firstHeader(value: string | string[] | undefined) {
@@ -212,9 +219,11 @@ export default async function handler(request: any, response: any) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "same-origin");
   const method = String(request.method || "GET").toUpperCase();
+  let customerIdForAudit: string | undefined;
 
   try {
     const customerId = await currentCustomerId(request);
+    customerIdForAudit = customerId;
     if (!customerId) return send(response, 401, { error: { code: "AUTH_REQUIRED", message: "Sign in to manage commercial accounts." } });
 
     if (method === "GET") {
@@ -237,6 +246,9 @@ export default async function handler(request: any, response: any) {
     const action = String(input.action || "");
 
     if (action === "create_account") {
+      await enforceDurableRateLimit({ request, action: "commercial_application_customer", subject: customerId, limit: APPLICATION_CUSTOMER_DAILY_LIMIT, windowSeconds: 86_400 });
+      await enforceDurableRateLimit({ request, action: "commercial_application_ip", subject: requestIp(request), limit: APPLICATION_IP_DAILY_LIMIT, windowSeconds: 86_400 });
+
       const displayName = String(input.displayName || "").trim();
       const legalName = String(input.legalName || displayName).trim();
       const taxIdentifier = String(input.taxIdentifier || "").trim();
@@ -249,28 +261,40 @@ export default async function handler(request: any, response: any) {
 
       const normalized = normalizeName(legalName);
       const normalizedTax = taxIdentifier ? normalizeIdentifier(taxIdentifier) : null;
-      const exactMatches = await sql()`
-        SELECT id, display_name, verification_status
-        FROM commercial_accounts
-        WHERE normalized_name = ${normalized}
-           OR (${normalizedTax} IS NOT NULL AND normalized_tax_identifier = ${normalizedTax})
-        ORDER BY verification_status = 'verified' DESC, created_at ASC
-        LIMIT 5
-      ` as Array<{ id: string; display_name: string; verification_status: string }>;
+      const [exactMatches, recentApplicantRows] = await Promise.all([
+        sql()`
+          SELECT id, display_name, verification_status
+          FROM commercial_accounts
+          WHERE normalized_name = ${normalized}
+             OR (${normalizedTax} IS NOT NULL AND normalized_tax_identifier = ${normalizedTax})
+          ORDER BY verification_status = 'verified' DESC, created_at ASC
+          LIMIT 5
+        ` as Promise<Array<{ id: string; display_name: string; verification_status: string }>>,
+        sql()`
+          SELECT COUNT(*)::int AS application_count
+          FROM commercial_verification_applications
+          WHERE applicant_customer_id = ${customerId}
+            AND created_at > NOW() - INTERVAL '30 days'
+        ` as Promise<Array<{ application_count: number }>>,
+      ]);
       if (exactMatches.some((row) => row.verification_status === 'verified')) {
         await audit(null, customerId, 'commercial_duplicate_verified_organisation_claim', 'blocked', { normalizedName: normalized, accountType });
         return send(response, 409, { error: { code: "COMMERCIAL_ORGANISATION_EXISTS", message: "A verified organisation with matching details already exists. Request access to the existing organisation instead." } });
       }
 
+      const priorApplicationCount = Number(recentApplicantRows[0]?.application_count || 0);
       const accountId = `com_${randomBytes(16).toString("hex")}`;
       const memberId = `cmm_${randomBytes(16).toString("hex")}`;
       const applicationId = `cva_${randomBytes(16).toString("hex")}`;
       const governmentClaim = accountType === 'government';
+      const repeatedApplicant = priorApplicationCount >= 2;
       const riskFlags = [
         ...(governmentClaim ? ['government_manual_review_required'] : []),
         ...(exactMatches.length ? ['possible_duplicate_organisation'] : []),
+        ...(repeatedApplicant ? ['repeated_commercial_applications'] : []),
       ];
-      const applicationStatus = governmentClaim || exactMatches.length ? 'under_review' : 'submitted';
+      const requiresReview = governmentClaim || exactMatches.length > 0 || repeatedApplicant;
+      const applicationStatus = requiresReview ? 'under_review' : 'submitted';
 
       await sql()`
         WITH created_account AS (
@@ -279,7 +303,7 @@ export default async function handler(request: any, response: any) {
             normalized_name, normalized_tax_identifier, verification_status, privilege_status
           ) VALUES (
             ${accountId}, ${displayName}, ${legalName}, ${accountType}, ${taxIdentifier || null}, 'pending', ${customerId},
-            ${normalized}, ${normalizedTax}, ${governmentClaim || exactMatches.length ? 'pending_review' : 'unverified'}, 'locked'
+            ${normalized}, ${normalizedTax}, ${requiresReview ? 'pending_review' : 'unverified'}, 'locked'
           )
           RETURNING id
         ), created_member AS (
@@ -296,7 +320,8 @@ export default async function handler(request: any, response: any) {
                ${registrationIdentifier || null}, ${taxIdentifier || null}, ${workEmail || null}, ${applicationStatus}, ${JSON.stringify(riskFlags)}::jsonb, NOW()
         FROM created_member
       `;
-      await audit(accountId, customerId, governmentClaim ? 'government_account_application_created' : 'commercial_account_application_created', governmentClaim || exactMatches.length ? 'review_required' : 'recorded', { applicationId, riskFlags });
+      await audit(accountId, customerId, governmentClaim ? 'government_account_application_created' : 'commercial_account_application_created', requiresReview ? 'review_required' : 'recorded', { applicationId, riskFlags, priorApplicationCount });
+      await recordSecurityEvent({ request, eventType: "commercial_application_submitted", eventStatus: requiresReview ? "manual_review" : "submitted", riskLevel: requiresReview ? "medium" : "info", customerId, commercialAccountId: accountId, metadata: { applicationId, accountType, riskFlagCount: riskFlags.length, priorApplicationCount } });
       return send(response, 201, { details: await accountDetails(customerId, accountId) });
     }
 
@@ -344,6 +369,16 @@ export default async function handler(request: any, response: any) {
   } catch (error) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     const status = Number((error as any)?.status || 500);
+    const code = error instanceof Error ? error.message : "COMMERCIAL_REQUEST_FAILED";
+    if (code === "RATE_LIMITED") {
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 60));
+      response.setHeader("Retry-After", String(retryAfter));
+      try {
+        await audit(null, customerIdForAudit || null, 'commercial_application_velocity_blocked', 'blocked', { retryAfterSeconds: retryAfter });
+        await recordSecurityEvent({ request, eventType: "commercial_application_velocity_blocked", eventStatus: "rate_limited", riskLevel: "high", customerId: customerIdForAudit || null, metadata: { retryAfterSeconds: retryAfter } });
+      } catch {}
+      return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many commercial account applications. Please wait before trying again.", retryAfterSeconds: retryAfter } });
+    }
     if (status === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The request is too large." } });
     console.error("commercial_account_error", { code: error instanceof Error && error.message === "COMMERCIAL_DATABASE_NOT_CONFIGURED" ? "database_not_configured" : "commercial_request_failed" });
     return send(response, 503, { error: { code: "COMMERCIAL_SERVICE_UNAVAILABLE", message: "Commercial accounts are temporarily unavailable.", retryable: true } });

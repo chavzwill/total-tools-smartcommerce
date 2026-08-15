@@ -16,6 +16,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Cart mutation and quote-generation velocity controls use the durable database-backed rate-limit infrastructure.
 - Quote creation is replay-resistant within a quote window: identical authenticated customer/cart/pricing state produces the same quote identifier instead of creating duplicate quote records.
 - Commerce velocity blocks and quote creation/replay events are recorded in the security event stream.
+- Commercial account applications are velocity-limited by authenticated customer and network signal; repeat applications and duplicate organisation claims are escalated to review.
 
 ### Closed findings
 
@@ -35,6 +36,10 @@ Closed in code for the current cart/quote surface. Authenticated cart mutations 
 
 Closed in code for current checkout quote creation. Quote IDs are deterministically derived from authenticated customer, cart, revalidated provider pricing, totals, and the active quote window. Repeated submission of the same state uses `ON CONFLICT DO NOTHING`, preventing duplicate quote records from retries/double taps while allowing a new quote after the quote window or pricing/cart state changes.
 
+#### SC-FRAUD-004 — Commercial application velocity and identity abuse
+
+Closed in code for the current commercial-account application surface. Application creation is rate-limited per authenticated customer and IP/network signal. Government claims, duplicate organisation identifiers/names, and repeated applicant behavior are routed to manual review while account privileges remain locked. Review signals are stored in commercial verification/audit data and the security event stream, which are not exposed to ordinary non-administrative commercial members.
+
 ### Open: high priority fraud controls
 
 #### SC-FRAUD-003 — Order/payment idempotency
@@ -47,16 +52,6 @@ Required remediation:
 - Reject reuse of a key with a different request fingerprint.
 - Make provider/webhook handling idempotent by provider event ID.
 - Add database uniqueness constraints at the final order/payment boundary, not only application checks.
-
-#### SC-FRAUD-004 — Commercial application velocity and identity abuse
-
-Commercial account creation already flags duplicate verified organisations and government claims for review, but application-submission velocity and repeated identity-claim patterns still require dedicated controls.
-
-Required remediation:
-
-- Rate-limit commercial account applications by authenticated customer and network signal.
-- Escalate repeated tax/registration/work-domain claims across accounts to manual review rather than auto-trust.
-- Record reviewable fraud signals without exposing those signals to normal account members.
 
 #### SC-FRAUD-005 — Account takeover transaction escalation
 
