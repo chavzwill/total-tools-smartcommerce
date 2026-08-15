@@ -9,40 +9,72 @@ This document tracks security and fraud-control findings discovered during the p
 - Customer sessions use server-side session lookup and customer scoping.
 - Persistent cart mutations are scoped to the authenticated customer's active cart.
 - Commercial account detail lookup requires active membership in the requested commercial account.
-- Commercial financial controls require authenticated membership, verified organisation/member authority, enabled privileges, a verified provider mapping, and strong step-up authentication for protected actions.
+- Commercial financial controls require authenticated membership, verified organisation/member authority, enabled privileges, a verified provider mapping, strong step-up authentication, and explicit role authorization for protected actions.
+- Commercial administrative data is minimized by role; sensitive verification, member-contact, provider-account, and organisation-identifier data is restricted to administrative roles.
 - Generic `/api/platform/*` sensitive operations are protected by the server-only `SMARTCOMMERCE_PLATFORM_INTERNAL_TOKEN` boundary; public reads are separated from privileged operations.
 - Platform gateway request bodies are bounded and raw internal exception details are no longer returned to callers.
+- Cart mutation and quote-generation velocity controls use the durable database-backed rate-limit infrastructure.
+- Quote creation is replay-resistant within a quote window: identical authenticated customer/cart/pricing state produces the same quote identifier instead of creating duplicate quote records.
+- Commerce velocity blocks and quote creation/replay events are recorded in the security event stream.
 
-### Open: high priority
+### Closed findings
 
 #### SC-SEC-002 — Commercial financial role authorization
 
-The commercial financial-policy endpoint currently verifies that the caller is an active member and that organisation/member/provider trust is verified, but it does not independently restrict financial-policy actions by commercial role. A verified member with a non-financial role could therefore reach entitlement evaluation or submit a financial override request if their authority status is verified.
-
-Required remediation:
-
-- Define explicit financial roles/capabilities (for example owner/admin/buyer/approver as applicable to business policy).
-- Enforce role authorization server-side before returning financial controls and before `evaluate` or `request_override` actions.
-- Keep strong step-up as an additional control, not as a substitute for authorization.
-- Record denied role attempts in the security event log.
+Closed in code. Financial controls now enforce explicit server-side role allowlists. Owner/admin/approver/buyer may inspect/evaluate permitted financial entitlements; override requests are restricted to owner/admin/approver. Strong step-up remains additive and denied-role attempts are security-audited.
 
 #### SC-SEC-003 — Commercial account data minimization
 
-`accountDetails` currently returns organisation tax identifiers, member names/emails, approval rules, and verification application/risk information to any active member of the commercial account. Membership proves tenancy but not a need to see all sensitive administrative and fraud-review data.
+Closed in code. Sensitive commercial account fields and fraud-review data are restricted by role; non-administrative members receive only the operational data required for their role.
+
+#### SC-FRAUD-001 — Commerce velocity abuse
+
+Closed in code for the current cart/quote surface. Authenticated cart mutations and quote creation are subject to durable customer-level limits, quote creation also has an IP-level limit, and rate-limit events are logged. Thresholds must be tuned from production telemetry rather than treated as permanent constants.
+
+#### SC-FRAUD-002 — Duplicate quote/replay generation
+
+Closed in code for current checkout quote creation. Quote IDs are deterministically derived from authenticated customer, cart, revalidated provider pricing, totals, and the active quote window. Repeated submission of the same state uses `ON CONFLICT DO NOTHING`, preventing duplicate quote records from retries/double taps while allowing a new quote after the quote window or pricing/cart state changes.
+
+### Open: high priority fraud controls
+
+#### SC-FRAUD-003 — Order/payment idempotency
+
+Before a payment-capable order write path is enabled, every order/payment creation request must require a server-enforced idempotency boundary. A retry, browser double-submit, network replay, or webhook retry must never create a second financial transaction or duplicate fulfillment obligation.
 
 Required remediation:
 
-- Apply field-level and section-level authorization by commercial role.
-- Restrict verification applications, risk flags, tax identifiers, and full member directory details to authorised administrative roles.
-- Return only the minimum data needed by buyer/approver/project users.
+- Persist idempotency keys with authenticated actor/customer, operation, request fingerprint, response reference, and expiry.
+- Reject reuse of a key with a different request fingerprint.
+- Make provider/webhook handling idempotent by provider event ID.
+- Add database uniqueness constraints at the final order/payment boundary, not only application checks.
 
-### Open: fraud controls
+#### SC-FRAUD-004 — Commercial application velocity and identity abuse
 
-- Transaction/order velocity rules and duplicate-order detection.
-- Account takeover risk signals and unusual-device/session escalation.
+Commercial account creation already flags duplicate verified organisations and government claims for review, but application-submission velocity and repeated identity-claim patterns still require dedicated controls.
+
+Required remediation:
+
+- Rate-limit commercial account applications by authenticated customer and network signal.
+- Escalate repeated tax/registration/work-domain claims across accounts to manual review rather than auto-trust.
+- Record reviewable fraud signals without exposing those signals to normal account members.
+
+#### SC-FRAUD-005 — Account takeover transaction escalation
+
+Authentication security is strong, but transactional risk should also consider session/device change and recent security events.
+
+Required remediation:
+
+- Require fresh strong step-up for high-risk future actions such as payment-method change, refund destination change, high-value order, credit use, or commercial privilege change.
+- Add risk escalation for new-device/new-network activity combined with sensitive transactions.
+- Keep customer-visible messaging generic so fraud rules cannot be easily reverse engineered.
+
+### Open: operational assurance
+
 - Refund/credit/promo abuse controls once those write paths are enabled.
 - Tamper-resistant audit/event retention and operational alerting.
-- Automated authorization regression tests (cross-customer and cross-commercial-account IDOR cases).
+- Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
+- Production telemetry review and threshold tuning for all durable rate limits.
+- Deployment verification for security changes currently blocked by hosting build-rate limits.
 
 ## Release rule
 
