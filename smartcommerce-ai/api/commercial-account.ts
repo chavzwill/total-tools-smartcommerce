@@ -154,10 +154,16 @@ export default async function handler(request: any, response: any) {
       }
       const accountId = `com_${randomBytes(16).toString("hex")}`;
       const memberId = `cmm_${randomBytes(16).toString("hex")}`;
-      await sql().transaction([
-        sql()`INSERT INTO commercial_accounts (id, display_name, legal_name, account_type, tax_identifier, status, created_by_customer_id) VALUES (${accountId}, ${displayName}, ${legalName || null}, ${accountType}, ${taxIdentifier || null}, 'pending', ${customerId})`,
-        sql()`INSERT INTO commercial_account_members (id, commercial_account_id, customer_id, role, status, invited_by_customer_id) VALUES (${memberId}, ${accountId}, ${customerId}, 'owner', 'active', ${customerId})`,
-      ]);
+      await sql()`
+        WITH created_account AS (
+          INSERT INTO commercial_accounts (id, display_name, legal_name, account_type, tax_identifier, status, created_by_customer_id)
+          VALUES (${accountId}, ${displayName}, ${legalName || null}, ${accountType}, ${taxIdentifier || null}, 'pending', ${customerId})
+          RETURNING id
+        )
+        INSERT INTO commercial_account_members (id, commercial_account_id, customer_id, role, status, invited_by_customer_id)
+        SELECT ${memberId}, id, ${customerId}, 'owner', 'active', ${customerId}
+        FROM created_account
+      `;
       return send(response, 201, { details: await accountDetails(customerId, accountId) });
     }
 
