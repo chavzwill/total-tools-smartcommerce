@@ -6,6 +6,7 @@ on:
       - main
       - 'feature/**'
       - 'preview/**'
+      - development
   pull_request:
     paths:
       - 'smartcommerce-ai/**'
