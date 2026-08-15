@@ -1,0 +1,65 @@
+name: SmartCommerce Security
+
+on:
+  push:
+    branches:
+      - main
+      - 'security/**'
+  pull_request:
+    paths:
+      - 'smartcommerce-ai/**'
+      - '.github/workflows/smartcommerce-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: smartcommerce-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smartcommerce-ai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: smartcommerce-ai/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: Dependency vulnerability gate
+        run: npm audit --audit-level=high --omit=dev
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Build application
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
