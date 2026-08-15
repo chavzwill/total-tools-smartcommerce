@@ -20,7 +20,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Platform order, invoice, and checkout creation require durable idempotency keys. Replays with the same request return the stored response, while reuse of a key for a changed request is rejected.
 - Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
 - Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
-- Security CI runs production builds from the lockfile, fails on high/critical production dependency vulnerabilities, and runs GitHub CodeQL analysis for JavaScript/TypeScript on security branches, pull requests, and main.
+- Security CI runs production builds, fails on high/critical production dependency vulnerabilities, and runs GitHub CodeQL analysis for JavaScript/TypeScript on security branches, pull requests, and main.
 - Security events support an HMAC-SHA-256 append-only integrity chain. Each protected event commits its predecessor hash and event hash through an atomic compare-and-advance database statement, and an internal-only verifier detects changed events, deleted/disconnected events, forks, cycles, count mismatches, and chain-head mismatches.
 
 ### Closed findings
@@ -59,7 +59,9 @@ Future payment-method changes, refund-destination changes, direct payment chargi
 
 #### SC-OPS-001 — Automated dependency and static-analysis gate
 
-Closed in code. A dedicated GitHub security workflow installs dependencies from `package-lock.json` with `npm ci`, builds the production application, fails the workflow for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also uses the lockfile and runs on `security/**` branches so security changes receive normal compilation checks before merge.
+Closed in code for build, dependency-vulnerability and static-analysis coverage. A dedicated GitHub security workflow builds the production application, fails for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also runs on `security/**` branches so security changes receive compilation checks before merge.
+
+The repository's `package-lock.json` is currently behind `package.json` for recently added server dependencies. CI therefore uses `npm install` rather than `npm ci` until the lockfile is regenerated and committed. Restoring lockfile reproducibility is tracked as an operational cleanup item and must be completed before a final release gate.
 
 #### SC-OPS-002 — Tamper-evident security event integrity
 
@@ -72,6 +74,7 @@ The integrity key must remain server-only, independent from customer MFA secrets
 - Refund/credit/promo abuse controls once those write paths are enabled.
 - Security-event retention policy plus automated external alert delivery when the integrity verifier fails or critical security events occur.
 - Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
+- Regenerate and commit `package-lock.json`, then restore `npm ci` as the required install path for CI/security workflows.
 - Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
 - Deployment and live integrity-chain verification after hosting build capacity is available and `SMARTCOMMERCE_AUDIT_INTEGRITY_KEY` is configured.
 
