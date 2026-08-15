@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
-import { firstHeader, recordSecurityEvent, requestUserAgent } from "../src/server/securityInfrastructure";
+import { firstHeader, recordSecurityEvent, requestUserAgent } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 8_000;
