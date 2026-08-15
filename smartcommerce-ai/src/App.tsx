@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
+import { addPersistentCartItem } from "./lib/customerCommerce";
 import { getRoute, go } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
 import AssistantPage from "./pages/AssistantPage";
@@ -30,7 +31,18 @@ export default function App() {
     compared,
     onWishlist: (id: string) => toggle(setWishlist, id),
     onCompare: (id: string) => toggle(setCompared, id),
-    onAdd: (id: string) => { setCart((items) => items.includes(id) ? items : [...items, id]); go("/cart"); }
+    onAdd: (id: string) => {
+      void addPersistentCartItem(id, 1)
+        .then(() => go("/cart"))
+        .catch((error: any) => {
+          if (error?.status === 401) {
+            setCart((items) => items.includes(id) ? items : [...items, id]);
+            go("/cart");
+            return;
+          }
+          go("/cart");
+        });
+    }
   }), [wishlist, compared]);
 
   const path = route.path;
@@ -47,10 +59,10 @@ export default function App() {
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
   else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
-  else if (path === "/cart") page = <CartPage cart={cart} remove={(id) => setCart((items) => items.filter((item) => item !== id))} />;
+  else if (path === "/cart") page = <CartPage guestCart={cart} removeGuest={(id) => setCart((items) => items.filter((item) => item !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
-  else if (path === "/checkout") page = <CheckoutPage count={cart.length} />;
+  else if (path === "/checkout") page = <CheckoutPage />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} />;
   else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" />;
