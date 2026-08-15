@@ -1,0 +1,41 @@
+name: SmartCommerce CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'preview/**'
+      - development
+  pull_request:
+    paths:
+      - 'smartcommerce-ai/**'
+      - '.github/workflows/smartcommerce-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: smartcommerce-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smartcommerce-ai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: smartcommerce-ai/package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
