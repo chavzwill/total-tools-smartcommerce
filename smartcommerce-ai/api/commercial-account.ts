@@ -269,13 +269,13 @@ export default async function handler(request: any, response: any) {
              OR (${normalizedTax} IS NOT NULL AND normalized_tax_identifier = ${normalizedTax})
           ORDER BY verification_status = 'verified' DESC, created_at ASC
           LIMIT 5
-        ` as Promise<Array<{ id: string; display_name: string; verification_status: string }>>,
+        ` as unknown as Promise<Array<{ id: string; display_name: string; verification_status: string }>>,
         sql()`
           SELECT COUNT(*)::int AS application_count
           FROM commercial_verification_applications
           WHERE applicant_customer_id = ${customerId}
             AND created_at > NOW() - INTERVAL '30 days'
-        ` as Promise<Array<{ application_count: number }>>,
+        ` as unknown as Promise<Array<{ application_count: number }>>,
       ]);
       if (exactMatches.some((row) => row.verification_status === 'verified')) {
         await audit(null, customerId, 'commercial_duplicate_verified_organisation_claim', 'blocked', { normalizedName: normalized, accountType });

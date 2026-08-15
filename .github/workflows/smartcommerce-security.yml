@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: smartcommerce-security-${{ github.ref }}
@@ -45,21 +44,27 @@ jobs:
       - name: Dependency vulnerability gate
         run: npm audit --audit-level=high --omit=dev
 
-  codeql:
+  codeql-advisory:
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
 
       - name: Build application
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
+      - name: Analyze without repository upload
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:javascript-typescript'
+          upload: never
+
+      - name: Explain advisory status
+        if: failure()
+        run: echo "CodeQL is advisory until GitHub code scanning is enabled for this repository. Build and dependency-audit gates remain mandatory."

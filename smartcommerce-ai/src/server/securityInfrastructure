@@ -4,6 +4,7 @@
 // and Node cannot infer named exports from a dynamic `export *` bridge.
 import * as securityInfrastructure from "./securityInfrastructure.js";
 
+export const assessSensitiveActionRisk = securityInfrastructure.assessSensitiveActionRisk;
 export const enforceDurableRateLimit = securityInfrastructure.enforceDurableRateLimit;
 export const firstHeader = securityInfrastructure.firstHeader;
 export const recordSecurityEvent = securityInfrastructure.recordSecurityEvent;
@@ -12,3 +13,4 @@ export const requestUserAgent = securityInfrastructure.requestUserAgent;
 export const securityHash = securityInfrastructure.securityHash;
 export const sessionRequiresStepUp = securityInfrastructure.sessionRequiresStepUp;
 export const touchSessionSecurity = securityInfrastructure.touchSessionSecurity;
+export const verifySecurityEventIntegrity = securityInfrastructure.verifySecurityEventIntegrity;
