@@ -20,6 +20,7 @@ This document tracks security and fraud-control findings discovered during the p
 - Platform order, invoice, and checkout creation require durable idempotency keys. Replays with the same request return the stored response, while reuse of a key for a changed request is rejected.
 - Provider webhook processing requires a provider event ID and is durably replay-protected for 72 hours.
 - Sensitive commercial financial actions require the current request to match a recent successful TOTP, recovery-code, or passkey strong-authentication event for the same session. A changed request context or a newer high-risk security event invalidates the active step-up window and requires fresh strong authentication.
+- Security CI runs production builds from the lockfile, fails on high/critical production dependency vulnerabilities, and runs GitHub CodeQL analysis for JavaScript/TypeScript on security branches, pull requests, and main.
 
 ### Closed findings
 
@@ -55,10 +56,14 @@ Closed in code for the currently implemented high-risk commercial financial acti
 
 Future payment-method changes, refund-destination changes, direct payment charging, and other newly introduced high-risk transaction paths must call the same sensitive-action risk boundary rather than implementing weaker local checks.
 
+#### SC-OPS-001 — Automated dependency and static-analysis gate
+
+Closed in code. A dedicated GitHub security workflow now installs dependencies from `package-lock.json` with `npm ci`, builds the production application, fails the workflow for high/critical vulnerabilities in production dependencies, and runs GitHub CodeQL analysis over JavaScript/TypeScript. The primary build workflow also uses the lockfile and runs on `security/**` branches so security changes receive normal compilation checks before merge.
+
 ### Open: operational assurance
 
 - Refund/credit/promo abuse controls once those write paths are enabled.
-- Tamper-resistant audit/event retention and operational alerting.
+- Tamper-evident audit/event integrity, retention policy, and operational alerting.
 - Automated authorization regression tests covering cross-customer and cross-commercial-account IDOR cases.
 - Production telemetry review and threshold tuning for all durable rate limits and transaction-risk signals.
 - Deployment verification for security changes currently blocked by hosting build-rate limits.
