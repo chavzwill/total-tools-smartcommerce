@@ -1,0 +1,4 @@
+// Runtime compatibility shim for Vercel's Node ESM resolver.
+// Some serverless entrypoints still import this module without a file extension.
+// Keep this shim until all callers use the explicit .js specifier.
+export * from "./securityInfrastructure.js";
