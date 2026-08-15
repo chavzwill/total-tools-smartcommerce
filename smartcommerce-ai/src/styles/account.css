@@ -24,11 +24,15 @@
 .sc-account-real__form label span, .sc-account-real__form small { color: rgba(22, 34, 28, .58); font-weight: 500; }
 .sc-account-real__form input { min-height: 50px; border-radius: 14px; }
 .sc-account-real__form button { min-height: 52px; border-radius: 15px; font-weight: 850; }
+.sc-account-real__text-action { width: fit-content; min-height: 44px !important; padding: 0 !important; border: 0 !important; background: transparent !important; color: #0b6b3a !important; box-shadow: none !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 .sc-account-real__security { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; margin: 28px 0; padding: 18px; border-radius: 18px; background: rgba(11, 107, 58, .07); }
 .sc-account-real__security svg { color: #0b6b3a; }
 .sc-account-real__security div { display: grid; gap: 4px; }
 .sc-account-real__security span { color: rgba(22, 34, 28, .66); }
+.sc-account-real__security button { width: fit-content; margin-top: 8px; min-height: 42px; padding: 0 14px; border: 0; border-radius: 12px; background: #0b6b3a; color: #fff; font-weight: 800; cursor: pointer; }
+.sc-account-real__security--attention { background: rgba(190, 126, 0, .09); }
+.sc-account-real__security--attention svg { color: #9b6500; }
 
 .sc-account-real__future { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 24px 0 30px; }
 .sc-account-real__future article { min-height: 130px; padding: 20px; border-radius: 20px; background: #fff; border: 1px solid rgba(20, 42, 29, .08); display: grid; align-content: start; gap: 8px; }
@@ -39,7 +43,9 @@
 .sc-account-real__actions a, .sc-account-real__actions button { min-height: 46px; border-radius: 14px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; text-decoration: none; }
 .sc-account-real__actions a { background: #0b6b3a; color: #fff; }
 .sc-account-real__actions button { border: 1px solid rgba(20, 42, 29, .14); background: #fff; cursor: pointer; }
-.sc-account-real__error { padding: 12px 14px; border-radius: 12px; background: rgba(176, 34, 34, .08); color: #8e1f1f !important; font-weight: 700; }
+.sc-account-real__error, .sc-account-real__notice { padding: 12px 14px; border-radius: 12px; font-weight: 700; }
+.sc-account-real__error { background: rgba(176, 34, 34, .08); color: #8e1f1f !important; }
+.sc-account-real__notice { background: rgba(11, 107, 58, .08); color: #075537 !important; }
 
 .v2-command-side-actions { display: flex; align-items: center; gap: 8px; }
 .v2-mobile-account { display: none; }
