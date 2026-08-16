@@ -21,6 +21,21 @@
   outline-offset: 2px;
 }
 
+.v2-header__nav a.is-active {
+  color: #06100b !important;
+}
+
+.v2-header__nav a.is-active::after {
+  transform: translateX(-50%) scaleX(1) !important;
+  width: 24px;
+}
+
+.v2-header__actions .is-active,
+.v2-global-command__media .is-active,
+.v2-ai-submit.is-active {
+  box-shadow: 0 0 0 3px rgba(0, 168, 107, .16) !important;
+}
+
 .tt-utility__inner {
   display: flex !important;
   align-items: center;
