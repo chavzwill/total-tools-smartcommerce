@@ -58,7 +58,10 @@ function initialGuestCartCount() {
   try {
     const items = JSON.parse(window.localStorage.getItem(GUEST_CART_KEY) || "[]");
     if (!Array.isArray(items)) return 0;
-    return items.reduce((sum, item) => sum + Math.max(0, Number(item?.quantity || 0)), 0);
+    return items.reduce((sum, item) => {
+      const quantity = Number(item?.quantity || 0);
+      return sum + (Number.isInteger(quantity) && quantity > 0 ? quantity : 0);
+    }, 0);
   } catch {
     return 0;
   }
@@ -99,7 +102,7 @@ export default function Header() {
   useEffect(() => {
     const syncCart = (event: Event) => {
       const count = Number((event as CustomEvent<{ count?: number }>).detail?.count || 0);
-      setGuestCartCount(Math.max(0, count));
+      setGuestCartCount(Number.isInteger(count) && count > 0 ? count : 0);
     };
     window.addEventListener(GUEST_CART_CHANGED_EVENT, syncCart);
     return () => window.removeEventListener(GUEST_CART_CHANGED_EVENT, syncCart);
