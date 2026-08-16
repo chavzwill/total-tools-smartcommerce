@@ -1,0 +1,229 @@
+/* Mobile commerce layout corrections driven by real iPhone preview QA. */
+
+@media (max-width: 760px) {
+  html {
+    scroll-padding-top: 18px;
+  }
+
+  body {
+    padding-bottom: 0 !important;
+  }
+
+  /* Fixed commerce nav must never cover page or footer content. */
+  .tt-app-shell main {
+    padding-bottom: 106px !important;
+  }
+
+  .tt-footer {
+    background: linear-gradient(180deg, #fffaf0 0%, #f3f8f2 100%) !important;
+    border-top: 1px solid #dce8df !important;
+    color: #17372a !important;
+    padding-bottom: 138px !important;
+  }
+
+  .tt-footer__lead,
+  .tt-footer__grid,
+  .tt-footer__bottom {
+    color: #17372a !important;
+  }
+
+  .tt-footer__lead {
+    border-bottom-color: #dce8df !important;
+  }
+
+  .tt-footer__lead p,
+  .tt-footer__grid a,
+  .tt-footer__contact span,
+  .tt-footer__bottom span {
+    color: #5f7167 !important;
+  }
+
+  .tt-footer__grid h2,
+  .tt-footer__contact strong {
+    color: #176b45 !important;
+  }
+
+  .tt-footer__grid {
+    gap: 30px 18px !important;
+  }
+
+  .tt-footer__brand img {
+    filter: none !important;
+  }
+
+  /* Rental intent chips should scroll naturally, not become an overlay layer. */
+  .rental-intent-nav {
+    position: static !important;
+    top: auto !important;
+  }
+
+  .rental-intent-nav__inner {
+    padding: 8px 16px !important;
+  }
+
+  .rental-page-header {
+    padding: 22px 0 12px !important;
+  }
+
+  .rental-page-header__inner {
+    gap: 12px !important;
+  }
+
+  .rental-page-header__inner h1 {
+    font-size: clamp(34px, 9vw, 46px) !important;
+    line-height: .98 !important;
+    margin: 6px 0 10px !important;
+  }
+
+  .rental-page-header__inner > div:first-child > p {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+  }
+
+  .rental-page-header__assistant {
+    background: linear-gradient(135deg, #f3faef, #fff8dc) !important;
+    border-color: #dbe8d6 !important;
+    box-shadow: none !important;
+    gap: 5px !important;
+    padding: 15px 16px !important;
+  }
+
+  .rental-page-header__assistant strong {
+    font-size: 17px !important;
+  }
+
+  .rental-page-header__assistant p {
+    font-size: 13px !important;
+    line-height: 1.42 !important;
+    margin: 0 !important;
+  }
+
+  .rental-page-content-next {
+    gap: 10px !important;
+  }
+
+  .rental-context-bar {
+    border-color: #dce7df !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+  }
+
+  .rental-context-bar__mobile-toggle {
+    background: #fff !important;
+    border: 1px solid #cfe0d5 !important;
+    border-radius: 999px !important;
+    color: #176b45 !important;
+    min-height: 40px !important;
+    padding: 0 14px !important;
+    width: fit-content !important;
+  }
+
+  .rental-context-bar__missing {
+    color: #5f6f66 !important;
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+  }
+
+  .rental-discovery-toolbar {
+    gap: 8px !important;
+  }
+
+  .rental-discovery-toolbar__search {
+    border-radius: 14px !important;
+    gap: 7px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    padding: 8px !important;
+  }
+
+  .rental-discovery-toolbar__search label {
+    display: none !important;
+  }
+
+  .rental-discovery-toolbar__search input {
+    font-size: 14px !important;
+    min-width: 0 !important;
+    padding-inline: 12px !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+  }
+
+  .rental-discovery-toolbar__search button {
+    min-width: 88px !important;
+    padding-inline: 14px !important;
+  }
+
+  .rental-discovery-toolbar__actions {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  .rental-discovery-toolbar__actions > button {
+    min-height: 42px !important;
+  }
+
+  .rental-discovery-toolbar__actions label {
+    min-width: 0 !important;
+  }
+
+  .rental-discovery-toolbar__actions select {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rental-grid-next {
+    gap: 14px !important;
+  }
+
+  .rental-card-next {
+    border-color: #dfe8e2 !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 30px rgba(20, 73, 49, .055) !important;
+    overflow: hidden !important;
+  }
+
+  .rental-card-next .demo-rental-card__image,
+  .rental-card-next .rental-card__image {
+    max-height: 250px !important;
+  }
+
+  .rental-card-next .demo-rental-card__image img,
+  .rental-card-next .rental-card__image img {
+    max-height: 250px !important;
+    object-fit: cover !important;
+  }
+
+  .rental-card-next .demo-rental-card__body,
+  .rental-card-next .rental-card__body {
+    padding: 18px !important;
+  }
+
+  .rental-card-next h3 {
+    font-size: 24px !important;
+    line-height: 1.04 !important;
+    margin-block: 8px 10px !important;
+  }
+
+  .rental-card-next .rental-card-next__rates,
+  .rental-card-next .rental-rate-grid {
+    margin-top: 14px !important;
+  }
+
+  /* Keep primary rental action visible before the fixed nav. */
+  .rental-card-next :where(.demo-add-button, .rental-primary-action, a[href*="/rental/"]) {
+    scroll-margin-bottom: 122px !important;
+  }
+
+  .rental-page-next {
+    padding-bottom: 150px !important;
+  }
+
+  .sc-mobile-commerce-nav {
+    bottom: 0 !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+}
