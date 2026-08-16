@@ -2,9 +2,7 @@ import {
   Bot,
   Camera,
   Compass,
-  ImageUp,
   MapPin,
-  Mic,
   Search,
   ShoppingBag,
   ShoppingCart,
@@ -54,8 +52,6 @@ export default function Header() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
   const launcherInputRef = useRef<HTMLInputElement>(null);
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -77,42 +73,26 @@ export default function Header() {
 
   useEffect(() => {
     let active = true;
-    getCustomerAccount()
-      .then((state) => { if (active) setCustomer(state.customer); })
-      .catch(() => { if (active) setCustomer(null); });
-
+    getCustomerAccount().then((state) => { if (active) setCustomer(state.customer); }).catch(() => { if (active) setCustomer(null); });
     const syncCustomer = (event: Event) => {
       const detail = (event as CustomEvent<CustomerAccountState>).detail;
       setCustomer(detail?.customer || null);
     };
     window.addEventListener(CUSTOMER_ACCOUNT_CHANGED_EVENT, syncCustomer);
-    return () => {
-      active = false;
-      window.removeEventListener(CUSTOMER_ACCOUNT_CHANGED_EVENT, syncCustomer);
-    };
+    return () => { active = false; window.removeEventListener(CUSTOMER_ACCOUNT_CHANGED_EVENT, syncCustomer); };
   }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setLauncherOpen(true);
-      }
-      if (event.key === "Escape" && launcherOpen) {
-        setLauncherOpen(false);
-        launcherTriggerRef.current?.focus();
-      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setLauncherOpen(true); }
+      if (event.key === "Escape" && launcherOpen) { setLauncherOpen(false); launcherTriggerRef.current?.focus(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [launcherOpen]);
 
   useEffect(() => {
-    if (!launcherOpen) {
-      setLauncherQuery("");
-      document.body.style.overflow = "";
-      return;
-    }
+    if (!launcherOpen) { setLauncherQuery(""); document.body.style.overflow = ""; return; }
     document.body.style.overflow = "hidden";
     window.setTimeout(() => launcherInputRef.current?.focus(), 0);
     return () => { document.body.style.overflow = ""; };
@@ -129,28 +109,15 @@ export default function Header() {
     go(`/search?q=${encodeURIComponent(value)}`);
   }
 
-  function askAI() {
-    go(`/assistant?prompt=${encodeURIComponent(search.trim() || "Help me figure out what I need for this job")}`);
-  }
-
-  const closeLauncher = () => {
-    setLauncherOpen(false);
-    launcherTriggerRef.current?.focus();
-  };
-
+  function askAI() { go(`/assistant?prompt=${encodeURIComponent(search.trim() || "Help me figure out what I need for this job")}`); }
+  const closeLauncher = () => { setLauncherOpen(false); launcherTriggerRef.current?.focus(); };
   const accountLabel = customerLabel(customer);
 
   return (
     <header className="v2-header">
       <Container size="wide" className="v2-header__primary">
-        <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home">
-          <img src={logo} alt="Total Tools Jamaica" width="900" height="249" />
-        </a>
-
-        <nav className="v2-header__nav" aria-label="Primary commerce navigation">
-          {navigation.map((item) => <a key={item.href} href={routeHref(item.href)}>{item.label}</a>)}
-        </nav>
-
+        <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home"><img src={logo} alt="Total Tools Jamaica" width="900" height="249" /></a>
+        <nav className="v2-header__nav" aria-label="Primary commerce navigation">{navigation.map((item) => <a key={item.href} href={routeHref(item.href)}>{item.label}</a>)}</nav>
         <div className="v2-header__actions" aria-label="Customer actions">
           <button type="button" onClick={() => setLauncherOpen(true)} title="Locations and quick find"><MapPin size={19} /><span>Explore</span></button>
           <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className="v2-account-action"><UserRound size={19} /><span>{accountLabel}</span></button>
@@ -163,15 +130,9 @@ export default function Header() {
           <Search size={21} aria-hidden="true" />
           <label className="tt-sr-only" htmlFor="v2-global-search">Search Total Tools</label>
           <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search a product, model, category, or job…" autoComplete="off" />
-          <div className="v2-global-command__media">
-            <button type="button" title="Upload a photo" onClick={() => uploadRef.current?.click()}><ImageUp size={18} /><span className="tt-sr-only">Upload photo</span></button>
-            <button type="button" title="Use camera" onClick={() => cameraRef.current?.click()}><Camera size={18} /><span className="tt-sr-only">Use camera</span></button>
-            <button type="button" title="Voice-assisted search" onClick={() => go("/assistant?prompt=Help%20me%20search%20by%20voice")}><Mic size={18} /><span className="tt-sr-only">Voice-assisted search</span></button>
-          </div>
+          <div className="v2-global-command__media"><button type="button" title="Open Product Match" onClick={() => go("/product-match")}><Camera size={18} /><span className="tt-sr-only">Open Product Match</span></button></div>
           <button className="v2-search-submit" type="submit">Search</button>
           <button className="v2-ai-submit" type="button" onClick={askAI}><Sparkles size={17} /> Ask AI</button>
-          <input ref={uploadRef} type="file" accept="image/*" hidden onChange={() => go("/product-match?source=upload")} />
-          <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={() => go("/product-match?source=camera")} />
         </form>
         <div className="v2-command-side-actions">
           <a className="v2-mobile-account" href={routeHref("/account")} aria-label={customer ? `Open ${accountLabel}'s account` : "Sign in or create an account"}><UserRound size={18} /><span>{accountLabel}</span></a>
@@ -179,25 +140,7 @@ export default function Header() {
         </div>
       </Container>
 
-      {launcherOpen ? (
-        <div className="v2-command-overlay" role="presentation" onClick={closeLauncher}>
-          <section className="v2-command-palette" role="dialog" aria-modal="true" aria-label="Quick Find" onClick={(event) => event.stopPropagation()}>
-            <div className="v2-command-palette__top">
-              <span>SmartCommerce navigation</span>
-              <h2>Go anywhere in one move.</h2>
-              <p>Products, rentals, repairs, commercial support, categories, and AI guidance.</p>
-            </div>
-            <div className="v2-command-palette__search"><Search size={19} /><input ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Type a destination or category" /></div>
-            <div className="v2-command-palette__results">
-              {filteredLauncherItems.map((item) => {
-                const Icon = item.icon;
-                return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(item.href); }}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>;
-              })}
-              {!filteredLauncherItems.length ? <p>No matching destination. Try the main search or Ask AI.</p> : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
+      {launcherOpen ? <div className="v2-command-overlay" role="presentation" onClick={closeLauncher}><section className="v2-command-palette" role="dialog" aria-modal="true" aria-label="Quick Find" onClick={(event) => event.stopPropagation()}><div className="v2-command-palette__top"><span>SmartCommerce navigation</span><h2>Go anywhere in one move.</h2><p>Products, rentals, repairs, commercial support, categories, and AI guidance.</p></div><div className="v2-command-palette__search"><Search size={19} /><input ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Type a destination or category" /></div><div className="v2-command-palette__results">{filteredLauncherItems.map((item) => { const Icon = item.icon; return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(item.href); }}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>; })}{!filteredLauncherItems.length ? <p>No matching destination. Try the main search or Ask AI.</p> : null}</div></section></div> : null}
     </header>
   );
 }
