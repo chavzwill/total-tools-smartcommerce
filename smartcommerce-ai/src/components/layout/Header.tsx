@@ -3,7 +3,6 @@ import {
   Camera,
   ChevronDown,
   Compass,
-  MapPin,
   Search,
   ShoppingBag,
   ShoppingCart,
@@ -32,16 +31,16 @@ export const SHOPPING_BRANCHES = ["Ocho Rios", "Drax Hall", "Kingston", "Online"
 type ShoppingBranch = (typeof SHOPPING_BRANCHES)[number];
 
 const navigation = [
-  { label: "Products", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
-  { label: "Rentals", href: "/rentals", match: ["/rentals", "/rental/"] },
-  { label: "Repairs", href: "/repairs", match: ["/repairs", "/repair-"] },
+  { label: "Shop", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
+  { label: "Rent", href: "/rentals", match: ["/rentals", "/rental/"] },
+  { label: "Repair", href: "/repairs", match: ["/repairs", "/repair-"] },
   { label: "Commercial", href: "/commercial", match: ["/commercial"] },
   { label: "Deals", href: "/deals", match: ["/deals"] },
 ];
 
 const exploreLinks = [
-  { title: "All products", description: "Search the complete product experience", href: "/products", icon: ShoppingBag },
-  { title: "Rentals", description: "Plan equipment by job, date, and branch", href: "/rentals", icon: Compass },
+  { title: "All products", description: "Search the complete product catalogue", href: "/products", icon: ShoppingBag },
+  { title: "Equipment rentals", description: "Plan equipment by job, date, and branch", href: "/rentals", icon: Compass },
   { title: "Repairs", description: "Start a repair or service request", href: "/repairs", icon: Bot },
   { title: "Commercial", description: "Business, contractor, and quote support", href: "/commercial", icon: ShoppingCart },
   { title: "SmartCommerce AI", description: "Describe the job and get guided help", href: "/assistant", icon: Sparkles },
@@ -51,7 +50,7 @@ const exploreLinks = [
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
 
 function customerLabel(customer: CustomerAccount | null) {
-  if (!customer) return "Sign in";
+  if (!customer) return "Account";
   const firstName = customer.fullName.trim().split(/\s+/)[0];
   return firstName || "Account";
 }
@@ -80,6 +79,10 @@ function initialShoppingBranch(): ShoppingBranch {
   } catch {
     return "Online";
   }
+}
+
+function branchDescription(branch: ShoppingBranch) {
+  return branch === "Online" ? "Browse the widest online selection" : `Prioritize ${branch} stock and pickup`;
 }
 
 export default function Header() {
@@ -181,7 +184,11 @@ export default function Header() {
     go(`/search?q=${encodeURIComponent(value)}${branchQuery}`);
   }
 
-  function askAI() { go(`/assistant?prompt=${encodeURIComponent(search.trim() || `Help me shop for this job${branch === "Online" ? "" : ` at ${branch}`}`)}`); }
+  function askAI() {
+    const prompt = search.trim() || `Help me find the right tool or equipment${branch === "Online" ? "" : ` from ${branch}`}`;
+    go(`/assistant?prompt=${encodeURIComponent(prompt)}`);
+  }
+
   const closeLauncher = () => { setLauncherOpen(false); launcherTriggerRef.current?.focus(); };
   const accountLabel = customerLabel(customer);
 
@@ -196,26 +203,35 @@ export default function Header() {
           </button>
           {branchOpen ? (
             <div className="v2-branch-selector__menu" role="listbox" aria-label="Choose shopping branch">
-              <span>Shop inventory from</span>
+              <div className="v2-branch-selector__intro"><strong>Choose where you shop</strong><span>Stock, pickup and rental context follow your selection where live data is available.</span></div>
               {SHOPPING_BRANCHES.map((option) => (
                 <button key={option} type="button" role="option" aria-selected={option === branch} className={option === branch ? "is-selected" : ""} onClick={() => chooseBranch(option)}>
-                  <span>{option}</span>{option === branch ? <strong>Current</strong> : null}
+                  <span><strong>{option}</strong><small>{branchDescription(option)}</small></span>
+                  {option === branch ? <em>Current</em> : null}
                 </button>
               ))}
             </div>
           ) : null}
         </div>
-        <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home"><img src={logo} alt="Total Tools Jamaica" width="900" height="249" /></a>
+
+        <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home">
+          <img src={logo} alt="Total Tools Jamaica" width="900" height="249" />
+        </a>
+
         <nav className="v2-header__nav" aria-label="Primary commerce navigation">
           {navigation.map((item) => {
             const active = isActive(path, item.match);
             return <a key={item.href} href={routeHref(item.href)} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined}>{item.label}</a>;
           })}
         </nav>
+
         <div className="v2-header__actions" aria-label="Customer actions">
-          <button type="button" onClick={() => setLauncherOpen(true)} title="Locations and quick find"><MapPin size={19} /><span>Explore</span></button>
-          <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className={path === "/account" ? "v2-account-action is-active" : "v2-account-action"}><UserRound size={19} /><span>{accountLabel}</span></button>
-          <button type="button" onClick={() => go("/cart")} title="Cart" className={path === "/cart" || path === "/checkout" ? "v2-cart is-active" : "v2-cart"}><ShoppingCart size={19} /><span>{guestCartCount > 0 && !customer ? `Cart · ${guestCartCount}` : "Cart"}</span></button>
+          <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className={path === "/account" ? "v2-account-action is-active" : "v2-account-action"}>
+            <UserRound size={19} /><span>{accountLabel}</span>
+          </button>
+          <button type="button" onClick={() => go("/cart")} title="Cart" className={path === "/cart" || path === "/checkout" ? "v2-cart is-active" : "v2-cart"}>
+            <ShoppingCart size={19} /><span>Cart</span>{guestCartCount > 0 && !customer ? <strong className="v2-cart__count">{guestCartCount}</strong> : null}
+          </button>
         </div>
       </Container>
 
@@ -223,18 +239,26 @@ export default function Header() {
         <form className="v2-global-command" role="search" onSubmit={submitSearch}>
           <Search size={21} aria-hidden="true" />
           <label className="tt-sr-only" htmlFor="v2-global-search">Search Total Tools</label>
-          <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${branch === "Online" ? "all products" : branch + " inventory"}, model, category, or job…`} autoComplete="off" />
-          <div className="v2-global-command__media"><button type="button" title="Open Product Match" onClick={() => go("/product-match")} className={path === "/product-match" ? "is-active" : undefined}><Camera size={18} /><span className="tt-sr-only">Open Product Match</span></button></div>
+          <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${branch === "Online" ? "products, models, categories, or jobs" : `${branch} stock, models, categories, or jobs`}…`} autoComplete="off" />
+          <button type="button" title="Find from a photo" onClick={() => go("/product-match")} className={`v2-photo-match${path === "/product-match" ? " is-active" : ""}`}><Camera size={18} /><span>Photo</span></button>
           <button className="v2-search-submit" type="submit">Search</button>
-          <button className={path === "/assistant" ? "v2-ai-submit is-active" : "v2-ai-submit"} type="button" onClick={askAI}><Sparkles size={17} /> Ask AI</button>
+          <button className={path === "/assistant" ? "v2-ai-submit is-active" : "v2-ai-submit"} type="button" onClick={askAI}><Sparkles size={17} /><span>Ask AI</span></button>
         </form>
-        <div className="v2-command-side-actions">
-          <a className="v2-mobile-account" href={routeHref("/account")} aria-label={customer ? `Open ${accountLabel}'s account` : "Sign in or create an account"}><UserRound size={18} /><span>{accountLabel}</span></a>
-          <button ref={launcherTriggerRef} className="v2-quick-find" type="button" onClick={() => setLauncherOpen(true)} aria-expanded={launcherOpen} aria-haspopup="dialog"><Compass size={18} /><span>Quick Find</span><kbd>⌘K</kbd></button>
-        </div>
+        <button ref={launcherTriggerRef} className="v2-quick-find" type="button" onClick={() => setLauncherOpen(true)} aria-expanded={launcherOpen} aria-haspopup="dialog"><Compass size={18} /><span>Explore</span><kbd>⌘K</kbd></button>
       </Container>
 
-      {launcherOpen ? <div className="v2-command-overlay" role="presentation" onClick={closeLauncher}><section className="v2-command-palette" role="dialog" aria-modal="true" aria-label="Quick Find" onClick={(event) => event.stopPropagation()}><div className="v2-command-palette__top"><span>SmartCommerce navigation</span><h2>Go anywhere in one move.</h2><p>Products, rentals, repairs, commercial support, categories, and AI guidance.</p></div><div className="v2-command-palette__search"><Search size={19} /><input ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Type a destination or category" /></div><div className="v2-command-palette__results">{filteredLauncherItems.map((item) => { const Icon = item.icon; return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(item.href); }}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>; })}{!filteredLauncherItems.length ? <p>No matching destination. Try the main search or Ask AI.</p> : null}</div></section></div> : null}
+      {launcherOpen ? (
+        <div className="v2-command-overlay" role="presentation" onClick={closeLauncher}>
+          <section className="v2-command-palette" role="dialog" aria-modal="true" aria-label="Explore SmartCommerce" onClick={(event) => event.stopPropagation()}>
+            <div className="v2-command-palette__top"><span>SmartCommerce</span><h2>What do you need to do?</h2><p>Jump to shopping, rentals, repairs, commercial support, product matching, or guided AI help.</p></div>
+            <div className="v2-command-palette__search"><Search size={19} /><input ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Search destinations and categories" /></div>
+            <div className="v2-command-palette__results">
+              {filteredLauncherItems.map((item) => { const Icon = item.icon; return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(item.href); }}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>; })}
+              {!filteredLauncherItems.length ? <p>No matching destination. Try the main search or Ask AI.</p> : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </header>
   );
 }
