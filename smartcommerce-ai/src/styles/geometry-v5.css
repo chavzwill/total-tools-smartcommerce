@@ -1,0 +1,194 @@
+/* Platform geometry v5
+   Purpose: normalize spacing, alignment and mobile rhythm without rewriting feature CSS.
+   Loaded last so it can resolve conflicts between legacy and newer design layers. */
+
+:root {
+  --sc-space-1: 6px;
+  --sc-space-2: 10px;
+  --sc-space-3: 14px;
+  --sc-space-4: 18px;
+  --sc-space-5: 24px;
+  --sc-space-6: 32px;
+  --sc-radius-card: 18px;
+  --sc-yellow: #f5c928;
+  --sc-yellow-ink: #2c290c;
+}
+
+/* Keep global content centered and prevent isolated blocks from feeling detached. */
+.tt-container { padding-left: clamp(16px, 3vw, 28px); padding-right: clamp(16px, 3vw, 28px); }
+
+/* Utility information is one visual unit, not two unrelated left/right clusters. */
+.tt-utility__inner {
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 18px 30px !important;
+  text-align: center;
+}
+.tt-utility__branches,
+.tt-utility__links {
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* The AI action is the deliberate visual anchor of the five-item dock. */
+@media (max-width: 900px) {
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  .sc-mobile-commerce-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-height: 64px;
+    padding: 5px 8px max(5px, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(7,85,55,.12);
+    box-shadow: 0 -8px 28px rgba(16,35,23,.07);
+  }
+
+  .sc-mobile-commerce-nav a {
+    min-height: 52px;
+    gap: 3px;
+    padding: 4px 2px;
+    border-radius: 12px;
+    font-size: 9px;
+  }
+
+  .sc-mobile-commerce-nav a.is-featured {
+    min-height: 58px;
+    margin: -8px 4px 0;
+    border: 1px solid rgba(107,84,0,.10);
+    border-radius: 14px;
+    background: var(--sc-yellow) !important;
+    color: var(--sc-yellow-ink) !important;
+    box-shadow: 0 8px 20px rgba(121,91,0,.19);
+  }
+
+  .sc-mobile-commerce-nav a.is-featured svg { stroke-width: 2.35; }
+  .sc-mobile-commerce-nav a.is-featured:active { transform: translateY(1px); box-shadow: 0 4px 12px rgba(121,91,0,.16); }
+}
+
+/* Account: reduce oversized dead zones and restore a consistent 8/16/24px rhythm. */
+.sc-account-dashboard { gap: 24px !important; }
+.sc-account-hero { gap: 16px; padding-bottom: 22px; }
+.sc-account-workspace { gap: 22px; }
+.sc-account-tab-panel { gap: 18px; }
+.sc-account-section__heading { gap: 4px; }
+.sc-account-section__heading p { margin-top: 3px; }
+.sc-account-overview-shell { gap: 12px; }
+.sc-account-profile-card,
+.sc-account-readiness-card { border-radius: var(--sc-radius-card); }
+.sc-account-profile-card { padding: 20px; }
+.sc-account-readiness-card { padding: 20px; gap: 18px; }
+.sc-account-profile-card h3 { margin: 14px 0 12px; }
+.sc-account-profile-card dl > div { padding: 9px 0; }
+.sc-account-recent { padding: 17px 18px; border-radius: var(--sc-radius-card); }
+
+/* Footer: compact information architecture. Avoid the single-column mobile tower. */
+.tt-footer { padding-top: 40px; padding-bottom: 20px; }
+.tt-footer__lead { align-items: center; padding-bottom: 24px; }
+.tt-footer__brand img { display: block; width: min(260px, 58vw); height: auto; object-fit: contain; }
+.tt-footer__grid { gap: 26px 24px; padding: 30px 0; }
+.tt-footer__grid section { gap: 8px; }
+.tt-footer__grid h2 { margin-bottom: 3px; }
+.tt-footer__bottom { padding-top: 18px; }
+
+@media (max-width: 760px) {
+  .tt-utility__inner {
+    flex-direction: column !important;
+    gap: 9px !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+
+  .tt-utility__branches,
+  .tt-utility__links {
+    width: auto !important;
+    max-width: 100%;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .sc-account-real.sc-account-dashboard {
+    width: calc(100% - 16px);
+    padding: 16px 12px 22px;
+    gap: 18px !important;
+    border-radius: 20px;
+  }
+
+  .sc-account-hero {
+    grid-template-columns: 48px minmax(0,1fr);
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+  .sc-account-avatar { width: 48px; height: 48px; border-radius: 15px; }
+  .sc-account-hero__copy h1 { font-size: clamp(1.65rem, 8vw, 2.05rem); }
+  .sc-signout-button { min-height: 40px; }
+
+  .sc-account-workspace { gap: 14px; }
+  .sc-account-context { margin: 0; }
+  .sc-account-nav {
+    display: flex !important;
+    gap: 5px;
+    padding: 5px;
+    border-radius: 15px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sc-account-nav::-webkit-scrollbar { display: none; }
+  .sc-account-nav button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-height: 40px !important;
+    padding: 0 11px !important;
+    border-radius: 11px !important;
+    font-size: .78rem !important;
+  }
+
+  .sc-account-tab-panel { gap: 14px; }
+  .sc-account-section__heading { text-align: left; padding-inline: 2px; }
+  .sc-account-section__heading h2 { font-size: 1.48rem; line-height: 1.08; }
+  .sc-account-section__heading p { font-size: .86rem; line-height: 1.42; }
+
+  .sc-account-overview-shell { gap: 9px; }
+  .sc-account-profile-card,
+  .sc-account-readiness-card { padding: 15px; border-radius: 15px; }
+  .sc-account-profile-card h3,
+  .sc-account-readiness-card h3 { font-size: 1.15rem; }
+  .sc-account-profile-card dl > div { grid-template-columns: 70px minmax(0,1fr); gap: 8px; padding: 8px 0; }
+  .sc-account-profile-card dt { font-size: .74rem; }
+  .sc-account-profile-card dd { font-size: .8rem; }
+  .sc-account-readiness-card { gap: 14px; }
+  .sc-account-readiness-card p { font-size: .83rem; line-height: 1.45; }
+  .sc-account-readiness-card button { min-height: 42px; }
+  .sc-account-recent { gap: 10px; padding: 15px !important; }
+
+  .tt-footer { padding-top: 30px; padding-bottom: 16px; }
+  .tt-footer__lead {
+    align-items: center !important;
+    gap: 10px !important;
+    padding-bottom: 20px;
+    text-align: center;
+  }
+  .tt-footer__lead p { max-width: 360px; text-align: center !important; }
+  .tt-footer__grid {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    gap: 24px 18px;
+    padding: 24px 0;
+  }
+  .tt-footer__grid section { align-content: start; gap: 7px; }
+  .tt-footer__grid .tt-footer__contact { grid-column: 1 / -1; }
+  .tt-footer__bottom { gap: 6px; padding-top: 15px; }
+}
+
+@media (max-width: 430px) {
+  .tt-utility__inner { padding-inline: 10px; }
+  .tt-utility__branches { font-size: 11.5px; }
+  .tt-utility__links { font-size: 11px; }
+  .tt-utility__links .tt-utility__item:last-child { flex-basis: auto !important; margin-top: 0 !important; }
+  .tt-utility__links .tt-utility__item:last-child::before { display: block !important; }
+
+  .sc-account-section__heading h2 { font-size: 1.4rem; }
+
+  .tt-footer__grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .tt-footer__grid a,
+  .tt-footer__grid span { font-size: 11.5px; }
+  .tt-footer__grid h2 { font-size: 10.5px; }
+  .tt-footer__bottom { flex-direction: column; text-align: center; }
+}
