@@ -5,6 +5,7 @@ import "../../styles/retail-joy.css";
 import "../../styles/mobile-commerce.css";
 import "../../styles/brand-correction.css";
 import "../../styles/design-system.css";
+import "../../styles/commerce-shell.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
