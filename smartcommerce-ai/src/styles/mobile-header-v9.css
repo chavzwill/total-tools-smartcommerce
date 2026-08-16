@@ -1,9 +1,11 @@
-/* Mobile header v9
-   One hierarchy: quiet utility strip -> strong brand row -> uninterrupted search row.
-   This file must remain last in PageShell so legacy mobile overrides cannot distort it. */
+/* Canonical mobile header architecture.
+   One hierarchy: quiet utility strip -> strong brand row -> uninterrupted search row. */
 
 @media (max-width: 760px) {
-  /* Utility strip: useful but deliberately secondary. */
+  .v2-header {
+    background: #fff !important;
+  }
+
   .tt-utility {
     min-height: 0 !important;
   }
@@ -29,11 +31,7 @@
     white-space: nowrap !important;
   }
 
-  .tt-utility__branches {
-    font-size: 10px !important;
-    line-height: 1.15 !important;
-  }
-
+  .tt-utility__branches,
   .tt-utility__links {
     font-size: 10px !important;
     line-height: 1.15 !important;
@@ -67,15 +65,11 @@
     gap: 4px !important;
   }
 
-  .tt-utility__action svg {
-    display: none !important;
-  }
-
+  .tt-utility__action svg,
   .tt-utility__detail {
     display: none !important;
   }
 
-  /* Brand row: brand dominates, account is a quiet independent action. */
   .v2-header__primary {
     position: relative !important;
     display: flex !important;
@@ -148,7 +142,6 @@
     display: none !important;
   }
 
-  /* Search row: one control with one AI action; no stacked/overlapping controls. */
   .v2-header__command-row {
     display: block !important;
     position: relative !important;
