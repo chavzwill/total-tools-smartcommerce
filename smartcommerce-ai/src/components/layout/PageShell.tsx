@@ -10,6 +10,7 @@ import "../../styles/navigation-v4.css";
 import "../../styles/account-priority-fix.css";
 import "../../styles/geometry-v5.css";
 import "../../styles/header-nav-v6.css";
+import "../../styles/mobile-header-v9.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
