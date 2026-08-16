@@ -65,17 +65,18 @@ export default function App() {
     compared,
     onWishlist: (id: string) => toggle(setWishlist, id),
     onCompare: (id: string) => toggle(setCompared, id),
-    onAdd: (id: string) => {
-      void addPersistentCartItem(id, 1)
-        .then(() => announceCart("Added to your cart."))
+    onAdd: (id: string, requestedQuantity = 1) => {
+      const quantity = Math.max(1, Math.min(999, Math.trunc(requestedQuantity || 1)));
+      void addPersistentCartItem(id, quantity)
+        .then(() => announceCart(`${quantity > 1 ? `${quantity} items` : "Item"} added to your cart.`))
         .catch((error: any) => {
           if (error?.status === 401) {
             setCart((items) => {
               const existing = items.find((item) => item.productId === id);
-              if (existing) return items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item);
-              return [...items, { productId: id, quantity: 1 }];
+              if (existing) return items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, item.quantity + quantity) } : item);
+              return [...items, { productId: id, quantity }];
             });
-            announceCart("Added to your guest cart.");
+            announceCart(`${quantity > 1 ? `${quantity} items` : "Item"} added to your guest cart.`);
             return;
           }
           announceCart(error?.message || "We could not add that item. Please try again.", "error");
