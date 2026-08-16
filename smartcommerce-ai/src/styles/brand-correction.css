@@ -1,0 +1,146 @@
+/* Total Tools brand correction.
+   Uses the actual medium Total Tools green as the brand accent and removes
+   the distressed raster wordmark from rendered chrome so white texture holes
+   cannot appear inside the letterforms. */
+
+:root {
+  --tt-brand-green: #307036;
+  --tt-brand-green-deep: #255b2b;
+  --tt-brand-yellow: #f5c928;
+  --tt-brand-ink: #202820;
+  --tt-brand-cream: #fffaf0;
+
+  --joy-green: var(--tt-brand-green);
+  --joy-green-strong: var(--tt-brand-green-deep);
+  --joy-ink: var(--tt-brand-ink);
+  --sc-green-700: var(--tt-brand-green-deep);
+  --sc-green-600: var(--tt-brand-green);
+  --sc-green-500: var(--tt-brand-green);
+  --sc-ink-950: var(--tt-brand-ink);
+  --sc-ink-900: #293229;
+  --sc-ink-800: #344034;
+}
+
+/* Clean code-rendered wordmark: no distressed raster texture, no white spots. */
+.v2-brand,
+.tt-footer__brand {
+  align-items: center !important;
+  display: inline-flex !important;
+  overflow: visible !important;
+  text-decoration: none !important;
+}
+
+.v2-brand img,
+.tt-footer__brand img {
+  display: none !important;
+}
+
+.v2-brand::before,
+.tt-footer__brand::before {
+  color: var(--tt-brand-green);
+  content: "TOTAL TOOLS";
+  display: inline-block;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 27px;
+  font-weight: 950;
+  letter-spacing: -.055em;
+  line-height: .9;
+  white-space: nowrap;
+}
+
+.v2-brand::after,
+.tt-footer__brand::after {
+  color: var(--tt-brand-green-deep);
+  content: "JAMAICA";
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .22em;
+  margin-left: 9px;
+  margin-top: 12px;
+}
+
+/* Dark surfaces are neutral charcoal, not off-brand dark green. */
+.v3-hero,
+.v3-hero__scene-card,
+.v3-hero__tabs button,
+.demo-cart-layout > aside,
+.sc-checkout-summary {
+  background-color: var(--tt-brand-ink) !important;
+}
+
+/* Company green is used for positive actions and retail accents. */
+.v2-search-submit,
+.demo-add-button,
+.demo-flow-form > button[type="submit"],
+.rental-detail-next__reservation > button[type="submit"],
+.rental-discovery-toolbar__search button,
+.rental-sheet footer button:last-child {
+  background: var(--tt-brand-green) !important;
+}
+
+.v2-search-submit:hover,
+.demo-add-button:hover,
+.demo-add-button:focus-visible,
+.rental-discovery-toolbar__search button:hover {
+  background: var(--tt-brand-green-deep) !important;
+}
+
+/* Footer belongs to the brighter retail system instead of the old green-black block. */
+.tt-footer {
+  background: linear-gradient(180deg, #fffdf7 0%, #f5f3e9 100%) !important;
+  border-top: 1px solid #dde3d9 !important;
+  color: var(--tt-brand-ink) !important;
+}
+
+.tt-footer :where(p,a,span,strong) {
+  color: #59645a !important;
+}
+
+.tt-footer h2 {
+  color: var(--tt-brand-green-deep) !important;
+}
+
+.tt-footer__lead p {
+  color: #59645a !important;
+}
+
+.tt-footer__bottom {
+  border-color: #d9dfd6 !important;
+}
+
+/* Any legacy dark-green utility treatment becomes neutral charcoal. */
+.tt-utility {
+  background: var(--tt-brand-ink) !important;
+}
+
+@media (max-width: 760px) {
+  .v2-brand {
+    height: 56px !important;
+    justify-content: center !important;
+    width: auto !important;
+  }
+
+  .v2-brand::before {
+    font-size: clamp(20px, 6.3vw, 27px);
+  }
+
+  .v2-brand::after {
+    display: none;
+  }
+
+  .tt-footer__brand::before {
+    font-size: 25px;
+  }
+
+  .tt-footer__brand::after {
+    font-size: 7px;
+  }
+
+  .tt-footer {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .sc-mobile-commerce-nav a.is-active {
+    color: var(--tt-brand-green-deep) !important;
+  }
+}
