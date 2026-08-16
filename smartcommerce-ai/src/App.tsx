@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
+import { CART_FEEDBACK_EVENT, GUEST_CART_CHANGED_EVENT } from "./lib/commerceEvents";
 import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
 import { getRoute } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
@@ -16,8 +17,6 @@ import OperationalRentalDetailPage from "./pages/OperationalRentalDetailPage";
 import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } from "./pages/UtilityPages";
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
-export const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
-export const CART_FEEDBACK_EVENT = "smartcommerce:cart-feedback";
 
 function loadGuestCart(): GuestCheckoutItem[] {
   try {
