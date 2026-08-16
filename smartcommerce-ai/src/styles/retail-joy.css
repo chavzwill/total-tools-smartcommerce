@@ -1,0 +1,457 @@
+/* SmartCommerce retail joy pass.
+   Corrects mobile contrast/hierarchy and restores a brighter Total Tools retail character. */
+
+:root {
+  --joy-green: #176b45;
+  --joy-green-strong: #0f5939;
+  --joy-mint: #eaf6ec;
+  --joy-mint-2: #f4faf3;
+  --joy-yellow: #f4cc45;
+  --joy-yellow-soft: #fff3c7;
+  --joy-cream: #fffaf0;
+  --joy-ink: #17372a;
+  --joy-muted: #617469;
+  --joy-line: #d8e4dc;
+}
+
+body,
+.tt-app-shell,
+.demo-page,
+.v3-home {
+  background: #fff !important;
+}
+
+/* Header: balanced store context | brand | account on mobile. */
+.v2-branch-selector {
+  position: relative;
+  z-index: 80;
+}
+
+.v2-branch-selector__trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--joy-line);
+  border-radius: 999px;
+  color: var(--joy-green-strong);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px;
+}
+
+.v2-branch-selector__trigger > span {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.v2-branch-selector__trigger small {
+  color: #7a8a80;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.v2-branch-selector__trigger strong {
+  color: var(--joy-ink);
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.v2-branch-selector__menu {
+  background: #fff;
+  border: 1px solid var(--joy-line);
+  border-radius: 18px;
+  box-shadow: 0 22px 70px rgba(18, 61, 42, .16);
+  display: grid;
+  gap: 4px;
+  left: 0;
+  min-width: 220px;
+  padding: 10px;
+  position: absolute;
+  top: calc(100% + 8px);
+}
+
+.v2-branch-selector__menu > span {
+  color: #73837a;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .11em;
+  padding: 5px 8px 7px;
+  text-transform: uppercase;
+}
+
+.v2-branch-selector__menu button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: var(--joy-ink);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.v2-branch-selector__menu button:hover,
+.v2-branch-selector__menu button.is-selected {
+  background: var(--joy-mint);
+  color: var(--joy-green-strong);
+}
+
+.v2-branch-selector__menu button strong {
+  color: var(--joy-green);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+/* Replace the heavy dark service rail with a cheerful merchandising signal. */
+.sc-signal-rail {
+  background: linear-gradient(100deg, #fff4c9 0%, #f5f9d8 52%, #e9f7e8 100%) !important;
+  border-bottom: 1px solid #e4dfbd !important;
+  border-top: 0 !important;
+  color: var(--joy-ink) !important;
+}
+
+.sc-signal-rail__identity strong,
+.sc-signal-rail__identity span,
+.sc-signal-rail__message > span,
+.sc-signal-rail__message strong,
+.sc-signal-rail__message small,
+.sc-signal-rail__actions span {
+  color: var(--joy-ink) !important;
+}
+
+.sc-signal-rail__identity > span:last-child {
+  color: #7b8269 !important;
+}
+
+.sc-signal-rail__pulse {
+  background: var(--joy-green) !important;
+  box-shadow: 0 0 0 7px rgba(23, 107, 69, .10) !important;
+}
+
+.sc-signal-rail__actions a {
+  color: var(--joy-green-strong) !important;
+}
+
+.sc-signal-rail__actions button {
+  background: rgba(255,255,255,.68) !important;
+  border-color: rgba(23,107,69,.18) !important;
+  color: var(--joy-green-strong) !important;
+}
+
+.sc-signal-rail__progress {
+  background: rgba(23,107,69,.10) !important;
+}
+
+.sc-signal-rail__progress span {
+  background: var(--joy-yellow) !important;
+}
+
+/* Inner-page heroes should be bright, readable and retail-focused. */
+.demo-page-hero,
+.sc-product-discovery__hero,
+.sc-cart-hero {
+  background:
+    radial-gradient(circle at 88% 6%, rgba(244,204,69,.22), transparent 28%),
+    linear-gradient(135deg, #f8fbf5 0%, #edf7ed 56%, #fff9e8 100%) !important;
+  color: var(--joy-ink) !important;
+}
+
+.demo-page-hero::after,
+.sc-product-discovery__hero::after,
+.sc-cart-hero::after {
+  display: none !important;
+}
+
+.demo-page-hero span,
+.sc-product-discovery__hero > div > span,
+.sc-cart-hero span {
+  color: var(--joy-green) !important;
+}
+
+.demo-page-hero h1,
+.sc-product-discovery__hero h1,
+.sc-cart-hero h1 {
+  color: var(--joy-ink) !important;
+  text-shadow: none !important;
+}
+
+.demo-page-hero p,
+.sc-product-discovery__hero p,
+.sc-cart-hero p {
+  color: var(--joy-muted) !important;
+}
+
+.sc-data-mode.is-preview {
+  background: #fff8df !important;
+  border-color: #ead47a !important;
+  color: var(--joy-ink) !important;
+}
+
+.sc-data-mode.is-preview strong,
+.sc-data-mode.is-preview small {
+  color: var(--joy-ink) !important;
+}
+
+.sc-data-mode.is-preview > span {
+  background: #d4a72a !important;
+}
+
+/* Keep action areas energetic instead of black-heavy. */
+.demo-add-button,
+.demo-flow-form > button[type="submit"],
+.rental-detail-next__reservation > button[type="submit"] {
+  background: var(--joy-green) !important;
+  color: #fff !important;
+}
+
+.demo-add-button:hover,
+.demo-add-button:focus-visible,
+.demo-flow-form > button[type="submit"]:hover:not(:disabled),
+.rental-detail-next__reservation > button[type="submit"]:hover:not(:disabled) {
+  background: var(--joy-green-strong) !important;
+}
+
+/* Mobile corrections observed in live preview screenshots. */
+@media (max-width: 760px) {
+  .tt-utility {
+    display: none !important;
+  }
+
+  .v2-header {
+    background: #fff !important;
+    border-bottom: 1px solid #e6eee8 !important;
+  }
+
+  .v2-header__primary {
+    display: grid !important;
+    grid-template-columns: 48px minmax(0, 1fr) 48px !important;
+    min-height: 86px !important;
+    padding: 8px 16px 4px !important;
+    position: relative !important;
+  }
+
+  .v2-branch-selector {
+    align-self: center;
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .v2-branch-selector__trigger {
+    height: 44px;
+    justify-content: center;
+    min-width: 44px;
+    padding: 0;
+    width: 44px;
+  }
+
+  .v2-branch-selector__trigger > span,
+  .v2-branch-selector__trigger > svg:last-child {
+    display: none;
+  }
+
+  .v2-branch-selector__menu {
+    left: -2px;
+    min-width: 205px;
+    top: 52px;
+  }
+
+  .v2-brand {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    height: 66px !important;
+    justify-self: center !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: min(230px, 62vw) !important;
+  }
+
+  .v2-brand img {
+    height: auto !important;
+    max-height: 62px !important;
+    object-fit: contain !important;
+    transform: none !important;
+    width: 100% !important;
+  }
+
+  .v2-header__actions {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  .v2-account-action {
+    border-color: #dce9e1 !important;
+    box-shadow: 0 5px 18px rgba(18,61,42,.06) !important;
+  }
+
+  .v2-header__command-row {
+    padding: 4px 14px 12px !important;
+  }
+
+  .v2-global-command {
+    border-color: #d7e4db !important;
+    border-radius: 18px !important;
+    box-shadow: 0 6px 22px rgba(18,61,42,.045) !important;
+    min-height: 58px !important;
+  }
+
+  .v2-global-command input {
+    color: var(--joy-ink) !important;
+    font-size: 15px !important;
+  }
+
+  .v2-ai-submit {
+    background: var(--joy-yellow) !important;
+    color: #27331d !important;
+    height: 46px !important;
+    width: 46px !important;
+  }
+
+  .sc-signal-rail {
+    display: grid !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+    padding: 14px 18px 17px !important;
+  }
+
+  .sc-signal-rail__identity {
+    gap: 8px !important;
+  }
+
+  .sc-signal-rail__identity strong {
+    font-size: 12px !important;
+  }
+
+  .sc-signal-rail__identity > span:last-child {
+    display: none !important;
+  }
+
+  .sc-signal-rail__message {
+    gap: 3px !important;
+  }
+
+  .sc-signal-rail__message > span {
+    font-size: 9px !important;
+    letter-spacing: .12em !important;
+  }
+
+  .sc-signal-rail__message strong {
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+
+  .sc-signal-rail__message small {
+    display: none !important;
+  }
+
+  .sc-signal-rail__actions {
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .sc-signal-rail__actions button {
+    height: 34px !important;
+    width: 34px !important;
+  }
+
+  .demo-page-hero,
+  .sc-product-discovery__hero,
+  .sc-cart-hero {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .demo-page-hero > .container,
+  .demo-page-hero > div,
+  .sc-product-discovery__hero > .container,
+  .sc-product-discovery__hero > div,
+  .sc-cart-hero > .container,
+  .sc-cart-hero > div {
+    padding-bottom: 38px !important;
+    padding-top: 38px !important;
+  }
+
+  .demo-page-hero h1,
+  .sc-product-discovery__hero h1,
+  .sc-cart-hero h1 {
+    font-size: clamp(42px, 12vw, 58px) !important;
+    letter-spacing: -.055em !important;
+    line-height: .94 !important;
+    margin: 10px 0 18px !important;
+  }
+
+  .demo-page-hero p,
+  .sc-product-discovery__hero p,
+  .sc-cart-hero p {
+    font-size: 17px !important;
+    line-height: 1.55 !important;
+    margin: 0 !important;
+  }
+
+  .sc-data-mode {
+    border-radius: 15px !important;
+    margin-top: 24px !important;
+    padding: 14px 16px !important;
+  }
+
+  .sc-data-mode strong {
+    font-size: 14px !important;
+  }
+
+  .sc-data-mode small {
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+
+  .sc-cart-premium,
+  .demo-cart-layout {
+    min-height: 0 !important;
+    padding-bottom: 112px !important;
+    padding-top: 24px !important;
+  }
+
+  .sc-cart-premium > section,
+  .demo-cart-layout > section {
+    min-height: 0 !important;
+  }
+
+  .demo-empty {
+    margin: 0 !important;
+    min-height: 220px !important;
+    padding: 36px 24px !important;
+  }
+
+  .sc-mobile-commerce-nav {
+    background: rgba(255,255,255,.97) !important;
+    border-top: 1px solid #e3ece6 !important;
+    box-shadow: 0 -10px 30px rgba(18,61,42,.06) !important;
+  }
+
+  .sc-mobile-commerce-nav a {
+    color: #68786e !important;
+  }
+
+  .sc-mobile-commerce-nav a.is-active {
+    color: var(--joy-green-strong) !important;
+  }
+
+  .sc-mobile-commerce-nav a.is-featured {
+    background: var(--joy-yellow) !important;
+    color: #26321e !important;
+  }
+}
