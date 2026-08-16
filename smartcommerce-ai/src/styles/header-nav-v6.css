@@ -93,11 +93,7 @@
     padding: 0 !important;
     justify-content: center !important;
     border-radius: 13px !important;
-  }
-
-  .v2-ai-submit > span,
-  .v2-ai-submit:not(:has(svg)) {
-    font-size: 0;
+    font-size: 0 !important;
   }
 }
 
