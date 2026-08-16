@@ -7,6 +7,7 @@ import "../../styles/experience-v3.css";
 import "../../styles/experience-v3-promo.css";
 import "../../styles/mobile-logo-tune.css";
 import "../../styles/navigation-v4.css";
+import "../../styles/account-priority-fix.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
