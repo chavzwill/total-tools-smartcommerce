@@ -18,11 +18,8 @@ export default function ProductTile({ product, wished, compared, onWishlist, onC
   const keySpec = Object.entries(product.specs || {}).find(([, value]) => value?.trim());
 
   const handleCompare = () => {
-    if (compared) {
-      go("/compare");
-      return;
-    }
-    onCompare(product.id);
+    if (!compared) onCompare(product.id);
+    go("/compare");
   };
 
   return (
