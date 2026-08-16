@@ -1,12 +1,12 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
-import { handlePlatformRestRequest } from "../src/backend/platformRestApi";
-import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime";
+import { handlePlatformRestRequest } from "../src/backend/platformRestApi.js";
+import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
 import {
   enforceDurableRateLimit,
   recordSecurityEvent,
   requestIp,
-} from "../src/server/securityInfrastructure";
+} from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 24_000;
