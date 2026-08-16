@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { handlePlatformRestRequest } from "../../src/backend/platformRestApi";
-import { createConfiguredTotalToolsPlatformService } from "../../src/integrations/totalToolsPlatformRuntime";
-import { executeIdempotentPlatformWrite } from "../../src/server/platformIdempotency";
+import { handlePlatformRestRequest } from "../../src/backend/platformRestApi.js";
+import { createConfiguredTotalToolsPlatformService } from "../../src/integrations/totalToolsPlatformRuntime.js";
+import { executeIdempotentPlatformWrite } from "../../src/server/platformIdempotency.js";
 
 const service = createConfiguredTotalToolsPlatformService();
 const MAX_BODY_BYTES = 64 * 1024;

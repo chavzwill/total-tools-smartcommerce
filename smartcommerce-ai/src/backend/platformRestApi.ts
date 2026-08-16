@@ -18,7 +18,7 @@ import type {
 } from "./platformBackendTypes";
 import {
   pendingInvoiceLookup,
-} from "./platformBackendService";
+} from "./platformBackendService.js";
 
 const getRequestId = (request: Request) =>
   request.headers.get("x-request-id") ||

@@ -1,8 +1,8 @@
-import { createPlatformBackendService } from "../backend/platformBackendService";
+import { createPlatformBackendService } from "../backend/platformBackendService.js";
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
-import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch";
-import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter";
+import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch.js";
+import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter.js";
 
 const unsupported = <T>(operation: string): PlatformApiResult<T> => ({
   success: false,
