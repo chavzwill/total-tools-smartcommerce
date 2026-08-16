@@ -1,9 +1,9 @@
 import { CheckCircle2, ShoppingCart, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { CART_FEEDBACK_EVENT } from "../../App";
+import { CART_FEEDBACK_EVENT, type CartFeedbackDetail } from "../../lib/commerceEvents";
 import { go } from "../../lib/router";
 
-type Feedback = { message: string; tone: "success" | "error" };
+type Feedback = CartFeedbackDetail;
 
 export default function CommerceToast() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
