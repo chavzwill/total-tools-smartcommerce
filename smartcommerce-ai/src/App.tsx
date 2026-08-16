@@ -20,7 +20,15 @@ export default function App() {
   const [compared, setCompared] = useState<string[]>([]);
 
   useEffect(() => {
-    const update = () => setRoute(getRoute());
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+
+    const update = () => {
+      setRoute(getRoute());
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      });
+    };
+
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);
