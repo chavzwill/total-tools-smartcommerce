@@ -1,12 +1,14 @@
 import {
   Bot,
   Camera,
+  ChevronDown,
   Compass,
   MapPin,
   Search,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
+  Store,
   UserRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +26,10 @@ import Container from "../shared/Container";
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
+export const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+export const SHOPPING_BRANCH_CHANGED_EVENT = "smartcommerce:shopping-branch-changed";
+export const SHOPPING_BRANCHES = ["Ocho Rios", "Drax Hall", "Kingston", "Online"] as const;
+type ShoppingBranch = (typeof SHOPPING_BRANCHES)[number];
 
 const navigation = [
   { label: "Products", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
@@ -67,6 +73,15 @@ function initialGuestCartCount() {
   }
 }
 
+function initialShoppingBranch(): ShoppingBranch {
+  try {
+    const stored = window.localStorage.getItem(SHOPPING_BRANCH_KEY) as ShoppingBranch | null;
+    return stored && SHOPPING_BRANCHES.includes(stored) ? stored : "Online";
+  } catch {
+    return "Online";
+  }
+}
+
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -74,8 +89,11 @@ export default function Header() {
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const [path, setPath] = useState(() => getRoute().path);
   const [guestCartCount, setGuestCartCount] = useState(initialGuestCartCount);
+  const [branch, setBranch] = useState<ShoppingBranch>(initialShoppingBranch);
+  const [branchOpen, setBranchOpen] = useState(false);
   const launcherInputRef = useRef<HTMLInputElement>(null);
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
+  const branchRef = useRef<HTMLDivElement>(null);
 
   const launcherItems = useMemo(() => {
     const categoryLinks = getCategories().slice(0, 12).map((category) => ({
@@ -109,6 +127,14 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    const closeBranch = (event: PointerEvent) => {
+      if (!branchRef.current?.contains(event.target as Node)) setBranchOpen(false);
+    };
+    document.addEventListener("pointerdown", closeBranch);
+    return () => document.removeEventListener("pointerdown", closeBranch);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     getCustomerAccount().then((state) => { if (active) setCustomer(state.customer); }).catch(() => { if (active) setCustomer(null); });
     const syncCustomer = (event: Event) => {
@@ -123,10 +149,11 @@ export default function Header() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setLauncherOpen(true); }
       if (event.key === "Escape" && launcherOpen) { setLauncherOpen(false); launcherTriggerRef.current?.focus(); }
+      if (event.key === "Escape" && branchOpen) setBranchOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [launcherOpen]);
+  }, [launcherOpen, branchOpen]);
 
   useEffect(() => {
     if (!launcherOpen) { setLauncherQuery(""); document.body.style.overflow = ""; return; }
@@ -135,24 +162,49 @@ export default function Header() {
     return () => { document.body.style.overflow = ""; };
   }, [launcherOpen]);
 
+  function chooseBranch(next: ShoppingBranch) {
+    setBranch(next);
+    setBranchOpen(false);
+    window.localStorage.setItem(SHOPPING_BRANCH_KEY, next);
+    window.dispatchEvent(new CustomEvent(SHOPPING_BRANCH_CHANGED_EVENT, { detail: { branch: next } }));
+  }
+
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     const value = search.trim();
     const normalized = value.toLowerCase();
-    if (!value) return go("/products");
+    const branchQuery = branch === "Online" ? "" : `&branch=${encodeURIComponent(branch)}`;
+    if (!value) return go(branch === "Online" ? "/products" : `/products?branch=${encodeURIComponent(branch)}`);
     if (matchTerms.some((term) => normalized.includes(term))) return go("/product-match");
     if (normalized.includes("repair")) return go(`/repairs?equipment=${encodeURIComponent(value)}`);
-    if (normalized.includes("rental") || normalized.startsWith("rent ")) return go(`/rentals?q=${encodeURIComponent(value)}`);
-    go(`/search?q=${encodeURIComponent(value)}`);
+    if (normalized.includes("rental") || normalized.startsWith("rent ")) return go(`/rentals?q=${encodeURIComponent(value)}${branchQuery}`);
+    go(`/search?q=${encodeURIComponent(value)}${branchQuery}`);
   }
 
-  function askAI() { go(`/assistant?prompt=${encodeURIComponent(search.trim() || "Help me figure out what I need for this job")}`); }
+  function askAI() { go(`/assistant?prompt=${encodeURIComponent(search.trim() || `Help me shop for this job${branch === "Online" ? "" : ` at ${branch}`}`)}`); }
   const closeLauncher = () => { setLauncherOpen(false); launcherTriggerRef.current?.focus(); };
   const accountLabel = customerLabel(customer);
 
   return (
     <header className="v2-header">
       <Container size="wide" className="v2-header__primary">
+        <div className="v2-branch-selector" ref={branchRef}>
+          <button type="button" className="v2-branch-selector__trigger" onClick={() => setBranchOpen((open) => !open)} aria-haspopup="listbox" aria-expanded={branchOpen} aria-label={`Shopping from ${branch}. Change branch`}>
+            <Store size={19} aria-hidden="true" />
+            <span><small>Shopping from</small><strong>{branch}</strong></span>
+            <ChevronDown size={15} aria-hidden="true" />
+          </button>
+          {branchOpen ? (
+            <div className="v2-branch-selector__menu" role="listbox" aria-label="Choose shopping branch">
+              <span>Shop inventory from</span>
+              {SHOPPING_BRANCHES.map((option) => (
+                <button key={option} type="button" role="option" aria-selected={option === branch} className={option === branch ? "is-selected" : ""} onClick={() => chooseBranch(option)}>
+                  <span>{option}</span>{option === branch ? <strong>Current</strong> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home"><img src={logo} alt="Total Tools Jamaica" width="900" height="249" /></a>
         <nav className="v2-header__nav" aria-label="Primary commerce navigation">
           {navigation.map((item) => {
@@ -171,7 +223,7 @@ export default function Header() {
         <form className="v2-global-command" role="search" onSubmit={submitSearch}>
           <Search size={21} aria-hidden="true" />
           <label className="tt-sr-only" htmlFor="v2-global-search">Search Total Tools</label>
-          <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search a product, model, category, or job…" autoComplete="off" />
+          <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${branch === "Online" ? "all products" : branch + " inventory"}, model, category, or job…`} autoComplete="off" />
           <div className="v2-global-command__media"><button type="button" title="Open Product Match" onClick={() => go("/product-match")} className={path === "/product-match" ? "is-active" : undefined}><Camera size={18} /><span className="tt-sr-only">Open Product Match</span></button></div>
           <button className="v2-search-submit" type="submit">Search</button>
           <button className={path === "/assistant" ? "v2-ai-submit is-active" : "v2-ai-submit"} type="button" onClick={askAI}><Sparkles size={17} /> Ask AI</button>
