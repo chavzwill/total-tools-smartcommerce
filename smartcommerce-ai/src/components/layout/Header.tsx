@@ -13,7 +13,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import logo from "../../assets/brand/total-tools-logo-transparent.png";
 import { getCategories } from "../../data/products";
 import { slugify } from "../../lib/format";
-import { go, routeHref } from "../../lib/router";
+import { getRoute, go, routeHref } from "../../lib/router";
 import {
   CUSTOMER_ACCOUNT_CHANGED_EVENT,
   getCustomerAccount,
@@ -23,11 +23,11 @@ import {
 import Container from "../shared/Container";
 
 const navigation = [
-  { label: "Products", href: "/products" },
-  { label: "Rentals", href: "/rentals" },
-  { label: "Repairs", href: "/repairs" },
-  { label: "Commercial", href: "/commercial" },
-  { label: "Deals", href: "/deals" },
+  { label: "Products", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
+  { label: "Rentals", href: "/rentals", match: ["/rentals", "/rental/"] },
+  { label: "Repairs", href: "/repairs", match: ["/repairs", "/repair-"] },
+  { label: "Commercial", href: "/commercial", match: ["/commercial"] },
+  { label: "Deals", href: "/deals", match: ["/deals"] },
 ];
 
 const exploreLinks = [
@@ -47,11 +47,16 @@ function customerLabel(customer: CustomerAccount | null) {
   return firstName || "Account";
 }
 
+function isActive(path: string, matches: string[]) {
+  return matches.some((candidate) => path === candidate || path.startsWith(candidate));
+}
+
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
+  const [path, setPath] = useState(() => getRoute().path);
   const launcherInputRef = useRef<HTMLInputElement>(null);
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -70,6 +75,12 @@ export default function Header() {
     if (!query) return launcherItems;
     return launcherItems.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(query));
   }, [launcherItems, launcherQuery]);
+
+  useEffect(() => {
+    const syncPath = () => setPath(getRoute().path);
+    window.addEventListener("hashchange", syncPath);
+    return () => window.removeEventListener("hashchange", syncPath);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -117,11 +128,16 @@ export default function Header() {
     <header className="v2-header">
       <Container size="wide" className="v2-header__primary">
         <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home"><img src={logo} alt="Total Tools Jamaica" width="900" height="249" /></a>
-        <nav className="v2-header__nav" aria-label="Primary commerce navigation">{navigation.map((item) => <a key={item.href} href={routeHref(item.href)}>{item.label}</a>)}</nav>
+        <nav className="v2-header__nav" aria-label="Primary commerce navigation">
+          {navigation.map((item) => {
+            const active = isActive(path, item.match);
+            return <a key={item.href} href={routeHref(item.href)} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined}>{item.label}</a>;
+          })}
+        </nav>
         <div className="v2-header__actions" aria-label="Customer actions">
           <button type="button" onClick={() => setLauncherOpen(true)} title="Locations and quick find"><MapPin size={19} /><span>Explore</span></button>
-          <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className="v2-account-action"><UserRound size={19} /><span>{accountLabel}</span></button>
-          <button type="button" onClick={() => go("/cart")} title="Cart" className="v2-cart"><ShoppingCart size={19} /><span>Cart</span></button>
+          <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className={path === "/account" ? "v2-account-action is-active" : "v2-account-action"}><UserRound size={19} /><span>{accountLabel}</span></button>
+          <button type="button" onClick={() => go("/cart")} title="Cart" className={path === "/cart" || path === "/checkout" ? "v2-cart is-active" : "v2-cart"}><ShoppingCart size={19} /><span>Cart</span></button>
         </div>
       </Container>
 
@@ -130,9 +146,9 @@ export default function Header() {
           <Search size={21} aria-hidden="true" />
           <label className="tt-sr-only" htmlFor="v2-global-search">Search Total Tools</label>
           <input id="v2-global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search a product, model, category, or job…" autoComplete="off" />
-          <div className="v2-global-command__media"><button type="button" title="Open Product Match" onClick={() => go("/product-match")}><Camera size={18} /><span className="tt-sr-only">Open Product Match</span></button></div>
+          <div className="v2-global-command__media"><button type="button" title="Open Product Match" onClick={() => go("/product-match")} className={path === "/product-match" ? "is-active" : undefined}><Camera size={18} /><span className="tt-sr-only">Open Product Match</span></button></div>
           <button className="v2-search-submit" type="submit">Search</button>
-          <button className="v2-ai-submit" type="button" onClick={askAI}><Sparkles size={17} /> Ask AI</button>
+          <button className={path === "/assistant" ? "v2-ai-submit is-active" : "v2-ai-submit"} type="button" onClick={askAI}><Sparkles size={17} /> Ask AI</button>
         </form>
         <div className="v2-command-side-actions">
           <a className="v2-mobile-account" href={routeHref("/account")} aria-label={customer ? `Open ${accountLabel}'s account` : "Sign in or create an account"}><UserRound size={18} /><span>{accountLabel}</span></a>
