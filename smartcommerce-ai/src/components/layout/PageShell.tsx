@@ -7,6 +7,7 @@ import "../../styles/brand-correction.css";
 import "../../styles/design-system.css";
 import "../../styles/commerce-shell.css";
 import "../../styles/shopping-experience.css";
+import "../../styles/product-detail.css";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
