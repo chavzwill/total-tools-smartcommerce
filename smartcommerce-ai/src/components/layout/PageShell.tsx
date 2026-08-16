@@ -6,6 +6,8 @@ import "../../styles/mobile-commerce.css";
 import "../../styles/brand-correction.css";
 import "../../styles/design-system.css";
 import "../../styles/commerce-shell.css";
+import "../../styles/shopping-experience.css";
+import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
@@ -26,6 +28,7 @@ export default function PageShell({ children }: PageShellProps) {
       <main id="main-content" tabIndex={-1}>{children}</main>
       <Footer />
       <MobileCommerceNav />
+      <CommerceToast />
     </div>
   );
 }
