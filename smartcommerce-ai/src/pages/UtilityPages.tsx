@@ -82,7 +82,7 @@ export function CartPage({
               <article className="demo-cart-item sc-cart-line-premium" key={product.id}>
                 <img src={product.image} alt={product.name} />
                 <div className="sc-cart-line-premium__copy">
-                  <small>{product.brand} · SKU {product.sku}</small>
+                  <small>{product.category} · SKU {product.sku}</small>
                   <h2>{product.name}</h2>
                   <p>Final price and availability will be independently revalidated by the server.</p>
                   <div className="sc-cart-quantity" aria-label={`Quantity for ${product.name}`}>
