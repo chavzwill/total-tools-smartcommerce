@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import "../../styles/shell.css";
 import "../../styles/premium-experience.css";
+import "../../styles/retail-joy.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
