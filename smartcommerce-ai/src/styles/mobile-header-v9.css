@@ -1,0 +1,266 @@
+/* Mobile header v9
+   One hierarchy: quiet utility strip -> strong brand row -> uninterrupted search row.
+   This file must remain last in PageShell so legacy mobile overrides cannot distort it. */
+
+@media (max-width: 760px) {
+  /* Utility strip: useful but deliberately secondary. */
+  .tt-utility {
+    min-height: 0 !important;
+  }
+
+  .tt-utility__inner {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+    min-height: 0 !important;
+    padding: 7px 14px 8px !important;
+    text-align: center !important;
+  }
+
+  .tt-utility__branches,
+  .tt-utility__links {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-wrap: nowrap !important;
+    gap: 0 !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  .tt-utility__branches {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .tt-utility__links {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .tt-utility__label,
+  .tt-utility__item {
+    font-weight: 700 !important;
+  }
+
+  .tt-utility__branches > * + *::before,
+  .tt-utility__links > * + *::before {
+    content: "" !important;
+    display: block !important;
+    width: 1px !important;
+    height: 10px !important;
+    margin: 0 7px !important;
+    background: rgba(255,255,255,.32) !important;
+    border: 0 !important;
+    flex: 0 0 1px !important;
+  }
+
+  .tt-utility__action {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    gap: 4px !important;
+  }
+
+  .tt-utility__action svg {
+    display: none !important;
+  }
+
+  .tt-utility__detail {
+    display: none !important;
+  }
+
+  /* Brand row: brand dominates, account is a quiet independent action. */
+  .v2-header__primary {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 78px !important;
+    padding: 5px 58px 3px !important;
+  }
+
+  .v2-brand {
+    width: min(270px, 72vw) !important;
+    height: 70px !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: visible !important;
+  }
+
+  .v2-brand img {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+    max-height: 70px !important;
+    object-fit: contain !important;
+    object-position: center !important;
+    transform: none !important;
+  }
+
+  .v2-header__nav {
+    display: none !important;
+  }
+
+  .v2-header__actions {
+    position: absolute !important;
+    right: 13px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .v2-header__actions > button:not(.v2-account-action),
+  .v2-header__actions > a:not(.v2-account-action) {
+    display: none !important;
+  }
+
+  .v2-account-action {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid rgba(5,79,52,.16) !important;
+    border-radius: 50% !important;
+    background: #fff !important;
+    color: #075d3d !important;
+    box-shadow: 0 5px 16px rgba(13,49,35,.06) !important;
+  }
+
+  .v2-account-action span {
+    display: none !important;
+  }
+
+  /* Search row: one control with one AI action; no stacked/overlapping controls. */
+  .v2-header__command-row {
+    display: block !important;
+    position: relative !important;
+    padding: 0 12px 9px !important;
+    margin: 0 !important;
+  }
+
+  .v2-global-command {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-height: 56px !important;
+    border-radius: 18px !important;
+    padding: 0 58px 0 17px !important;
+    gap: 10px !important;
+    background: #fff !important;
+    border: 1px solid rgba(12,72,50,.14) !important;
+    box-shadow: 0 4px 18px rgba(15,53,39,.045) !important;
+    overflow: hidden !important;
+  }
+
+  .v2-global-command > svg {
+    flex: 0 0 auto !important;
+    width: 20px !important;
+    height: 20px !important;
+    color: #718078 !important;
+  }
+
+  .v2-global-command input[type="text"],
+  .v2-global-command input:not([type]) {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    height: 54px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    outline: none !important;
+    background: transparent !important;
+    font-size: 15px !important;
+    line-height: 1 !important;
+    color: #13231c !important;
+  }
+
+  .v2-global-command__media,
+  .v2-search-submit,
+  .v2-command-side-actions {
+    display: none !important;
+  }
+
+  .v2-ai-submit {
+    position: absolute !important;
+    right: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 14px !important;
+    background: #07110d !important;
+    color: #fff !important;
+    font-size: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .v2-ai-submit svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .tt-utility__inner {
+    padding-inline: 10px !important;
+  }
+
+  .tt-utility__branches,
+  .tt-utility__links {
+    font-size: 9.4px !important;
+  }
+
+  .tt-utility__branches > * + *::before,
+  .tt-utility__links > * + *::before {
+    margin-inline: 5px !important;
+  }
+
+  .v2-header__primary {
+    min-height: 74px !important;
+    padding-inline: 52px !important;
+  }
+
+  .v2-brand {
+    width: min(246px, 70vw) !important;
+    height: 66px !important;
+  }
+
+  .v2-brand img {
+    max-height: 66px !important;
+  }
+
+  .v2-account-action {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .v2-global-command {
+    min-height: 54px !important;
+    border-radius: 17px !important;
+  }
+}
