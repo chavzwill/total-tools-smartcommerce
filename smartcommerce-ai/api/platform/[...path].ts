@@ -102,8 +102,12 @@ const toRequest = async (request: any, privileged: boolean) => {
     if (headerValue !== undefined) headers.set(key, headerValue);
   });
 
-  const trustedBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
-  const trustedProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
+  const configuredBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
+  const configuredProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
+  const trustedBusinessAccountId = configuredBusinessAccountId || (!privileged ? "public-catalog" : undefined);
+  const trustedProviderId = configuredProviderId || (!privileged
+    ? (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "public-unsupported")
+    : undefined);
   if (trustedBusinessAccountId) headers.set("x-business-account-id", trustedBusinessAccountId);
   if (trustedProviderId) headers.set("x-provider-id", trustedProviderId);
 
