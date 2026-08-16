@@ -1,4 +1,4 @@
-import { BadgeCheck, BriefcaseBusiness, KeyRound, LockKeyhole, LogIn, LogOut, MailCheck, PackageCheck, ShieldCheck, UserRound, UserRoundPlus, Wrench } from "lucide-react";
+import { BadgeCheck, Bot, BriefcaseBusiness, ChevronRight, KeyRound, LayoutDashboard, LockKeyhole, LogIn, LogOut, MailCheck, PackageCheck, ShieldCheck, ShoppingBag, UserRound, UserRoundPlus, Wrench } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
@@ -19,6 +19,19 @@ import { getRoute, routeHref } from "../lib/router";
 type Mode = "login" | "signup" | "forgot" | "reset";
 type AccountTab = "overview" | "orders" | "rentals" | "repairs" | "commercial" | "security";
 
+const accountTabs = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "orders", label: "Orders", icon: PackageCheck },
+  { id: "rentals", label: "Rentals", icon: BriefcaseBusiness },
+  { id: "repairs", label: "Repairs", icon: Wrench },
+  { id: "commercial", label: "Commercial", icon: BadgeCheck },
+  { id: "security", label: "Security", icon: ShieldCheck },
+] as const;
+
+function isAccountTab(value: string | null): value is AccountTab {
+  return accountTabs.some((tab) => tab.id === value);
+}
+
 export default function CustomerAccountPage() {
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +47,9 @@ export default function CustomerAccountPage() {
     const query = getRoute().query;
     const verifyToken = query.get("verify") || "";
     const passwordResetToken = query.get("reset") || "";
+    const requestedSection = query.get("section");
+    if (isAccountTab(requestedSection)) setAccountTab(requestedSection);
+
     async function initialize() {
       try {
         if (verifyToken) { await verifyCustomerEmail(verifyToken); if (active) setNotice("Email verified. Your SmartCommerce account is now confirmed."); }
@@ -45,6 +61,14 @@ export default function CustomerAccountPage() {
     initialize();
     return () => { active = false; };
   }, []);
+
+  function selectAccountTab(tab: AccountTab) {
+    setAccountTab(tab);
+    setError("");
+    setNotice("");
+    const next = routeHref(`/account?section=${tab}`);
+    window.history.replaceState(null, "", next);
+  }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSubmitting(true); setError(""); setNotice(""); const form = new FormData(event.currentTarget);
@@ -101,14 +125,7 @@ export default function CustomerAccountPage() {
 
   if (customer && mode !== "reset") {
     const firstName = customer.fullName.split(/\s+/)[0];
-    const tabTitle: Record<AccountTab, string> = {
-      overview: "Account overview",
-      orders: "Orders",
-      rentals: "Rentals",
-      repairs: "Repairs",
-      commercial: "Commercial account",
-      security: "Security",
-    };
+    const currentTab = accountTabs.find((tab) => tab.id === accountTab) || accountTabs[0];
 
     return (
       <div className="demo-page sc-account-page">
@@ -123,47 +140,78 @@ export default function CustomerAccountPage() {
             <button className="sc-signout-button" type="button" disabled={submitting} onClick={handleLogout}><LogOut size={17} /> Sign out</button>
           </header>
 
-          <nav className="sc-account-nav" aria-label="Account sections">
-            {(["overview", "orders", "rentals", "repairs", "commercial", "security"] as AccountTab[]).map((tab) => (
-              <button key={tab} type="button" className={accountTab === tab ? "is-active" : ""} aria-current={accountTab === tab ? "page" : undefined} onClick={() => { setAccountTab(tab); setError(""); setNotice(""); }}>
-                {tabTitle[tab]}
-              </button>
-            ))}
-          </nav>
-
           {!customer.emailVerified && <section className="sc-account-alert"><MailCheck size={21} /><div><strong>Verify your email</strong><span>Verify your address to unlock sensitive account and commercial features.</span></div><button type="button" disabled={submitting} onClick={handleVerificationRequest}>{submitting ? "Sending…" : "Send verification email"}</button></section>}
 
-          {accountTab === "overview" && (
-            <section className="sc-account-tab-panel">
-              <div className="sc-account-section__heading"><span className="sc-eyebrow">Overview</span><h2>Your SmartCommerce account</h2><p>Orders, rentals, repairs and business purchasing stay organized here without putting security controls in the way of everyday activity.</p></div>
-              <div className="sc-account-overview-grid">
-                <article className="sc-account-overview-card"><div className="sc-service-icon"><PackageCheck size={20} /></div><div><strong>Orders</strong><span>Purchases, fulfilment and order history.</span></div><em>Coming online</em></article>
-                <article className="sc-account-overview-card"><div className="sc-service-icon"><BriefcaseBusiness size={20} /></div><div><strong>Rentals</strong><span>Agreements, extensions and returns.</span></div><em>Coming online</em></article>
-                <article className="sc-account-overview-card"><div className="sc-service-icon"><Wrench size={20} /></div><div><strong>Repairs</strong><span>Status, approvals and service history.</span></div><em>Coming online</em></article>
-                <article className="sc-account-overview-card"><div className="sc-service-icon"><BadgeCheck size={20} /></div><div><strong>Commercial</strong><span>Business verification, credit and purchasing controls.</span></div><em>Restricted</em></article>
-              </div>
-              <div className="sc-account-security-entry">
-                <div className="sc-summary-icon"><ShieldCheck size={20} /></div>
-                <div><strong>Account security</strong><span>{customer.emailVerified ? "Security controls are available under the Security tab." : "Verify your email before configuring stronger security."}</span></div>
-                <button type="button" onClick={() => setAccountTab("security")}>Open security</button>
-              </div>
-            </section>
-          )}
+          <div className="sc-account-workspace">
+            <aside className="sc-account-context">
+              <div className="sc-account-context__label">Account center</div>
+              <nav className="sc-account-nav" aria-label="Account sections">
+                {accountTabs.map(({ id, label, icon: Icon }) => (
+                  <button key={id} type="button" className={accountTab === id ? "is-active" : ""} aria-current={accountTab === id ? "page" : undefined} onClick={() => selectAccountTab(id)}>
+                    <Icon size={18} aria-hidden="true" />
+                    <span>{label}</span>
+                    <ChevronRight size={16} className="sc-account-nav__chevron" aria-hidden="true" />
+                  </button>
+                ))}
+              </nav>
+            </aside>
 
-          {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
+            <div className="sc-account-content">
+              <div className="sc-account-mobile-title"><currentTab.icon size={18} /><span>{currentTab.label}</span></div>
 
-          {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage rental agreements, active equipment, extensions and returns.</p></div><div className="sc-account-placeholder"><BriefcaseBusiness size={28} /><h3>Rental history is coming online</h3><p>Connected rental agreements and active rental status will appear here.</p></div></section>}
+              {accountTab === "overview" && (
+                <section className="sc-account-tab-panel">
+                  <div className="sc-account-section__heading"><span className="sc-eyebrow">Overview</span><h2>Your account at a glance</h2><p>Your identity, account readiness and useful actions — without repeating the navigation you already have.</p></div>
 
-          {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
+                  <div className="sc-account-overview-shell">
+                    <article className="sc-account-profile-card">
+                      <div className="sc-account-profile-card__top"><UserRound size={22} /><span>Profile</span></div>
+                      <h3>{customer.fullName}</h3>
+                      <dl>
+                        <div><dt>Email</dt><dd>{customer.email}</dd></div>
+                        <div><dt>Phone</dt><dd>{customer.phone || "Not added"}</dd></div>
+                        <div><dt>Identity</dt><dd className={customer.emailVerified ? "is-good" : "is-pending"}>{customer.emailVerified ? "Verified" : "Verification needed"}</dd></div>
+                      </dl>
+                    </article>
 
-          {accountTab === "commercial" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Commercial</span><h2>Business account</h2><p>Manage business verification, purchasing authority, credit and commercial controls.</p></div><div className="sc-account-placeholder"><BadgeCheck size={28} /><h3>Commercial access is restricted</h3><p>Approved organizations and authorized members will use this area for business purchasing features.</p></div></section>}
+                    <article className="sc-account-readiness-card">
+                      <div><span className="sc-eyebrow">Account readiness</span><h3>{customer.emailVerified ? "Ready for secure commerce" : "One step left"}</h3><p>{customer.emailVerified ? "Your verified identity can use stronger security and future connected services." : "Verify your email to unlock sensitive account and commercial features."}</p></div>
+                      <button type="button" onClick={() => selectAccountTab("security")}><ShieldCheck size={18} /> Manage security <ChevronRight size={16} /></button>
+                    </article>
+                  </div>
 
-          {accountTab === "security" && (
-            <section className="sc-account-tab-panel">
-              <div className="sc-account-section__heading"><span className="sc-eyebrow">Security</span><h2>Sign-in & security</h2><p>Passkeys, authenticator MFA and active sessions live here, separate from everyday account activity.</p></div>
-              {customer.emailVerified ? <AccountPasskeyPanel /> : <div className="sc-empty-state">Verify your email to configure passkeys, authenticator MFA and session controls.</div>}
-            </section>
-          )}
+                  <div className="sc-account-quick-actions">
+                    <div className="sc-account-section__heading sc-account-section__heading--compact"><span className="sc-eyebrow">Quick actions</span><h3>Get something done</h3></div>
+                    <div className="sc-account-action-grid">
+                      <a href={routeHref("/products")}><ShoppingBag size={19} /><span><strong>Shop products</strong><small>Browse tools, parts and equipment.</small></span><ChevronRight size={17} /></a>
+                      <a href={routeHref("/assistant")}><Bot size={19} /><span><strong>Ask SmartCommerce AI</strong><small>Describe the job and get guided help.</small></span><ChevronRight size={17} /></a>
+                      <button type="button" onClick={() => selectAccountTab("commercial")}><BadgeCheck size={19} /><span><strong>Commercial account</strong><small>Business purchasing and verification.</small></span><ChevronRight size={17} /></button>
+                    </div>
+                  </div>
+
+                  <div className="sc-account-recent">
+                    <div><span className="sc-eyebrow">Recent activity</span><h3>Nothing needs your attention</h3><p>Orders, rentals and repairs will surface here when connected activity exists.</p></div>
+                    <button type="button" onClick={() => selectAccountTab("orders")}>View orders <ChevronRight size={16} /></button>
+                  </div>
+                </section>
+              )}
+
+              {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
+
+              {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage rental agreements, active equipment, extensions and returns.</p></div><div className="sc-account-placeholder"><BriefcaseBusiness size={28} /><h3>Rental history is coming online</h3><p>Connected rental agreements and active rental status will appear here.</p></div></section>}
+
+              {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
+
+              {accountTab === "commercial" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Commercial</span><h2>Business account</h2><p>Manage business verification, purchasing authority, credit and commercial controls.</p></div><div className="sc-account-placeholder"><BadgeCheck size={28} /><h3>Commercial access is restricted</h3><p>Approved organizations and authorized members will use this area for business purchasing features.</p></div></section>}
+
+              {accountTab === "security" && (
+                <section className="sc-account-tab-panel">
+                  <div className="sc-account-section__heading"><span className="sc-eyebrow">Security</span><h2>Sign-in & security</h2><p>Passkeys, authenticator MFA and active sessions live here, separate from everyday account activity.</p></div>
+                  {customer.emailVerified ? <AccountPasskeyPanel /> : <div className="sc-empty-state">Verify your email to configure passkeys, authenticator MFA and session controls.</div>}
+                </section>
+              )}
+            </div>
+          </div>
 
           {notice && <p role="status" className="sc-account-real__notice">{notice}</p>}
           {error && <p role="alert" className="sc-account-real__error">{error}</p>}
