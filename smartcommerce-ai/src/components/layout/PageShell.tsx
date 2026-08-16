@@ -13,10 +13,11 @@ type PageShellProps = {
 export default function PageShell({ children }: PageShellProps) {
   return (
     <div className="tt-app-shell">
+      <a className="tt-skip-link" href="#main-content">Skip to main content</a>
       <UtilityBar />
       <Header />
       <PromoTicker />
-      <main id="main-content">{children}</main>
+      <main id="main-content" tabIndex={-1}>{children}</main>
       <Footer />
       <MobileCommerceNav />
     </div>
