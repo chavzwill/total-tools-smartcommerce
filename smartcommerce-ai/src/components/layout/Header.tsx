@@ -22,6 +22,9 @@ import {
 } from "../../lib/customerAccount";
 import Container from "../shared/Container";
 
+const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
+const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
+
 const navigation = [
   { label: "Products", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
   { label: "Rentals", href: "/rentals", match: ["/rentals", "/rental/"] },
@@ -51,12 +54,23 @@ function isActive(path: string, matches: string[]) {
   return matches.some((candidate) => path === candidate || path.startsWith(candidate));
 }
 
+function initialGuestCartCount() {
+  try {
+    const items = JSON.parse(window.localStorage.getItem(GUEST_CART_KEY) || "[]");
+    if (!Array.isArray(items)) return 0;
+    return items.reduce((sum, item) => sum + Math.max(0, Number(item?.quantity || 0)), 0);
+  } catch {
+    return 0;
+  }
+}
+
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const [path, setPath] = useState(() => getRoute().path);
+  const [guestCartCount, setGuestCartCount] = useState(initialGuestCartCount);
   const launcherInputRef = useRef<HTMLInputElement>(null);
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -80,6 +94,15 @@ export default function Header() {
     const syncPath = () => setPath(getRoute().path);
     window.addEventListener("hashchange", syncPath);
     return () => window.removeEventListener("hashchange", syncPath);
+  }, []);
+
+  useEffect(() => {
+    const syncCart = (event: Event) => {
+      const count = Number((event as CustomEvent<{ count?: number }>).detail?.count || 0);
+      setGuestCartCount(Math.max(0, count));
+    };
+    window.addEventListener(GUEST_CART_CHANGED_EVENT, syncCart);
+    return () => window.removeEventListener(GUEST_CART_CHANGED_EVENT, syncCart);
   }, []);
 
   useEffect(() => {
@@ -137,7 +160,7 @@ export default function Header() {
         <div className="v2-header__actions" aria-label="Customer actions">
           <button type="button" onClick={() => setLauncherOpen(true)} title="Locations and quick find"><MapPin size={19} /><span>Explore</span></button>
           <button type="button" onClick={() => go("/account")} title={customer ? "Open account" : "Sign in or create account"} className={path === "/account" ? "v2-account-action is-active" : "v2-account-action"}><UserRound size={19} /><span>{accountLabel}</span></button>
-          <button type="button" onClick={() => go("/cart")} title="Cart" className={path === "/cart" || path === "/checkout" ? "v2-cart is-active" : "v2-cart"}><ShoppingCart size={19} /><span>Cart</span></button>
+          <button type="button" onClick={() => go("/cart")} title="Cart" className={path === "/cart" || path === "/checkout" ? "v2-cart is-active" : "v2-cart"}><ShoppingCart size={19} /><span>{guestCartCount > 0 && !customer ? `Cart · ${guestCartCount}` : "Cart"}</span></button>
         </div>
       </Container>
 
