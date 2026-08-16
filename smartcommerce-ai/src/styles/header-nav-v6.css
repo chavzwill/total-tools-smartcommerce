@@ -1,14 +1,14 @@
-/* Header + navigation v6
-   Final mobile corrections for the live header geometry and dock behaviour.
-   Keep this layer last so older mobile logo/utility rules cannot distort it. */
+/* Header + navigation density pass
+   The logo is intentionally prominent; vertical efficiency comes from the
+   surrounding chrome, not from shrinking the brand. This file stays last so
+   legacy mobile rules cannot reintroduce the old geometry. */
 
 @media (max-width: 760px) {
-  /* Keep the utility information compact: one branches row, then one contact row
-     whenever the viewport can support it. */
+  /* Utility bar: two compact, centered rows. */
   .tt-utility__inner {
     min-height: 0 !important;
-    gap: 6px !important;
-    padding: 9px 14px 10px !important;
+    gap: 4px !important;
+    padding: 7px 12px 8px !important;
   }
 
   .tt-utility__branches,
@@ -16,42 +16,56 @@
     width: 100% !important;
     justify-content: center !important;
     align-items: center !important;
-    row-gap: 5px !important;
-    line-height: 1.2 !important;
+    line-height: 1.15 !important;
   }
 
-  .tt-utility__branches { font-size: 11.5px !important; }
-  .tt-utility__links { font-size: 10.5px !important; }
+  .tt-utility__branches {
+    font-size: 11px !important;
+    row-gap: 3px !important;
+  }
 
-  .tt-utility__branches > * + *::before,
+  .tt-utility__branches > * + *::before {
+    height: 11px !important;
+    margin: 0 6px !important;
+  }
+
+  .tt-utility__links {
+    display: grid !important;
+    grid-template-columns: repeat(3, max-content) !important;
+    gap: 0 !important;
+    font-size: 9.8px !important;
+    white-space: nowrap;
+  }
+
   .tt-utility__links > * + *::before {
-    height: 12px !important;
-    margin: 0 7px !important;
+    display: none !important;
+  }
+
+  .tt-utility__links .tt-utility__item + .tt-utility__item {
+    border-left: 1px solid rgba(229, 239, 233, 0.42);
+    margin-left: 7px;
+    padding-left: 7px;
   }
 
   .tt-utility__links .tt-utility__item:last-child {
     flex-basis: auto !important;
+    justify-content: center !important;
     margin-top: 0 !important;
   }
 
-  .tt-utility__links .tt-utility__item:last-child::before {
-    display: block !important;
-  }
-
-  /* The previous logo tune forced a 3.6:1 image into a 1.7:1 box and cropped it.
-     Restore the real aspect ratio and give the mark a deliberate breathing zone. */
+  /* Brand row: larger logo, shorter container. */
   .v2-header__primary {
     position: relative;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-height: 82px !important;
-    padding: 7px 58px 5px !important;
+    min-height: 70px !important;
+    padding: 2px 56px 0 !important;
   }
 
   .v2-brand {
-    width: min(224px, 62vw) !important;
-    height: 68px !important;
+    width: min(250px, 68vw) !important;
+    height: 66px !important;
     min-width: 0 !important;
     margin: 0 auto !important;
     overflow: visible !important;
@@ -64,49 +78,86 @@
     position: static !important;
     width: 100% !important;
     height: auto !important;
-    max-height: 66px !important;
+    max-height: none !important;
     transform: none !important;
     object-fit: contain !important;
     object-position: center !important;
   }
 
   .v2-mobile-account {
-    top: 18px !important;
-    right: max(14px, env(safe-area-inset-right)) !important;
+    top: 12px !important;
+    right: max(12px, env(safe-area-inset-right)) !important;
   }
 
+  /* Search is visually attached to the brand row instead of floating beneath it. */
   .v2-header__command-row {
-    padding: 1px 12px 11px !important;
-    gap: 8px !important;
+    padding: 0 12px 8px !important;
+    gap: 6px !important;
   }
 
   .v2-global-command {
-    min-height: 57px !important;
+    min-height: 54px !important;
   }
 }
 
-@media (max-width: 390px) {
-  /* On genuinely narrow phones, allow support to take a clean third line rather
-     than squeezing the contact row or leaving a separator orphaned. */
-  .tt-utility__links .tt-utility__item:last-child {
-    flex-basis: 100% !important;
-    justify-content: center !important;
-    margin-top: 1px !important;
+@media (max-width: 430px) {
+  .tt-utility__inner {
+    padding: 6px 10px 7px !important;
   }
 
-  .tt-utility__links .tt-utility__item:last-child::before {
+  .tt-utility__branches {
+    font-size: 10.5px !important;
+  }
+
+  .tt-utility__links {
+    font-size: 9.35px !important;
+  }
+
+  /* Keep the contact row on one line on narrow phones without sacrificing the
+     phone/WhatsApp numbers; only the redundant word “Support” collapses. */
+  .tt-utility__commercial-suffix {
     display: none !important;
   }
 
+  .tt-utility__links .tt-utility__item + .tt-utility__item {
+    margin-left: 6px;
+    padding-left: 6px;
+  }
+
   .v2-header__primary {
-    min-height: 78px !important;
-    padding-inline: 52px !important;
+    min-height: 68px !important;
+    padding: 1px 52px 0 !important;
   }
 
   .v2-brand {
-    width: min(208px, 61vw) !important;
-    height: 62px !important;
+    width: min(242px, 67vw) !important;
+    height: 64px !important;
   }
 
-  .v2-brand img { max-height: 60px !important; }
+  .v2-mobile-account {
+    top: 11px !important;
+  }
+
+  .v2-header__command-row {
+    padding-bottom: 7px !important;
+  }
+}
+
+@media (max-width: 365px) {
+  .tt-utility__branches {
+    font-size: 10px !important;
+  }
+
+  .tt-utility__links {
+    font-size: 8.8px !important;
+  }
+
+  .tt-utility__links .tt-utility__item + .tt-utility__item {
+    margin-left: 4px;
+    padding-left: 4px;
+  }
+
+  .v2-brand {
+    width: min(228px, 66vw) !important;
+  }
 }

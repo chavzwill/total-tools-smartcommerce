@@ -24,7 +24,9 @@ export default function UtilityBar() {
         <div className="tt-utility__links" aria-label="Contact options">
           <a className="tt-utility__item" href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>Call {company.phone}</a>
           <a className="tt-utility__item" href={`https://wa.me/${company.whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer">WhatsApp {company.whatsapp}</a>
-          <a className="tt-utility__item" href="#/commercial">Commercial Support</a>
+          <a className="tt-utility__item tt-utility__commercial" href="#/commercial" aria-label="Commercial Support">
+            Commercial<span className="tt-utility__commercial-suffix"> Support</span>
+          </a>
         </div>
       </Container>
     </div>
