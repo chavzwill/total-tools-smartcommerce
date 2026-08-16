@@ -32,7 +32,7 @@ const daysBetween = (startDate: string, endDate: string) => {
 };
 
 export default function OperationalRentalDetailPage({ id }: { id: string }) {
-  const rental = getRentalById(id);
+  const foundRental = getRentalById(id);
   const query = useMemo(readQuery, []);
   const [reservation, setReservation] = useState<ReservationDraft>({
     startDate: query.get("start") || "",
@@ -46,7 +46,8 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (!rental) return <div className="demo-empty"><h1>Rental not found</h1><a href={routeHref("/rentals")}>Return to rental fleet</a></div>;
+  if (!foundRental) return <div className="demo-empty"><h1>Rental not found</h1><a href={routeHref("/rentals")}>Return to rental fleet</a></div>;
+  const rental = foundRental;
 
   const rentalDays = daysBetween(reservation.startDate, reservation.endDate);
   const subtotal = rentalDays ? rental.dailyRate * rentalDays : 0;
