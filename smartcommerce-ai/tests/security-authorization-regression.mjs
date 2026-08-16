@@ -15,6 +15,10 @@ function guard(name, source, pattern, message) {
   checks.push(name);
   assert.match(source, pattern, message || `${name} authorization invariant is missing`);
 }
+function reject(name, source, pattern, message) {
+  checks.push(name);
+  assert.doesNotMatch(source, pattern, message || `${name} forbidden trust pattern returned`);
+}
 
 // Customer session identity must always come from a live, unrevoked server-side session.
 guard(
@@ -53,6 +57,28 @@ guard(
   "quotes bind authenticated customer and active cart",
   commerce,
   /createQuote\(request,\s*customerId,\s*cart\.id\)/,
+);
+
+// Commerce-to-platform lookups must never route through caller-controlled Host/provider identity.
+guard(
+  "commerce product lookup uses fixed internal origin",
+  commerce,
+  /https:\/\/smartcommerce\.internal\/api\/platform\/products/,
+);
+guard(
+  "commerce platform lookup dispatches in process",
+  commerce,
+  /handlePlatformRestRequest\(platformRequest,\s*platformService\)/,
+);
+guard(
+  "commerce cart provider identity comes from server configuration",
+  commerce,
+  /const\s+trustedProviderId\s*=\s*process\.env\.SMARTCOMMERCE_PROVIDER_ID[\s\S]*?VALUES\s*\(\$\{id\},\s*\$\{cart\.id\},\s*\$\{itemType\},\s*\$\{trustedProviderId\}/,
+);
+reject(
+  "commerce no longer constructs platform origin from request Host",
+  commerce,
+  /function\s+requestOrigin|x-forwarded-proto/,
 );
 
 // Commercial account resources must require an active membership for the exact customer/account pair.
