@@ -1,14 +1,14 @@
 export const theme = {
   colors: {
-    green: "#075537",
-    greenDark: "#033923",
+    green: "#307036",
+    greenDark: "#255b2b",
     yellow: "#f5c928",
     white: "#ffffff",
-    gray50: "#f6f8f6",
-    gray100: "#edf1ee",
-    gray300: "#d4ddd7",
-    gray600: "#647269",
-    charcoal: "#18211c"
+    gray50: "#f7f8f5",
+    gray100: "#edf1ec",
+    gray300: "#d6ddd5",
+    gray600: "#657066",
+    charcoal: "#202820"
   },
   radius: {
     small: "8px",
@@ -16,8 +16,8 @@ export const theme = {
     large: "22px"
   },
   shadow: {
-    soft: "0 12px 32px rgba(11, 49, 31, 0.08)",
-    elevated: "0 22px 56px rgba(11, 49, 31, 0.12)"
+    soft: "0 12px 32px rgba(32, 40, 32, 0.08)",
+    elevated: "0 22px 56px rgba(32, 40, 32, 0.12)"
   }
 } as const;
 
