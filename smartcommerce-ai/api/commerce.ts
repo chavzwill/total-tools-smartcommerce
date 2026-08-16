@@ -1,5 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
+import { handlePlatformRestRequest } from "../src/backend/platformRestApi";
+import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime";
 import {
   enforceDurableRateLimit,
   recordSecurityEvent,
@@ -12,6 +14,7 @@ const QUOTE_TTL_MS = 10 * 60 * 1000;
 const CART_MUTATION_LIMIT = 120;
 const QUOTE_CUSTOMER_LIMIT = 12;
 const QUOTE_IP_LIMIT = 40;
+const platformService = createConfiguredTotalToolsPlatformService();
 let sqlClient: ReturnType<typeof neon> | undefined;
 
 type CartItemRow = {
@@ -155,38 +158,25 @@ async function cartRows(cartId: string) {
   ` as CartItemRow[];
 }
 
-function requestOrigin(request: any) {
-  const host = firstHeader(request.headers?.host);
-  const forwardedProto = firstHeader(request.headers?.["x-forwarded-proto"]);
-  const protocol = forwardedProto === "http" ? "http" : "https";
-  if (!host) throw new Error("REQUEST_HOST_UNAVAILABLE");
-  return `${protocol}://${host}`;
-}
-
-function providerHeaders(request: any) {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  for (const name of ["x-business-account-id", "x-provider-id", "x-connection-id"]) {
-    const value = firstHeader(request.headers?.[name]);
-    if (value) headers[name] = value;
-  }
+function trustedPlatformHeaders() {
+  const headers = new Headers({ Accept: "application/json" });
+  const businessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
+  const providerId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
+  if (businessAccountId) headers.set("x-business-account-id", businessAccountId);
+  if (providerId) headers.set("x-provider-id", providerId);
   return headers;
 }
 
-async function fetchProduct(request: any, productId: string): Promise<ProviderProduct | undefined> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
-  try {
-    const response = await fetch(`${requestOrigin(request)}/api/platform/products/${encodeURIComponent(productId)}`, {
-      headers: providerHeaders(request),
-      signal: controller.signal,
-    });
-    if (!response.ok) return undefined;
-    const payload = await response.json().catch(() => undefined) as any;
-    if (!payload?.success || !payload.data) return undefined;
-    return payload.data as ProviderProduct;
-  } finally {
-    clearTimeout(timeout);
-  }
+async function fetchProduct(_request: any, productId: string): Promise<ProviderProduct | undefined> {
+  const platformRequest = new Request(
+    `https://smartcommerce.internal/api/platform/products/${encodeURIComponent(productId)}`,
+    { method: "GET", headers: trustedPlatformHeaders() },
+  );
+  const response = await handlePlatformRestRequest(platformRequest, platformService);
+  if (!response.ok) return undefined;
+  const payload = await response.json().catch(() => undefined) as any;
+  if (!payload?.success || !payload.data) return undefined;
+  return payload.data as ProviderProduct;
 }
 
 function retailPrice(product: ProviderProduct) {
@@ -321,9 +311,10 @@ export default async function handler(request: any, response: any) {
       const quantity = Math.max(1, Math.min(999, Number(input.quantity || 1)));
       if (!providerItemId || providerItemId.length > 180 || !Number.isInteger(quantity)) return send(response, 400, { error: { code: "INVALID_CART_ITEM", message: "That item cannot be added to the cart." } });
       const id = `cit_${randomBytes(16).toString("hex")}`;
+      const trustedProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim() || null;
       await sql()`
         INSERT INTO customer_cart_items (id, cart_id, item_type, provider_id, provider_item_id, quantity)
-        VALUES (${id}, ${cart.id}, ${itemType}, ${input.providerId || null}, ${providerItemId}, ${quantity})
+        VALUES (${id}, ${cart.id}, ${itemType}, ${trustedProviderId}, ${providerItemId}, ${quantity})
         ON CONFLICT (cart_id, item_type, provider_item_id)
         DO UPDATE SET quantity = LEAST(999, customer_cart_items.quantity + EXCLUDED.quantity), updated_at = NOW()
       `;
