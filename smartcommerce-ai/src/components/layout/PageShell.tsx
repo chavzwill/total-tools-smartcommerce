@@ -11,6 +11,7 @@ import "../../styles/account-priority-fix.css";
 import "../../styles/geometry-v5.css";
 import "../../styles/header-nav-v6.css";
 import "../../styles/mobile-header-v9.css";
+import "../../styles/total-tools-jamaica-redesign.css";
 import Footer from "./Footer";
 import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
