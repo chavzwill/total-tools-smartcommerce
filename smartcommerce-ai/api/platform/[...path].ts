@@ -88,8 +88,16 @@ const toRequest = async (request: any, privileged: boolean) => {
   const headers = new Headers();
   Object.entries(request.headers || {}).forEach(([key, value]) => {
     const normalized = key.toLowerCase();
-    if (normalized === "authorization") return;
-    if (!privileged && (normalized === "x-actor-id" || normalized === "x-connection-id")) return;
+    if (normalized === "authorization" || normalized === "host" || normalized === "x-forwarded-host") return;
+    if (
+      !privileged &&
+      (
+        normalized === "x-actor-id" ||
+        normalized === "x-connection-id" ||
+        normalized === "x-business-account-id" ||
+        normalized === "x-provider-id"
+      )
+    ) return;
     const headerValue = firstHeader(value as string | string[] | undefined);
     if (headerValue !== undefined) headers.set(key, headerValue);
   });
@@ -100,9 +108,8 @@ const toRequest = async (request: any, privileged: boolean) => {
   if (trustedProviderId) headers.set("x-provider-id", trustedProviderId);
 
   const method = String(request.method || "GET").toUpperCase();
-  const host = headers.get("host") || "localhost";
-  const forwardedProto = headers.get("x-forwarded-proto") || "https";
-  const url = `${forwardedProto}://${host}${request.url || "/api/platform"}`;
+  const rawPath = String(request.url || "/api/platform");
+  const url = new URL(rawPath, "https://smartcommerce.internal").toString();
   const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
 
   return new Request(url, {

@@ -7,6 +7,8 @@ const load = async (relativePath) =>
 const commerce = await load("api/commerce.ts");
 const commercial = await load("api/commercial-account.ts");
 const financial = await load("api/commercial-financial-policy.ts");
+const platform = await load("api/platform/[...path].ts");
+const vercel = await load("vercel.json");
 
 const checks = [];
 function guard(name, source, pattern, message) {
@@ -91,5 +93,28 @@ guard(
   financial,
   /requester_customer_id[\s\S]*?VALUES\([\s\S]*?\$\{session\.customer_id\}/,
 );
+
+// Public platform reads must not accept tenant/provider identity from caller-controlled headers.
+guard(
+  "public platform identity headers are stripped",
+  platform,
+  /!privileged[\s\S]*?x-business-account-id[\s\S]*?x-provider-id/,
+);
+guard(
+  "platform request URL ignores caller host headers",
+  platform,
+  /new URL\(rawPath,\s*"https:\/\/smartcommerce\.internal"\)/,
+);
+guard(
+  "platform trusted identity can come from server configuration",
+  platform,
+  /SMARTCOMMERCE_BUSINESS_ACCOUNT_ID[\s\S]*?SMARTCOMMERCE_PROVIDER_ID/,
+);
+
+// Baseline browser responses must carry anti-sniffing, anti-framing, referrer, and HSTS controls.
+guard("global anti-sniffing header", vercel, /"X-Content-Type-Options"[\s\S]*?"nosniff"/);
+guard("global anti-framing header", vercel, /"X-Frame-Options"[\s\S]*?"DENY"/);
+guard("global referrer policy", vercel, /"Referrer-Policy"[\s\S]*?"strict-origin-when-cross-origin"/);
+guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000"/);
 
 console.log(`Authorization regression gate passed: ${checks.length} invariants verified.`);
