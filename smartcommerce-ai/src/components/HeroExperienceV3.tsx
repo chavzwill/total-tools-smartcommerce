@@ -21,6 +21,13 @@ const examples = [
   ["Find this part from a photo", Camera],
 ] as const;
 
+const proof = [
+  ["BUY", "Product catalogue"],
+  ["RENT", "Equipment planning"],
+  ["REPAIR", "Service intake"],
+  ["ASK", "AI guidance"],
+] as const;
+
 export default function HeroExperienceV3() {
   const [prompt, setPrompt] = useState("");
   const [focused, setFocused] = useState(false);
@@ -54,10 +61,13 @@ export default function HeroExperienceV3() {
         <div className="v3-hero__content">
           <span className="v3-hero__eyebrow"><Sparkles size={15} /> TOTAL TOOLS × SMARTCOMMERCE</span>
           <h1>One Job.<br /><em>Every Option.</em></h1>
-          <p>Buy it. Rent it. Fix it. Or tell SmartCommerce what needs doing.</p>
+          <p>Buy it. Rent it. Repair it. Or describe the job and let SmartCommerce help you find the right path.</p>
           <HeroAdvisor prompt={prompt} setPrompt={setPrompt} onCommandFocusChange={setFocused} />
           <div className="v3-hero__examples">
             {examples.map(([text, Icon]) => <button type="button" key={text} onClick={() => setPrompt(text)}><Icon size={15} />{text}</button>)}
+          </div>
+          <div className="v3-hero__proof" aria-label="SmartCommerce capabilities">
+            {proof.map(([label, detail]) => <div key={label}><strong>{label}</strong><span>{detail}</span></div>)}
           </div>
         </div>
         <aside className="v3-hero__scene">
