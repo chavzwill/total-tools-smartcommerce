@@ -7,8 +7,15 @@ export function getRoute(): Route {
 }
 
 export function go(path: string) {
-  window.location.hash = path.startsWith("/") ? path : `/${path}`;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const nextHash = `#${normalized}`;
+
+  if (window.location.hash === nextHash) {
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    return;
+  }
+
+  window.location.hash = normalized;
 }
 
 export function routeHref(path: string) {
