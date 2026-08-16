@@ -124,11 +124,17 @@
   .sc-account-workspace { gap: 14px; }
   .sc-account-context { margin: 0; }
   .sc-account-nav {
+    display: flex !important;
     gap: 5px;
     padding: 5px;
     border-radius: 15px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  .sc-account-nav::-webkit-scrollbar { display: none; }
   .sc-account-nav button {
+    flex: 0 0 auto !important;
+    width: auto !important;
     min-height: 40px !important;
     padding: 0 11px !important;
     border-radius: 11px !important;
