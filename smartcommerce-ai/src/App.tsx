@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
 import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
-import { getRoute, go } from "./lib/router";
+import { getRoute } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
 import AssistantPage from "./pages/AssistantPage";
 import CommercialPage from "./pages/CommercialPage";
@@ -17,6 +17,7 @@ import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } f
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 export const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
+export const CART_FEEDBACK_EVENT = "smartcommerce:cart-feedback";
 
 function loadGuestCart(): GuestCheckoutItem[] {
   try {
@@ -28,6 +29,10 @@ function loadGuestCart(): GuestCheckoutItem[] {
   } catch {
     return [];
   }
+}
+
+function announceCart(message: string, tone: "success" | "error" = "success") {
+  window.dispatchEvent(new CustomEvent(CART_FEEDBACK_EVENT, { detail: { message, tone } }));
 }
 
 export default function App() {
@@ -63,7 +68,7 @@ export default function App() {
     onCompare: (id: string) => toggle(setCompared, id),
     onAdd: (id: string) => {
       void addPersistentCartItem(id, 1)
-        .then(() => go("/cart"))
+        .then(() => announceCart("Added to your cart."))
         .catch((error: any) => {
           if (error?.status === 401) {
             setCart((items) => {
@@ -71,10 +76,10 @@ export default function App() {
               if (existing) return items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item);
               return [...items, { productId: id, quantity: 1 }];
             });
-            go("/cart");
+            announceCart("Added to your guest cart.");
             return;
           }
-          go("/cart");
+          announceCart(error?.message || "We could not add that item. Please try again.", "error");
         });
     }
   }), [wishlist, compared]);
