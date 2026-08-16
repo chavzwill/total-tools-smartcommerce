@@ -85,11 +85,18 @@
   background: var(--tt-brand-green-deep) !important;
 }
 
-/* Footer belongs to the brighter retail system instead of the old green-black block. */
+/* Footer gets its own isolated light canvas so no legacy dark footer layer can bleed through. */
 .tt-footer {
-  background: linear-gradient(180deg, #fffdf7 0%, #f5f3e9 100%) !important;
+  background: #fffaf0 !important;
   border-top: 1px solid #dde3d9 !important;
   color: var(--tt-brand-ink) !important;
+}
+
+.tt-footer__surface {
+  background: linear-gradient(180deg, #fffdf8 0%, #f7f4e9 100%) !important;
+  color: var(--tt-brand-ink) !important;
+  min-height: 100%;
+  width: 100%;
 }
 
 .tt-footer :where(p,a,span,strong) {
@@ -97,7 +104,7 @@
 }
 
 .tt-footer h2 {
-  color: var(--tt-brand-green-deep) !important;
+  color: var(--tt-brand-green) !important;
 }
 
 .tt-footer__lead p {
@@ -136,7 +143,16 @@
     font-size: 7px;
   }
 
+  .tt-footer,
+  .tt-footer__surface {
+    background: #fffaf0 !important;
+  }
+
   .tt-footer {
+    padding-bottom: 0 !important;
+  }
+
+  .tt-footer__surface {
     padding-bottom: calc(128px + env(safe-area-inset-bottom)) !important;
   }
 
