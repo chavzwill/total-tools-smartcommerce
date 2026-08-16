@@ -1,4 +1,4 @@
-import { Camera, Construction, Sparkles, Wrench, Zap } from "lucide-react";
+import { BriefcaseBusiness, Camera, Construction, Sparkles, Wrench, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import mascot from "../assets/brand/mascot-3d.jpeg";
 import shopImage from "../assets/services/shop-products.jpg";
@@ -8,9 +8,10 @@ import { routeHref } from "../lib/router";
 import HeroAdvisor from "./HeroAdvisor";
 
 const scenes = [
-  { id: "shop", label: "SHOP", title: "The Right Tool. Right Now.", detail: "Search by product, model, specification, or the job you need to finish.", href: "/products", cta: "Shop products", image: shopImage },
-  { id: "rent", label: "RENT", title: "Rent the Right Machine.", detail: "Plan equipment around the job, dates, branch, pickup, or delivery.", href: "/rentals", cta: "Plan a rental", image: rentalImage },
-  { id: "repair", label: "REPAIR", title: "Fix What You Own.", detail: "Identify the machine, describe the problem, and start a service request.", href: "/repairs", cta: "Start a repair", image: repairImage },
+  { id: "shop", label: "SHOP", title: "Find the Right Tool.", detail: "Search by product, model, specification, brand, or the job you need to finish.", href: "/products", cta: "Shop products", image: shopImage },
+  { id: "rent", label: "RENT", title: "Use the Machine. Not the Price Tag.", detail: "Choose equipment around the job, dates, branch, pickup, or delivery.", href: "/rentals", cta: "Plan a rental", image: rentalImage },
+  { id: "repair", label: "REPAIR", title: "Keep Good Equipment Working.", detail: "Identify the machine, describe the problem, and start a service request.", href: "/repairs", cta: "Start a repair", image: repairImage },
+  { id: "commercial", label: "COMMERCIAL", title: "Built for Bigger Orders.", detail: "Contractor, fleet, government, and business purchasing with a direct route to quote support.", href: "/commercial", cta: "Commercial support", image: shopImage },
   { id: "ai", label: "ASK AI", title: "Tell Us the Job.", detail: "Describe what you are trying to accomplish, use a photo, or ask for guidance.", href: "/assistant", cta: "Ask SmartCommerce", image: mascot },
 ] as const;
 
@@ -18,6 +19,7 @@ const examples = [
   ["I need a generator for my house", Zap],
   ["Rent something to dig a trench", Construction],
   ["My pressure washer needs repair", Wrench],
+  ["Price a bulk order for my project", BriefcaseBusiness],
   ["Find this part from a photo", Camera],
 ] as const;
 
@@ -38,7 +40,7 @@ export default function HeroExperienceV3() {
 
   useEffect(() => {
     if (paused || focused || reducedMotion) return;
-    const timer = window.setInterval(() => setSceneIndex((current) => (current + 1) % scenes.length), 6200);
+    const timer = window.setInterval(() => setSceneIndex((current) => (current + 1) % scenes.length), 7000);
     return () => window.clearInterval(timer);
   }, [focused, paused, reducedMotion]);
 
@@ -54,7 +56,7 @@ export default function HeroExperienceV3() {
         <div className="v3-hero__content">
           <span className="v3-hero__eyebrow"><Sparkles size={15} /> TOTAL TOOLS × SMARTCOMMERCE</span>
           <h1>One Job.<br /><em>Every Option.</em></h1>
-          <p>Buy it. Rent it. Repair it. Or describe the job and let SmartCommerce help you find the right path.</p>
+          <p>Buy it. Rent it. Repair it. Get commercial support. Or describe the job and let SmartCommerce help you choose the right path.</p>
           <HeroAdvisor prompt={prompt} setPrompt={setPrompt} onCommandFocusChange={setFocused} />
           <div className="v3-hero__examples">
             {examples.map(([text, Icon]) => <button type="button" key={text} onClick={() => setPrompt(text)}><Icon size={15} />{text}</button>)}
