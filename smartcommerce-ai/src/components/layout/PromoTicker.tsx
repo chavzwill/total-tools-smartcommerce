@@ -60,7 +60,7 @@ export default function PromoTicker() {
   return (
     <aside
       className="sc-signal-rail"
-      aria-label="SmartCommerce service updates"
+      aria-label="Total Tools shopping updates"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -72,7 +72,7 @@ export default function PromoTicker() {
       <div className="sc-signal-rail__identity">
         <span className="sc-signal-rail__pulse" aria-hidden="true" />
         <strong>SmartCommerce</strong>
-        <span>Service signal</span>
+        <span>Today</span>
       </div>
       <div className="sc-signal-rail__message" aria-live="off">
         <span>{active.eyebrow}</span>
@@ -80,29 +80,17 @@ export default function PromoTicker() {
         {active.detail ? <small>{active.detail}</small> : null}
       </div>
       <div className="sc-signal-rail__actions">
-        {active.href && active.cta ? (
-          <a href={routeHref(active.href)}>{active.cta}</a>
-        ) : null}
+        {active.href && active.cta ? <a href={routeHref(active.href)}>{active.cta}</a> : null}
         {signals.length > 1 ? (
-          <div>
-            <button type="button" onClick={() => move(-1)} aria-label="Previous service signal">
-              <ChevronLeft size={16} />
-            </button>
+          <div className="sc-signal-rail__pager">
+            <button type="button" onClick={() => move(-1)} aria-label="Previous update"><ChevronLeft size={16} /></button>
             <span>{activeIndex + 1}/{signals.length}</span>
-            <button type="button" onClick={() => move(1)} aria-label="Next service signal">
-              <ChevronRight size={16} />
-            </button>
+            <button type="button" onClick={() => move(1)} aria-label="Next update"><ChevronRight size={16} /></button>
           </div>
         ) : null}
       </div>
       {!reducedMotion && signals.length > 1 ? (
-        <div className="sc-signal-rail__progress" aria-hidden="true">
-          <span
-            key={`${active.id}-${paused ? "paused" : "running"}`}
-            className={paused ? "is-paused" : ""}
-            style={{ animationDuration: `${ROTATION_MS}ms` }}
-          />
-        </div>
+        <div className="sc-signal-rail__progress" aria-hidden="true"><span key={`${active.id}-${paused ? "paused" : "running"}`} className={paused ? "is-paused" : ""} style={{ animationDuration: `${ROTATION_MS}ms` }} /></div>
       ) : null}
     </aside>
   );
