@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
-import { addPersistentCartItem } from "./lib/customerCommerce";
+import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
 import { getRoute, go } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
 import AssistantPage from "./pages/AssistantPage";
@@ -15,9 +15,23 @@ import { RentalsPage } from "./pages/RentalPages";
 import OperationalRentalDetailPage from "./pages/OperationalRentalDetailPage";
 import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } from "./pages/UtilityPages";
 
+const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
+
+function loadGuestCart(): GuestCheckoutItem[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(GUEST_CART_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({ productId: String(item?.productId || ""), quantity: Number(item?.quantity || 0) }))
+      .filter((item) => item.productId && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 999);
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [route, setRoute] = useState(getRoute());
-  const [cart, setCart] = useState<string[]>([]);
+  const [cart, setCart] = useState<GuestCheckoutItem[]>(loadGuestCart);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [compared, setCompared] = useState<string[]>([]);
 
@@ -35,6 +49,10 @@ export default function App() {
     return () => window.removeEventListener("hashchange", update);
   }, []);
 
+  useEffect(() => {
+    window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
+  }, [cart]);
+
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>, id: string) => setter((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
   const actions = useMemo(() => ({
     wishlist,
@@ -46,7 +64,11 @@ export default function App() {
         .then(() => go("/cart"))
         .catch((error: any) => {
           if (error?.status === 401) {
-            setCart((items) => items.includes(id) ? items : [...items, id]);
+            setCart((items) => {
+              const existing = items.find((item) => item.productId === id);
+              if (existing) return items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item);
+              return [...items, { productId: id, quantity: 1 }];
+            });
             go("/cart");
             return;
           }
@@ -70,10 +92,10 @@ export default function App() {
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
   else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
-  else if (path === "/cart") page = <CartPage guestCart={cart} removeGuest={(id) => setCart((items) => items.filter((item) => item !== id))} />;
+  else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
-  else if (path === "/checkout") page = <CheckoutPage />;
+  else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
