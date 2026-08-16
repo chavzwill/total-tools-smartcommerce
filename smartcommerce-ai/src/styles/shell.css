@@ -1,0 +1,20 @@
+/*
+ * Canonical SmartCommerce shell stylesheet entrypoint.
+ *
+ * Keep imports in this order until each legacy layer has been folded into
+ * the consolidated design system. This file intentionally preserves the
+ * existing cascade while giving the application shell one stable style
+ * boundary for future cleanup.
+ */
+@import "./experience-upgrade.css";
+@import "./catalog-upgrade.css";
+@import "./service-upgrade.css";
+@import "./experience-v2.css";
+@import "./experience-v3.css";
+@import "./experience-v3-promo.css";
+@import "./mobile-logo-tune.css";
+@import "./navigation-v4.css";
+@import "./account-priority-fix.css";
+@import "./geometry-v5.css";
+@import "./header-nav-v6.css";
+@import "./mobile-header-v9.css";
