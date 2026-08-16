@@ -11,7 +11,8 @@ import DealsPage from "./pages/DealsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
 import RepairPage from "./pages/RepairPage";
 import ProductMatchPage from "./pages/ProductMatchPage";
-import { RentalDetailPage, RentalsPage } from "./pages/RentalPages";
+import { RentalsPage } from "./pages/RentalPages";
+import OperationalRentalDetailPage from "./pages/OperationalRentalDetailPage";
 import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } from "./pages/UtilityPages";
 
 export default function App() {
@@ -62,7 +63,7 @@ export default function App() {
   else if (path.startsWith("/product/")) { const id = path.split("/")[2]; page = <ProductDetailPage id={id} wished={wishlist.includes(id)} onWishlist={actions.onWishlist} onAdd={actions.onAdd} />; }
   else if (path === "/compare") page = <ComparePage compared={compared} onCompare={actions.onCompare} onAdd={actions.onAdd} />;
   else if (path === "/rentals") page = <RentalsPage />;
-  else if (path.startsWith("/rental/")) page = <RentalDetailPage id={path.split("/")[2]} />;
+  else if (path.startsWith("/rental/")) page = <OperationalRentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
   else if (path === "/deals") page = <DealsPage />;
