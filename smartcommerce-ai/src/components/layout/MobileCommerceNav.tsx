@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { getRoute, routeHref } from "../../lib/router";
 
 const items = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Shop", href: "/products", icon: ShoppingBag },
+  { label: "Home", href: "/", icon: Home, featured: false },
+  { label: "Shop", href: "/products", icon: ShoppingBag, featured: false },
   { label: "Ask AI", href: "/assistant", icon: Bot, featured: true },
-  { label: "Rentals", href: "/rentals", icon: HardHat },
-  { label: "Account", href: "/account", icon: UserRound },
-  { label: "Cart", href: "/cart", icon: ShoppingCart },
+  { label: "Rentals", href: "/rentals", icon: HardHat, featured: false },
+  { label: "Account", href: "/account", icon: UserRound, featured: false },
+  { label: "Cart", href: "/cart", icon: ShoppingCart, featured: false },
 ] as const;
 
 function isActive(path: string, href: string) {
