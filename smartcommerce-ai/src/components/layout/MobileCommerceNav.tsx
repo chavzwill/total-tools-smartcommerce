@@ -1,17 +1,25 @@
-import { Bot, Home, HardHat, ShoppingBag, ShoppingCart } from "lucide-react";
+import { Bot, Home, HardHat, ShoppingBag, ShoppingCart, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getRoute, routeHref } from "../../lib/router";
 
 const items = [
-  ["Home", "/", Home],
-  ["Shop", "/products", ShoppingBag],
-  ["Ask AI", "/assistant", Bot],
-  ["Rentals", "/rentals", HardHat],
-  ["Cart", "/cart", ShoppingCart],
+  { label: "Home", href: "/", icon: Home },
+  { label: "Shop", href: "/products", icon: ShoppingBag },
+  { label: "Ask AI", href: "/assistant", icon: Bot, featured: true },
+  { label: "Rentals", href: "/rentals", icon: HardHat },
+  { label: "Account", href: "/account", icon: UserRound },
+  { label: "Cart", href: "/cart", icon: ShoppingCart },
 ] as const;
+
+function isActive(path: string, href: string) {
+  if (href === "/") return path === "/";
+  if (href === "/products") return path === "/products" || path.startsWith("/product/") || path.startsWith("/category/") || path.startsWith("/search");
+  return path.startsWith(href);
+}
 
 export default function MobileCommerceNav() {
   const [path, setPath] = useState(() => getRoute().path);
+
   useEffect(() => {
     const sync = () => setPath(getRoute().path);
     window.addEventListener("hashchange", sync);
@@ -19,17 +27,18 @@ export default function MobileCommerceNav() {
   }, []);
 
   return (
-    <nav className="sc-mobile-commerce-nav" aria-label="Mobile commerce navigation">
-      {items.map(([label, href, Icon], index) => {
-        const active = href === "/" ? path === "/" : path.startsWith(href);
+    <nav className="sc-mobile-commerce-nav" aria-label="Primary mobile navigation">
+      {items.map(({ label, href, icon: Icon, featured }) => {
+        const active = isActive(path, href);
         return (
           <a
             href={routeHref(href)}
             key={label}
-            className={`${active ? "is-active" : ""} ${index === 2 ? "is-featured" : ""}`.trim()}
+            className={`${active ? "is-active" : ""} ${featured ? "is-featured" : ""}`.trim()}
             aria-current={active ? "page" : undefined}
+            aria-label={label}
           >
-            <Icon size={index === 2 ? 23 : 20} aria-hidden="true" />
+            <span className="sc-mobile-commerce-nav__icon"><Icon size={featured ? 22 : 20} aria-hidden="true" /></span>
             <span>{label}</span>
           </a>
         );
