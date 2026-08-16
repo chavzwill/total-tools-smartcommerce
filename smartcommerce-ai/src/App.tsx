@@ -5,6 +5,7 @@ import { getRoute, go } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
 import AssistantPage from "./pages/AssistantPage";
 import CommercialPage from "./pages/CommercialPage";
+import ComparePage from "./pages/ComparePage";
 import { CategoriesPage, CategoryPage, ProductsPage, SearchPage } from "./pages/CatalogPages";
 import DealsPage from "./pages/DealsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
@@ -59,6 +60,7 @@ export default function App() {
   else if (path === "/categories") page = <CategoriesPage />;
   else if (path.startsWith("/category/")) page = <CategoryPage slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
   else if (path.startsWith("/product/")) { const id = path.split("/")[2]; page = <ProductDetailPage id={id} wished={wishlist.includes(id)} onWishlist={actions.onWishlist} onAdd={actions.onAdd} />; }
+  else if (path === "/compare") page = <ComparePage compared={compared} onCompare={actions.onCompare} onAdd={actions.onAdd} />;
   else if (path === "/rentals") page = <RentalsPage />;
   else if (path.startsWith("/rental/")) page = <RentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
@@ -71,10 +73,10 @@ export default function App() {
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
   else if (path === "/checkout") page = <CheckoutPage />;
-  else if (path === "/order-success") page = <ConfirmationPage type="order" />;
-  else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} />;
-  else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" />;
-  else if (path === "/commercial-confirmation") page = <ConfirmationPage type="commercial" />;
+  else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
+  else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
+  else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
+  else if (path === "/commercial-confirmation") page = <ConfirmationPage type="commercial" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
 
   return <PageShell>{page}</PageShell>;
 }
