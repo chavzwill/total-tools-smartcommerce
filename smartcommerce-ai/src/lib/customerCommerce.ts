@@ -20,6 +20,11 @@ export type CommerceCart = {
   items: CommerceCartItem[];
 };
 
+export type GuestCheckoutItem = {
+  productId: string;
+  quantity: number;
+};
+
 export type CheckoutQuote = {
   id: string;
   currency: string;
@@ -38,9 +43,21 @@ export type CheckoutQuote = {
     currency: string;
   }>;
   paymentAvailable: boolean;
+  checkoutMode?: "account" | "guest";
 };
 
 type CommerceError = Error & { code?: string; status?: number };
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || "Commerce request failed.") as CommerceError;
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+  return payload as T;
+}
 
 async function request<T>(method: "GET" | "POST", body?: unknown): Promise<T> {
   const response = await fetch("/api/commerce", {
@@ -52,14 +69,7 @@ async function request<T>(method: "GET" | "POST", body?: unknown): Promise<T> {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(payload?.error?.message || "Commerce request failed.") as CommerceError;
-    error.code = payload?.error?.code;
-    error.status = response.status;
-    throw error;
-  }
-  return payload as T;
+  return parseResponse<T>(response);
 }
 
 export async function getPersistentCart() {
@@ -96,5 +106,16 @@ export async function removePersistentCartItem(itemId: string) {
 
 export async function createCheckoutQuote() {
   const result = await request<{ quote: CheckoutQuote }>("POST", { action: "create_quote" });
-  return result.quote;
+  return { ...result.quote, checkoutMode: result.quote.checkoutMode || "account" as const };
+}
+
+export async function createGuestCheckoutQuote(items: GuestCheckoutItem[]) {
+  const response = await fetch("/api/guest-checkout", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const result = await parseResponse<{ quote: CheckoutQuote }>(response);
+  return { ...result.quote, checkoutMode: "guest" as const };
 }
