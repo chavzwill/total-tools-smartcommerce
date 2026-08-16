@@ -1,6 +1,6 @@
 import { Bot, Home, HardHat, ShoppingBag, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getRoute, routeHref } from "../../lib/router";
+import { getRoute, go, routeHref } from "../../lib/router";
 
 const items = [
   ["Home", "/", Home],
@@ -37,6 +37,10 @@ export default function MobileCommerceNav() {
             key={label}
             className={`${active ? "is-active" : ""} ${index === 2 ? "is-featured" : ""}`.trim()}
             aria-current={active ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              go(href);
+            }}
           >
             <Icon size={index === 2 ? 23 : 20} aria-hidden="true" />
             <span>{label}</span>
