@@ -16,6 +16,7 @@ import OperationalRentalDetailPage from "./pages/OperationalRentalDetailPage";
 import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } from "./pages/UtilityPages";
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
+export const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
 
 function loadGuestCart(): GuestCheckoutItem[] {
   try {
@@ -51,6 +52,7 @@ export default function App() {
 
   useEffect(() => {
     window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
+    window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED_EVENT, { detail: { count: cart.reduce((sum, item) => sum + item.quantity, 0) } }));
   }, [cart]);
 
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>, id: string) => setter((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
