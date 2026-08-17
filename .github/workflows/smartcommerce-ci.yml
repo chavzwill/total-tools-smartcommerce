@@ -72,6 +72,9 @@ jobs:
       - name: Password step-up security regression gate
         run: npm run test:security-step-up
 
+      - name: Commercial financial policy security regression gate
+        run: npm run test:security-commercial-financial-policy
+
       - name: MFA security regression gate
         run: npm run test:security-mfa
 
