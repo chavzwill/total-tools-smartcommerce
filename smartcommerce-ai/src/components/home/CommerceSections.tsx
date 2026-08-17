@@ -1,4 +1,4 @@
-import { Bot, BriefcaseBusiness, CheckCircle2, MapPin, PackageSearch, Wrench } from "lucide-react";
+import { CheckCircle2, Wrench } from "lucide-react";
 import mascot from "../../assets/brand/mascot-illustrated.jpeg";
 import repairImage from "../../assets/services/repairs-service.jpg";
 import { getProducts } from "../../data/products";
@@ -32,16 +32,6 @@ export default function CommerceSections(props: Props) {
   const connected = getCommerceDataMode() === "connected";
 
   return <>
-    <section className="home-promises sc-trust-strip">
-      <Container size="wide">
-        <div><MapPin size={18} /><span>{company.branches.length} Total Tools branch locations</span></div>
-        <div><PackageSearch size={18} /><span>Products, rentals, repairs, and commercial support</span></div>
-        <div><Bot size={18} /><span>SmartCommerce guided discovery</span></div>
-        <div><Wrench size={18} /><span>Repair request workflow</span></div>
-        <div><BriefcaseBusiness size={18} /><span>Commercial enquiry path</span></div>
-      </Container>
-    </section>
-
     <section className="home-merch-section" id="rental-preview">
       <Container size="wide">
         <div className="home-section-line"><SectionHeader eyebrow="Rentals" title="Rent the Right Machine." description="Choose by capability, set your dates and location, then move toward verified availability." /><a href={routeHref("/rentals")}>Plan a rental</a></div>
