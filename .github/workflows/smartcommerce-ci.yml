@@ -57,6 +57,9 @@ jobs:
       - name: Platform gateway security regression gate
         run: npm run test:security-platform-gateway
 
+      - name: Assistant gateway security regression gate
+        run: npm run test:security-assistant-gateway
+
       - name: Integrity endpoint security regression gate
         run: npm run test:security-integrity-endpoint
 
