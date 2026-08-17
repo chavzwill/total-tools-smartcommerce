@@ -1,0 +1,481 @@
+/* Canonical Phase 6 experience layer: Repairs + Commercial.
+   Owns service-intake and commercial transaction hierarchy without changing backend workflows. */
+
+.sc-repair-next {
+  background: #f7f8f5 !important;
+  color: #18211c !important;
+}
+
+.sc-repair-next__container {
+  display: grid !important;
+  gap: 28px !important;
+  padding-bottom: 88px !important;
+  padding-top: clamp(28px,4vw,54px) !important;
+}
+
+.sc-repair-next__intro {
+  max-width: 840px;
+}
+
+.sc-repair-next__intro > span {
+  align-items: center;
+  color: #08763f !important;
+  display: inline-flex;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  gap: 6px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sc-repair-next__intro h1 {
+  color: #18211c !important;
+  font-size: clamp(34px,5vw,64px) !important;
+  letter-spacing: -.05em !important;
+  line-height: .98 !important;
+  margin: 10px 0 14px !important;
+  max-width: 780px;
+}
+
+.sc-repair-next__intro p {
+  color: #616c64 !important;
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+  margin: 0 !important;
+  max-width: 680px;
+}
+
+.sc-repair-next__quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.sc-repair-next__quick-actions a {
+  align-items: center;
+  background: #fff !important;
+  border: 1px solid #dce2dd !important;
+  border-radius: 999px !important;
+  color: #465149 !important;
+  display: inline-flex;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 13px !important;
+  text-decoration: none !important;
+}
+
+.sc-repair-next__quick-actions a:first-child {
+  background: #fff7cf !important;
+  border-color: #eadb94 !important;
+  color: #5b4a0c !important;
+}
+
+.sc-repair-next__workspace {
+  align-items: start;
+  display: grid;
+  gap: 26px;
+  grid-template-columns: minmax(0,1.45fr) minmax(280px,.65fr);
+}
+
+.sc-repair-next__form {
+  background: #fff !important;
+  border: 1px solid #e0e5e1 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 14px 38px rgba(24,33,28,.055) !important;
+  color: #18211c !important;
+  display: grid !important;
+  gap: 14px !important;
+  padding: clamp(18px,3vw,28px) !important;
+}
+
+.sc-repair-next__form label {
+  color: #3d4941 !important;
+  display: grid !important;
+  font-size: 11px !important;
+  font-weight: 820 !important;
+  gap: 7px !important;
+}
+
+.sc-repair-next__form :where(input,select,textarea) {
+  background: #fff !important;
+  border: 1px solid #d7ded8 !important;
+  border-radius: 11px !important;
+  color: #18211c !important;
+  font-size: 13px !important;
+  min-height: 46px !important;
+  padding: 10px 12px !important;
+}
+
+.sc-repair-next__form textarea {
+  min-height: 118px !important;
+  resize: vertical;
+}
+
+.sc-repair-next__form > button[type="submit"] {
+  background: #08763f !important;
+  border: 1px solid #08763f !important;
+  border-radius: 12px !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  min-height: 50px !important;
+}
+
+.sc-repair-next__step {
+  align-items: center;
+  border-top: 1px solid #e7ebe7;
+  display: flex;
+  gap: 11px;
+  margin-top: 7px;
+  padding-top: 18px;
+}
+
+.sc-repair-next__step:first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.sc-repair-next__step > span {
+  align-items: center;
+  background: #e9f4ed;
+  border-radius: 999px;
+  color: #08763f;
+  display: inline-flex;
+  flex: 0 0 30px;
+  font-size: 12px;
+  font-weight: 900;
+  height: 30px;
+  justify-content: center;
+}
+
+.sc-repair-next__step div {
+  display: grid;
+  gap: 1px;
+}
+
+.sc-repair-next__step strong {
+  color: #18211c;
+  font-size: 14px;
+}
+
+.sc-repair-next__step small {
+  color: #7a847c;
+  font-size: 10px;
+}
+
+.sc-repair-next .sc-repair-hints {
+  background: #f7f9f6 !important;
+  border: 1px solid #e2e7e3 !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px !important;
+  padding: 10px !important;
+}
+
+.sc-repair-next .sc-repair-hints > span {
+  color: #657067 !important;
+  flex-basis: 100%;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+.sc-repair-next .sc-repair-hints button {
+  background: #fff !important;
+  border: 1px solid #dce2dd !important;
+  border-radius: 999px !important;
+  color: #465149 !important;
+  font-size: 10px !important;
+  min-height: 32px;
+  padding: 0 10px !important;
+}
+
+.sc-repair-next .demo-file-input {
+  background: #f7f9f6 !important;
+  border: 1px dashed #cfd8d1 !important;
+  border-radius: 12px !important;
+  color: #465149 !important;
+  min-height: 76px !important;
+}
+
+.sc-repair-next__form label > small {
+  color: #7b857d !important;
+  font-size: 9.5px !important;
+  line-height: 1.4;
+}
+
+.sc-repair-next__support {
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 18px;
+}
+
+.sc-repair-next__support-card {
+  background: #fff !important;
+  border: 1px solid #e0e5e1 !important;
+  border-radius: 16px !important;
+  display: grid;
+  gap: 7px;
+  padding: 16px !important;
+}
+
+.sc-repair-next__support-card > svg {
+  color: #08763f;
+}
+
+.sc-repair-next__support-card > span {
+  color: #7b857d !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.sc-repair-next__support-card strong {
+  color: #18211c !important;
+  font-size: 14px !important;
+  line-height: 1.25;
+}
+
+.sc-repair-next__support-card p {
+  color: #667169 !important;
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+
+.sc-repair-next__support-card a {
+  color: #08763f !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+/* Commercial: treat this as an account + quote workspace, not a campaign landing page. */
+.sc-commercial-page {
+  background: #f7f8f5 !important;
+  color: #18211c !important;
+}
+
+.sc-commercial-page__hero {
+  background: #fff !important;
+  border-bottom: 1px solid #e2e7e3 !important;
+  color: #18211c !important;
+  padding: clamp(28px,4vw,48px) 0 !important;
+}
+
+.sc-commercial-page__hero::after {
+  display: none !important;
+}
+
+.sc-commercial-page__hero > div {
+  align-items: center !important;
+  display: grid !important;
+  gap: 32px !important;
+  grid-template-columns: minmax(0,1.45fr) minmax(280px,.55fr) !important;
+}
+
+.sc-commercial-page__hero span {
+  color: #08763f !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sc-commercial-page__hero h1 {
+  color: #18211c !important;
+  font-size: clamp(36px,5vw,66px) !important;
+  letter-spacing: -.05em !important;
+  line-height: .98 !important;
+  margin: 9px 0 14px !important;
+}
+
+.sc-commercial-page__hero p {
+  color: #626d65 !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+  max-width: 720px !important;
+}
+
+.sc-commercial-page__hero img {
+  aspect-ratio: 4 / 3 !important;
+  border-radius: 18px !important;
+  max-height: 260px !important;
+  object-fit: cover !important;
+  width: 100% !important;
+}
+
+.sc-commercial-hero-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px !important;
+}
+
+.sc-commercial-hero-actions a {
+  background: #fff !important;
+  border: 1px solid #d9dfda !important;
+  border-radius: 999px !important;
+  color: #465149 !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  min-height: 38px;
+  padding: 0 13px !important;
+}
+
+.sc-commercial-hero-actions a:first-child,
+.sc-commercial-hero-actions a:nth-child(2) {
+  background: #08763f !important;
+  border-color: #08763f !important;
+  color: #fff !important;
+}
+
+.sc-commercial-page__body {
+  align-items: start !important;
+  display: grid !important;
+  gap: 26px !important;
+  grid-template-columns: minmax(0,1.2fr) minmax(320px,.8fr) !important;
+  padding-bottom: 90px !important;
+  padding-top: 34px !important;
+}
+
+.sc-commercial-page__body > #commercial-account {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.sc-commercial-page__body > #commercial-request {
+  grid-column: 2;
+  grid-row: 1;
+  position: sticky;
+  top: 18px;
+}
+
+.sc-commercial-page__body > section:not(#commercial-account) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.sc-commercial-page .demo-flow-form,
+.sc-commercial-page #commercial-account,
+.sc-commercial-page__body > section:not(#commercial-account) {
+  background: #fff !important;
+  border: 1px solid #e0e5e1 !important;
+  border-radius: 18px !important;
+  box-shadow: none !important;
+  color: #18211c !important;
+  padding: 20px !important;
+}
+
+.sc-commercial-page .demo-flow-form :where(input,select,textarea),
+.sc-commercial-page #commercial-account select {
+  background: #fff !important;
+  border: 1px solid #d6ddd7 !important;
+  border-radius: 10px !important;
+  color: #18211c !important;
+  min-height: 44px !important;
+}
+
+.sc-commercial-page .demo-flow-form button[type="submit"] {
+  background: #08763f !important;
+  border: 1px solid #08763f !important;
+  border-radius: 11px !important;
+  color: #fff !important;
+  min-height: 46px !important;
+}
+
+.sc-commercial-capabilities {
+  display: grid !important;
+  gap: 10px !important;
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+}
+
+.sc-commercial-capabilities article,
+.sc-commercial-capabilities form {
+  background: #f8faf7 !important;
+  border: 1px solid #e2e7e3 !important;
+  border-radius: 13px !important;
+  box-shadow: none !important;
+}
+
+.sc-commercial-contact {
+  background: #fff8dc !important;
+  border: 1px solid #eadb9f !important;
+  border-radius: 12px !important;
+}
+
+@media (max-width: 900px) {
+  .sc-repair-next__workspace,
+  .sc-commercial-page__body,
+  .sc-commercial-page__hero > div {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sc-repair-next__support,
+  .sc-commercial-page__body > #commercial-request {
+    position: static !important;
+  }
+
+  .sc-commercial-page__body > #commercial-account,
+  .sc-commercial-page__body > #commercial-request,
+  .sc-commercial-page__body > section:not(#commercial-account) {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+
+  .sc-commercial-page__body > #commercial-request {
+    order: -1;
+  }
+
+  .sc-commercial-page__hero img {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .sc-repair-next__container {
+    gap: 20px !important;
+    padding-bottom: 110px !important;
+    padding-top: 24px !important;
+  }
+
+  .sc-repair-next__intro h1,
+  .sc-commercial-page__hero h1 {
+    font-size: 38px !important;
+  }
+
+  .sc-repair-next__quick-actions {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 3px;
+  }
+
+  .sc-repair-next__quick-actions a {
+    flex: 0 0 auto;
+  }
+
+  .sc-repair-next__form {
+    border-left: 0 !important;
+    border-radius: 14px !important;
+    border-right: 0 !important;
+    margin-inline: -14px;
+    padding: 18px 14px !important;
+  }
+
+  .sc-repair-next__support {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sc-commercial-page__body {
+    gap: 14px !important;
+    padding-top: 18px !important;
+  }
+
+  .sc-commercial-capabilities {
+    grid-template-columns: 1fr !important;
+  }
+}
