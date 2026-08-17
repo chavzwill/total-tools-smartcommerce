@@ -54,6 +54,9 @@ jobs:
       - name: Authenticated commerce security regression gate
         run: npm run test:security-authenticated-commerce
 
+      - name: Platform gateway security regression gate
+        run: npm run test:security-platform-gateway
+
       - name: Guest checkout security regression gate
         run: npm run test:security-guest-checkout
 
