@@ -137,10 +137,12 @@ guard(
   /SMARTCOMMERCE_BUSINESS_ACCOUNT_ID[\s\S]*?SMARTCOMMERCE_PROVIDER_ID/,
 );
 
-// Baseline browser responses must carry anti-sniffing, anti-framing, referrer, and HSTS controls.
+// Baseline browser responses must carry transport, isolation, framing, capability, and referrer controls.
 guard("global anti-sniffing header", vercel, /"X-Content-Type-Options"[\s\S]*?"nosniff"/);
 guard("global anti-framing header", vercel, /"X-Frame-Options"[\s\S]*?"DENY"/);
 guard("global referrer policy", vercel, /"Referrer-Policy"[\s\S]*?"strict-origin-when-cross-origin"/);
 guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000"/);
+guard("global opener isolation header", vercel, /"Cross-Origin-Opener-Policy"[\s\S]*?"same-origin"/);
+guard("global browser capability policy", vercel, /"Permissions-Policy"[\s\S]*?camera=\(self\)[\s\S]*?microphone=\(\)[\s\S]*?geolocation=\(\)[\s\S]*?payment=\(\)[\s\S]*?usb=\(\)/);
 
 console.log(`Authorization regression gate passed: ${checks.length} invariants verified.`);
