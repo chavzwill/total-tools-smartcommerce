@@ -69,6 +69,9 @@ jobs:
       - name: Guest checkout security regression gate
         run: npm run test:security-guest-checkout
 
+      - name: Password step-up security regression gate
+        run: npm run test:security-step-up
+
       - name: MFA security regression gate
         run: npm run test:security-mfa
 
