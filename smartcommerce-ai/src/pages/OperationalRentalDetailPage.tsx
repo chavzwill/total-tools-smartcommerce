@@ -18,9 +18,20 @@ type ReservationDraft = {
   phone: string;
 };
 
+const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+
 const readQuery = () => {
   const raw = window.location.hash.split("?")[1] || "";
   return new URLSearchParams(raw);
+};
+
+const preferredPhysicalBranch = () => {
+  try {
+    const branch = window.localStorage.getItem(SHOPPING_BRANCH_KEY) || "";
+    return branch && branch !== "Online" && company.branches.some((item) => item.name === branch) ? branch : "";
+  } catch {
+    return "";
+  }
 };
 
 const daysBetween = (startDate: string, endDate: string) => {
@@ -37,7 +48,7 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const [reservation, setReservation] = useState<ReservationDraft>({
     startDate: query.get("start") || "",
     endDate: query.get("end") || "",
-    branch: query.get("branch") || "",
+    branch: query.get("branch") || preferredPhysicalBranch(),
     fulfillment: (query.get("fulfillment") === "delivery" || query.get("fulfillment") === "pickup" ? query.get("fulfillment") : "unspecified") as FulfillmentMode,
     fullName: "",
     email: "",
@@ -46,17 +57,19 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (!foundRental) return <div className="demo-empty"><h1>Rental not found</h1><a href={routeHref("/rentals")}>Return to rental fleet</a></div>;
+  if (!foundRental) {
+    return <div className="demo-empty"><h1>Rental not found</h1><a href={routeHref("/rentals")}>Return to rental fleet</a></div>;
+  }
   const rental = foundRental;
 
   const rentalDays = daysBetween(reservation.startDate, reservation.endDate);
-  const subtotal = rentalDays ? rental.dailyRate * rentalDays : 0;
+  const subtotal = rentalDays && rental.dailyRate > 0 ? rental.dailyRate * rentalDays : 0;
 
   async function submitReservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
     if (!reservation.startDate || !reservation.endDate || !reservation.branch || reservation.fulfillment === "unspecified") {
-      setError("Branch, dates, and pickup or delivery are required before requesting a reservation.");
+      setError("Choose a branch, rental dates, and pickup or delivery before requesting this reservation.");
       return;
     }
     if (reservation.endDate < reservation.startDate) {
@@ -94,7 +107,9 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   return (
     <div className="demo-page rental-detail-next">
       <Container className="rental-detail-next__container">
-        <nav className="rental-detail-next__breadcrumbs"><a href={routeHref("/rentals")}>Rentals</a><span>/</span><span>{rental.name}</span></nav>
+        <nav className="rental-detail-next__breadcrumbs">
+          <a href={routeHref("/rentals")}>Rentals</a><span>/</span><span>{rental.name}</span>
+        </nav>
 
         <section className="rental-detail-next__hero">
           <div className="rental-detail-next__media"><img src={rental.image} alt={rental.name} /></div>
@@ -102,49 +117,67 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
             <small>{rental.category}</small>
             <h1>{rental.name}</h1>
             <p>{rental.description}</p>
-            <div className="rental-detail-next__status"><CheckCircle2 size={18} /><div><strong>{rental.availability}</strong><span>{rental.branchAvailability}</span></div></div>
-            <div className="rental-detail-next__actions"><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Is ${rental.name} suitable for my job?`)}`)}><Sparkles size={16} /> Ask about this rental</a></div>
+
+            <div className="rental-detail-next__status">
+              <CheckCircle2 size={18} />
+              <div><strong>{rental.availability}</strong><span>{rental.branchAvailability}</span></div>
+            </div>
+
+            <div className="rental-detail-next__rate-grid" aria-label={`Rental rates for ${rental.name}`}>
+              <div><span>Daily</span><strong>{rental.dailyRate ? money(rental.dailyRate) : "Confirm rate"}</strong></div>
+              <div><span>Weekly</span><strong>{rental.weeklyRate ? money(rental.weeklyRate) : "Confirm rate"}</strong></div>
+              <div><span>Monthly</span><strong>{rental.monthlyRate ? money(rental.monthlyRate) : "Confirm rate"}</strong></div>
+            </div>
+
+            <div className="rental-detail-next__actions">
+              <a className="rental-detail-next__reserve-link" href="#rental-reservation"><CalendarDays size={16} /> Reserve this equipment</a>
+              <a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Is ${rental.name} suitable for my job?`)}`)}><Sparkles size={16} /> Ask SmartCommerce</a>
+            </div>
           </div>
         </section>
 
-        <section className="rental-detail-next__grid">
-          <article className="rental-detail-next__card">
-            <h2>Rates and planning</h2>
-            <div className="rental-detail-next__rate-grid">
-              <div><span>Daily rate</span><strong>{rental.dailyRate ? money(rental.dailyRate) : "Provider quote"}</strong></div>
-              <div><span>Weekly rate</span><strong>{rental.weeklyRate ? money(rental.weeklyRate) : "Provider quote"}</strong></div>
-              <div><span>Monthly rate</span><strong>{rental.monthlyRate ? money(rental.monthlyRate) : "Provider quote"}</strong></div>
-            </div>
-            <div className="rental-detail-next__estimate">
-              <div><span>Selected duration</span><strong>{rentalDays ? `${rentalDays} day${rentalDays === 1 ? "" : "s"}` : "Select dates"}</strong></div>
-              <div><span>Equipment subtotal</span><strong>{subtotal ? money(subtotal) : "Calculated after dates"}</strong></div>
-              <div><span>Delivery</span><strong>Verified by provider</strong></div>
-              <div><span>Final availability</span><strong>Verified on submission</strong></div>
-            </div>
-          </article>
+        <form id="rental-reservation" className="rental-detail-next__reservation" onSubmit={submitReservation}>
+          <header>
+            <span>Reservation</span>
+            <h2>Choose the details for your job.</h2>
+            <p>We only show a confirmation after the rental request is accepted.</p>
+          </header>
 
-          <article className="rental-detail-next__card">
-            <h2>Rental requirements</h2>
-            <p><MapPin size={16} /> Choose the branch that should handle the request.</p>
-            <p><CalendarDays size={16} /> Dates are sent to the provider as part of the reservation request.</p>
-            <p><Truck size={16} /> Pickup or delivery choice is included in the request.</p>
-          </article>
-        </section>
-
-        <form className="rental-detail-next__reservation" onSubmit={submitReservation}>
-          <header><h2>Request reservation</h2><p>This form does not show a success state until the connected provider accepts the request.</p></header>
           <div className="rental-detail-next__reservation-grid">
             <label>Branch<select required value={reservation.branch} onChange={(event) => setReservation((prev) => ({ ...prev, branch: event.target.value }))}><option value="">Select branch</option>{company.branches.map((branch) => <option key={branch.name} value={branch.name}>{branch.name}</option>)}</select></label>
             <label>Start date<input type="date" required value={reservation.startDate} onChange={(event) => setReservation((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
             <label>End date<input type="date" required value={reservation.endDate} onChange={(event) => setReservation((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
             <label>Pickup or delivery<select required value={reservation.fulfillment} onChange={(event) => setReservation((prev) => ({ ...prev, fulfillment: event.target.value as FulfillmentMode }))}><option value="unspecified">Choose</option><option value="pickup">Pickup</option><option value="delivery">Delivery</option></select></label>
-            <label>Full name<input required value={reservation.fullName} onChange={(event) => setReservation((prev) => ({ ...prev, fullName: event.target.value }))} /></label>
-            <label>Email<input type="email" required value={reservation.email} onChange={(event) => setReservation((prev) => ({ ...prev, email: event.target.value }))} /></label>
-            <label>Phone<input required value={reservation.phone} onChange={(event) => setReservation((prev) => ({ ...prev, phone: event.target.value }))} /></label>
+            <label>Full name<input autoComplete="name" required value={reservation.fullName} onChange={(event) => setReservation((prev) => ({ ...prev, fullName: event.target.value }))} /></label>
+            <label>Email<input autoComplete="email" type="email" required value={reservation.email} onChange={(event) => setReservation((prev) => ({ ...prev, email: event.target.value }))} /></label>
+            <label>Phone<input autoComplete="tel" inputMode="tel" required value={reservation.phone} onChange={(event) => setReservation((prev) => ({ ...prev, phone: event.target.value }))} /></label>
           </div>
+
+          <div className="rental-detail-next__estimate">
+            <div><span>Duration</span><strong>{rentalDays ? `${rentalDays} day${rentalDays === 1 ? "" : "s"}` : "Select dates"}</strong></div>
+            <div><span>Equipment estimate</span><strong>{subtotal ? money(subtotal) : "Calculated from dates"}</strong></div>
+            <div><span>Fulfillment</span><strong>{reservation.fulfillment === "unspecified" ? "Choose pickup or delivery" : reservation.fulfillment === "delivery" ? "Delivery" : "Pickup"}</strong></div>
+            <div><span>Availability</span><strong>Confirmed on request</strong></div>
+          </div>
+
           {error ? <p className="rental-context-bar__error" role="alert">{error}</p> : null}
           <button type="submit" disabled={submitting}>{submitting ? <><Loader2 size={16} /> Submitting…</> : "Request reservation"}</button>
         </form>
+
+        <section className="rental-detail-next__grid rental-detail-next__supporting">
+          <article className="rental-detail-next__card">
+            <h2>Before you reserve</h2>
+            <p><MapPin size={16} /> Your selected branch handles the request.</p>
+            <p><CalendarDays size={16} /> Dates are used to confirm equipment availability.</p>
+            <p><Truck size={16} /> Pickup or delivery is included with the request.</p>
+          </article>
+
+          <article className="rental-detail-next__card">
+            <h2>Need help choosing?</h2>
+            <p>Not sure this machine is right for the site, load, reach, or job? Ask SmartCommerce before you reserve.</p>
+            <a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Compare ${rental.name} with the best rental alternatives for my job`)}`)}><Sparkles size={16} /> Compare alternatives with AI</a>
+          </article>
+        </section>
       </Container>
     </div>
   );
