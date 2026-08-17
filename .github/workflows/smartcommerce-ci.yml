@@ -75,6 +75,9 @@ jobs:
       - name: Commercial financial policy security regression gate
         run: npm run test:security-commercial-financial-policy
 
+      - name: Commercial account security regression gate
+        run: npm run test:security-commercial-account
+
       - name: MFA security regression gate
         run: npm run test:security-mfa
 
