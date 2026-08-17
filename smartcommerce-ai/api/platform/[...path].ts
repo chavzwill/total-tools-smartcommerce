@@ -2,9 +2,17 @@ import { timingSafeEqual } from "node:crypto";
 import { handlePlatformRestRequest } from "../../src/backend/platformRestApi.js";
 import { createConfiguredTotalToolsPlatformService } from "../../src/integrations/totalToolsPlatformRuntime.js";
 import { executeIdempotentPlatformWrite } from "../../src/server/platformIdempotency.js";
+import {
+  enforceDurableRateLimit,
+  recordSecurityEvent,
+  requestIp,
+} from "../../src/server/securityInfrastructure.js";
 
 const service = createConfiguredTotalToolsPlatformService();
 const MAX_BODY_BYTES = 64 * 1024;
+const ASSISTANT_MAX_BODY_BYTES = 16 * 1024;
+const ASSISTANT_RATE_LIMIT = 30;
+const ASSISTANT_RATE_WINDOW_SECONDS = 300;
 const INTERNAL_TOKEN_ENV = "SMARTCOMMERCE_PLATFORM_INTERNAL_TOKEN";
 
 const firstHeader = (value: string | string[] | undefined) =>
@@ -21,6 +29,18 @@ const requestPath = (request: any) => {
     return new URL(String(request.url || "/"), "https://smartcommerce.local").pathname;
   } catch {
     return "/";
+  }
+};
+
+const sameOrigin = (request: any) => {
+  const origin = firstHeader(request.headers?.origin);
+  if (!origin) return true;
+  const host = firstHeader(request.headers?.host);
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
   }
 };
 
@@ -67,14 +87,14 @@ const internalAuthorization = (request: any) => {
   };
 };
 
-const readBody = async (request: AsyncIterable<unknown>) => {
+const readBody = async (request: AsyncIterable<unknown>, maxBodyBytes = MAX_BODY_BYTES) => {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of request) {
     if (chunk === undefined || chunk === null) continue;
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
     total += buffer.length;
-    if (total > MAX_BODY_BYTES) {
+    if (total > maxBodyBytes) {
       const error = new Error("PLATFORM_REQUEST_TOO_LARGE") as Error & { status?: number };
       error.status = 413;
       throw error;
@@ -84,7 +104,7 @@ const readBody = async (request: AsyncIterable<unknown>) => {
   return Buffer.concat(chunks);
 };
 
-const toRequest = async (request: any, privileged: boolean) => {
+const toRequest = async (request: any, privileged: boolean, maxBodyBytes = MAX_BODY_BYTES) => {
   const headers = new Headers();
   Object.entries(request.headers || {}).forEach(([key, value]) => {
     const normalized = key.toLowerCase();
@@ -114,7 +134,7 @@ const toRequest = async (request: any, privileged: boolean) => {
   const method = String(request.method || "GET").toUpperCase();
   const rawPath = String(request.url || "/api/platform");
   const url = new URL(rawPath, "https://smartcommerce.internal").toString();
-  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
+  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request, maxBodyBytes);
 
   return new Request(url, {
     method,
@@ -144,6 +164,7 @@ export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const path = requestPath(request);
   const publicPath = isPublicPlatformPath(method, path);
+  const assistantPublicPost = method === "POST" && path === "/api/platform/assistant";
   const authorization = internalAuthorization(request);
 
   if (!publicPath) {
@@ -170,7 +191,60 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const platformRequest = await toRequest(request, authorization.authorized);
+    if (assistantPublicPost) {
+      if (!sameOrigin(request)) {
+        await recordSecurityEvent({
+          request,
+          eventType: "platform_assistant_origin_rejected",
+          eventStatus: "blocked",
+          riskLevel: "medium",
+        }).catch(() => undefined);
+        return sendJson(response, 403, {
+          success: false,
+          error: {
+            code: "ORIGIN_REJECTED",
+            message: "This assistant request was rejected.",
+            retryable: false,
+          },
+        });
+      }
+
+      try {
+        await enforceDurableRateLimit({
+          request,
+          action: "platform_assistant_ip",
+          subject: requestIp(request),
+          limit: ASSISTANT_RATE_LIMIT,
+          windowSeconds: ASSISTANT_RATE_WINDOW_SECONDS,
+        });
+      } catch (error) {
+        if (Number((error as any)?.status) !== 429 && (error as Error)?.message !== "RATE_LIMITED") throw error;
+        const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || ASSISTANT_RATE_WINDOW_SECONDS));
+        response.setHeader("Retry-After", String(retryAfter));
+        await recordSecurityEvent({
+          request,
+          eventType: "platform_assistant_rate_limited",
+          eventStatus: "blocked",
+          riskLevel: "medium",
+          metadata: { retryAfterSeconds: retryAfter },
+        }).catch(() => undefined);
+        return sendJson(response, 429, {
+          success: false,
+          error: {
+            code: "RATE_LIMITED",
+            message: "Too many assistant requests. Please wait and try again.",
+            retryable: true,
+            retryAfterSeconds: retryAfter,
+          },
+        });
+      }
+    }
+
+    const platformRequest = await toRequest(
+      request,
+      authorization.authorized,
+      assistantPublicPost ? ASSISTANT_MAX_BODY_BYTES : MAX_BODY_BYTES,
+    );
     const protectedWrite = idempotentOperation(method, path);
     const platformResponse = protectedWrite
       ? await executeIdempotentPlatformWrite({
@@ -188,7 +262,9 @@ export default async function handler(request: any, response: any) {
         success: false,
         error: {
           code: "PLATFORM_REQUEST_TOO_LARGE",
-          message: "The platform request body exceeds the allowed size.",
+          message: assistantPublicPost
+            ? "The assistant request body exceeds the allowed size."
+            : "The platform request body exceeds the allowed size.",
           retryable: false,
         },
       });
