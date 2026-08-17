@@ -51,6 +51,9 @@ jobs:
       - name: Account recovery security regression gate
         run: npm run test:security-account-recovery
 
+      - name: Authenticated commerce security regression gate
+        run: npm run test:security-authenticated-commerce
+
       - name: Guest checkout security regression gate
         run: npm run test:security-guest-checkout
 
