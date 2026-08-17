@@ -1,7 +1,6 @@
 import { AlertTriangle, BriefcaseBusiness, Building2, CheckCircle2, FolderKanban, Loader2, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
-import rentalImage from "../assets/services/equipment-rentals.jpg";
 import { createSmartCommercePlatformApi } from "../apiClient";
 import { routeHref } from "../lib/router";
 import {
@@ -15,10 +14,29 @@ import {
 } from "../services/commercialAccountClient";
 import { company } from "../styles/theme";
 
+const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+
 const getProviderContext = () => {
   const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
   const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
   return businessAccountId && providerId ? { businessAccountId, providerId } : undefined;
+};
+
+const getRequestContext = () => {
+  const raw = window.location.hash.split("?")[1] || "";
+  const query = new URLSearchParams(raw);
+  let branch = "";
+  try {
+    const stored = window.localStorage.getItem(SHOPPING_BRANCH_KEY) || "";
+    branch = company.branches.some((item) => item.name === stored) ? stored : "";
+  } catch {
+    branch = "";
+  }
+  return {
+    item: query.get("item") || "",
+    mode: query.get("mode") || "",
+    branch,
+  };
 };
 
 function verificationLabel(status?: string) {
@@ -30,11 +48,12 @@ function verificationLabel(status?: string) {
 }
 
 export default function CommercialPage({ quote = false }: { quote?: boolean }) {
+  const requestContext = useMemo(getRequestContext, []);
   const [businessName, setBusinessName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
-  const [need, setNeed] = useState(quote ? "Bulk product pricing" : "Project support");
-  const [details, setDetails] = useState("");
+  const [need, setNeed] = useState(quote || requestContext.mode === "quote" ? "Bulk product pricing" : requestContext.mode === "maintenance" ? "Project support" : "Project support");
+  const [details, setDetails] = useState(requestContext.item ? `I need commercial support for: ${requestContext.item}` : "");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [accounts, setAccounts] = useState<CommercialAccountSummary[]>([]);
@@ -170,7 +189,11 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       customerAccountId: undefined,
       companyName: businessName,
       requestDetails: `${need}: ${details}`,
-      customerNotes: `Contact: ${contactName} · ${email}`,
+      customerNotes: [
+        `Contact: ${contactName} · ${email}`,
+        requestContext.branch ? `Shopping branch: ${requestContext.branch}` : "",
+        requestContext.item ? `Source item: ${requestContext.item}` : "",
+      ].filter(Boolean).join("\n"),
     });
     if (!result.success) {
       setStatus("error");
@@ -190,18 +213,33 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
         <Container>
           <div>
             <span>Total Tools Commercial</span>
-            <h1>Built for serious projects. Protected like serious money.</h1>
-            <p>Apply for a commercial account, plan jobs and projects, then unlock commercial privileges only after organisation, authority and provider verification.</p>
-            <div className="sc-commercial-hero-actions"><a href="#commercial-account">Commercial account</a><a href="#commercial-request">Request a quote</a><a href={routeHref("/rentals")}>Plan rentals</a></div>
+            <h1>Products, rentals and project support for the work that cannot wait.</h1>
+            <p>Request pricing now, or sign in to manage a verified commercial account, job sites and projects.</p>
+            <div className="sc-commercial-hero-actions"><a href="#commercial-request">Request pricing</a><a href="#commercial-account">Commercial account</a><a href={routeHref("/rentals")}>Plan rentals</a></div>
           </div>
-          <img src={rentalImage} alt="Professional equipment for commercial projects" />
         </Container>
       </section>
 
       <Container className="demo-commercial-body sc-commercial-page__body">
+        <form id="commercial-request" className="demo-flow-form sc-commercial-request" onSubmit={submit}>
+          <BriefcaseBusiness size={30} />
+          <span className="sc-flow-kicker">Commercial request</span>
+          <h2>{quote || requestContext.mode === "quote" ? "Request commercial pricing" : "What does the business need?"}</h2>
+          {requestContext.item ? <p className="sc-commercial-request__context"><strong>From your product:</strong> {requestContext.item}</p> : null}
+          {requestContext.branch ? <p className="sc-commercial-request__context"><MapPin size={15} /> Shopping from {requestContext.branch}</p> : null}
+          <label>Business or organisation<input required value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
+          <label>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
+          <label>Work email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+          <label>Business need<select value={need} onChange={(event) => setNeed(event.target.value)}><option>Project support</option><option>Bulk product pricing</option><option>Fleet rentals</option><option>Commercial quote</option><option>Delivery and logistics enquiry</option></select></label>
+          <label>Requirement<textarea required value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Products, quantities, site needs, dates, or project context" /></label>
+          <button type="submit" disabled={status === "submitting"}>{status === "submitting" ? <><Loader2 size={17} /> Sending request…</> : "Send commercial request"}</button>
+          {status === "success" ? <p className="sc-flow-status is-success" role="status"><CheckCircle2 size={16} /> {message}</p> : null}
+          {status === "error" ? <p className="sc-flow-status is-error" role="status">{message}</p> : null}
+        </form>
+
         <section id="commercial-account">
-          <span className="sc-flow-kicker">Commercial workspace</span>
-          <h2>Apply, verify, then transact.</h2>
+          <span className="sc-flow-kicker">Commercial account</span>
+          <h2>Apply, verify, then unlock account privileges.</h2>
           {accountState === "loading" ? <p><Loader2 size={16} /> Loading commercial access…</p> : null}
           {accountState === "signed-out" ? <div className="sc-commercial-contact"><strong>Sign in to apply for or manage a commercial account.</strong><a href={routeHref("/account")}>Sign in or create an account</a></div> : null}
           {accountState === "error" ? <p className="sc-flow-status is-error">Commercial accounts are temporarily unavailable.</p> : null}
@@ -258,30 +296,12 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
           </> : null}
         </section>
 
-        <section>
-          <span className="sc-flow-kicker">Commercial support</span>
-          <h2>Need pricing or project support now?</h2>
-          <div className="sc-commercial-capabilities">
-            <article><strong>Project and bulk enquiries</strong><p>Describe products, quantities, dates, and site requirements together.</p></article>
-            <article><strong>Rental planning</strong><p>Move directly into equipment, dates, branches, and availability.</p></article>
-            <article><strong>Verification-aware commerce</strong><p>Account-specific pricing and terms stay locked until the connected provider confirms them.</p></article>
-            <article><strong>Human assistance</strong><p>Phone, WhatsApp, and email remain visible when verification or a workflow needs a person.</p></article>
-          </div>
+        <section className="sc-commercial-support">
+          <span className="sc-flow-kicker">Need a person?</span>
+          <h2>Commercial support stays reachable.</h2>
+          <p>For verification, complex project requirements, delivery planning or anything the online workflow cannot finish, contact the Total Tools team directly.</p>
           <div className="sc-commercial-contact"><strong>Contact Total Tools</strong><a href={`tel:${company.phone.replace(/[^0-9+]/g, "")}`}>{company.phone}</a><a href={`mailto:${company.email}`}>{company.email}</a><a href={`https://wa.me/${company.whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer">WhatsApp</a></div>
         </section>
-
-        <form id="commercial-request" className="demo-flow-form" onSubmit={submit}>
-          <BriefcaseBusiness size={30} />
-          <h2>{quote ? "Request commercial pricing" : "Tell us what the business needs"}</h2>
-          <label>Business name<input required value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
-          <label>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
-          <label>Work email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-          <label>Business need<select value={need} onChange={(event) => setNeed(event.target.value)}><option>Project support</option><option>Bulk product pricing</option><option>Fleet rentals</option><option>Commercial quote</option><option>Delivery and logistics enquiry</option></select></label>
-          <label>Requirement<textarea required value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Products, quantities, site needs, dates, or project context" /></label>
-          <button type="submit" disabled={status === "submitting"}>{status === "submitting" ? <><Loader2 size={17} /> Submitting…</> : "Send commercial request"}</button>
-          {status === "success" ? <p className="sc-flow-status is-success" role="status"><CheckCircle2 size={16} /> {message}</p> : null}
-          {status === "error" ? <p className="sc-flow-status is-error" role="status">{message}</p> : null}
-        </form>
       </Container>
     </div>
   );
