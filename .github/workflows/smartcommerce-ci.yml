@@ -42,5 +42,8 @@ jobs:
       - name: Authorization regression gate
         run: npm run test:security-authz
 
+      - name: Storefront stability regression gate
+        run: npm run test:stability
+
       - name: Production build
         run: npm run build
