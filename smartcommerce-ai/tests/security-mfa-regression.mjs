@@ -20,7 +20,7 @@ guard("TOTP secrets use AES-256-GCM", /createCipheriv\("aes-256-gcm"[\s\S]*?getA
 guard("MFA encryption key is required from environment", /SMARTCOMMERCE_MFA_ENCRYPTION_KEY[\s\S]*?length<32/);
 guard("TOTP validation uses timing safe comparison", /validTotp[\s\S]*?timingSafeEqual\(expected,actual\)/);
 guard("TOTP enrollment requires recent step up", /action==="totp_begin"[\s\S]*?sessionRequiresStepUp\(\{tokenHash,maxAuthenticationAgeSeconds:600\}\)/);
-guard("TOTP disable requires strong step up", /action==="disable_totp"[\s\S]*?STRONG_STEP_UP_REQUIRED[\s\S]*?\['mfa','passkey'\]\.includes\(session\.auth_level\)/);
+guard("TOTP disable requires strong step up", /action==="disable_totp"[\s\S]*?sessionRequiresStepUp\(\{tokenHash,maxAuthenticationAgeSeconds:600\}\)[\s\S]*?\['mfa','passkey'\]\.includes\(session\.auth_level\)[\s\S]*?STRONG_STEP_UP_REQUIRED/);
 guard("Recovery codes are stored hashed", /function recoveryHash\(code:string\)\{return `sha256:\$\{createHash\("sha256"\)/);
 guard("Recovery codes are one time use", /action==="recovery_verify"[\s\S]*?UPDATE customer_authenticators SET revoked_at=NOW\(\),status='revoked',last_used_at=NOW\(\)/);
 guard("Successful MFA grants bounded step up", /const STEP_UP_TTL_MS = 10 \* 60 \* 1000[\s\S]*?step_up_expires_at/);
