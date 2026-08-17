@@ -11,6 +11,7 @@
     "test:security-session-management": "node tests/security-session-management-regression.mjs",
     "test:security-account-recovery": "node tests/security-account-recovery-regression.mjs",
     "test:security-authenticated-commerce": "node tests/security-authenticated-commerce-regression.mjs",
+    "test:security-platform-gateway": "node tests/security-platform-gateway-regression.mjs",
     "test:security-guest-checkout": "node tests/security-guest-checkout-regression.mjs",
     "test:security-mfa": "node tests/security-mfa-regression.mjs",
     "test:security-passkey": "node tests/security-passkey-regression.mjs",
