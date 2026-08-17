@@ -17,6 +17,7 @@
     "test:security-monitor-endpoint": "node tests/security-monitor-endpoint-regression.mjs",
     "test:security-guest-checkout": "node tests/security-guest-checkout-regression.mjs",
     "test:security-step-up": "node tests/security-step-up-regression.mjs",
+    "test:security-commercial-financial-policy": "node tests/security-commercial-financial-policy-regression.mjs",
     "test:security-mfa": "node tests/security-mfa-regression.mjs",
     "test:security-passkey": "node tests/security-passkey-regression.mjs",
     "test:stability": "node tests/storefront-stability-regression.mjs",
