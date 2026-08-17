@@ -45,6 +45,9 @@ jobs:
       - name: Session security regression gate
         run: npm run test:security-session
 
+      - name: Guest checkout security regression gate
+        run: npm run test:security-guest-checkout
+
       - name: Storefront stability regression gate
         run: npm run test:stability
 
