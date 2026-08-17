@@ -147,4 +147,9 @@ guard("global browser capability policy", vercel, /"Permissions-Policy"[\s\S]*?c
 guard("global CSP object and frame restrictions", vercel, /"Content-Security-Policy"[\s\S]*?base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'/);
 guard("global cross-domain policy lockout", vercel, /"X-Permitted-Cross-Domain-Policies"[\s\S]*?"none"/);
 
+// API responses may contain customer, quote, inventory, and workflow data and must never be cached or indexed.
+guard("API responses are no-store", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"Cache-Control"[\s\S]*?"private, no-store, max-age=0"/);
+guard("API responses disable legacy caches", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"Pragma"[\s\S]*?"no-cache"/);
+guard("API responses are excluded from search indexing", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"X-Robots-Tag"[\s\S]*?"noindex, nofollow, noarchive"/);
+
 console.log(`Authorization regression gate passed: ${checks.length} invariants verified.`);
