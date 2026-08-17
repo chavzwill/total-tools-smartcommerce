@@ -1,5 +1,6 @@
 name: SmartCommerce CI
 
+# Runner diagnostic retrigger: no application behavior change.
 on:
   push:
     branches:
