@@ -63,6 +63,9 @@ jobs:
       - name: Integrity endpoint security regression gate
         run: npm run test:security-integrity-endpoint
 
+      - name: Security monitor endpoint regression gate
+        run: npm run test:security-monitor-endpoint
+
       - name: Guest checkout security regression gate
         run: npm run test:security-guest-checkout
 
