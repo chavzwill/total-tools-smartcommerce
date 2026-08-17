@@ -9,6 +9,7 @@ import "../../styles/commerce-shell.css";
 import "../../styles/shopping-experience.css";
 import "../../styles/product-detail.css";
 import "../../styles/home-experience.css";
+import "../../styles/service-commercial.css";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
