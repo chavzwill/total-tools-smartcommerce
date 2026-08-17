@@ -1,7 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
-import { firstHeader, verifySecurityEventIntegrity } from "../src/server/securityInfrastructure.js";
+import {
+  enforceDurableRateLimit,
+  firstHeader,
+  recordSecurityEvent,
+  requestIp,
+  verifySecurityEventIntegrity,
+} from "../src/server/securityInfrastructure.js";
 
 const INTERNAL_TOKEN_ENV = "SMARTCOMMERCE_PLATFORM_INTERNAL_TOKEN";
+const INTEGRITY_PROBE_LIMIT = 30;
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left);
@@ -38,6 +45,36 @@ export default async function handler(request: any, response: any) {
     });
   }
 
+  try {
+    await enforceDurableRateLimit({
+      request,
+      action: "security_integrity_probe_ip",
+      subject: requestIp(request),
+      limit: INTEGRITY_PROBE_LIMIT,
+      windowSeconds: 300,
+    });
+  } catch (error) {
+    if (Number((error as any)?.status) === 429 || (error instanceof Error && error.message === "RATE_LIMITED")) {
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 60));
+      response.setHeader("Retry-After", String(retryAfter));
+      await recordSecurityEvent({
+        request,
+        eventType: "security_integrity_probe_blocked",
+        eventStatus: "rate_limited",
+        riskLevel: "medium",
+        metadata: { retryAfterSeconds: retryAfter },
+      }).catch(() => undefined);
+      return send(response, 429, {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many integrity verification requests. Try again later.",
+          retryAfterSeconds: retryAfter,
+        },
+      });
+    }
+    throw error;
+  }
+
   const auth = authorized(request);
   if (!auth.configured) {
     return send(response, 503, {
@@ -48,6 +85,12 @@ export default async function handler(request: any, response: any) {
     });
   }
   if (!auth.allowed) {
+    await recordSecurityEvent({
+      request,
+      eventType: "security_integrity_auth_rejected",
+      eventStatus: "blocked",
+      riskLevel: "medium",
+    }).catch(() => undefined);
     return send(response, 401, {
       error: { code: "SECURITY_INTEGRITY_AUTH_REQUIRED", message: "Trusted server authorization is required." },
     });
@@ -66,6 +109,13 @@ export default async function handler(request: any, response: any) {
         code: result.code,
         checkedEvents: result.checkedEvents,
       });
+      await recordSecurityEvent({
+        request,
+        eventType: "security_audit_integrity_failed",
+        eventStatus: "integrity_failure",
+        riskLevel: "critical",
+        metadata: { code: result.code, checkedEvents: result.checkedEvents },
+      }).catch(() => undefined);
       return send(response, 409, {
         ok: false,
         integrity: {
