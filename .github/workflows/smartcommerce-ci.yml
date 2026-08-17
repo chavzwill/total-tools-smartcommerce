@@ -48,6 +48,9 @@ jobs:
       - name: Session management security regression gate
         run: npm run test:security-session-management
 
+      - name: Account recovery security regression gate
+        run: npm run test:security-account-recovery
+
       - name: Guest checkout security regression gate
         run: npm run test:security-guest-checkout
 
