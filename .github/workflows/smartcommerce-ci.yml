@@ -51,6 +51,9 @@ jobs:
       - name: MFA security regression gate
         run: npm run test:security-mfa
 
+      - name: Passkey security regression gate
+        run: npm run test:security-passkey
+
       - name: Storefront stability regression gate
         run: npm run test:stability
 
