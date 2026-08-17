@@ -14,6 +14,7 @@
     "test:security-platform-gateway": "node tests/security-platform-gateway-regression.mjs",
     "test:security-assistant-gateway": "node tests/security-assistant-gateway-regression.mjs",
     "test:security-integrity-endpoint": "node tests/security-integrity-endpoint-regression.mjs",
+    "test:security-monitor-endpoint": "node tests/security-monitor-endpoint-regression.mjs",
     "test:security-guest-checkout": "node tests/security-guest-checkout-regression.mjs",
     "test:security-mfa": "node tests/security-mfa-regression.mjs",
     "test:security-passkey": "node tests/security-passkey-regression.mjs",
