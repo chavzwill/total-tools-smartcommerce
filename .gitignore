@@ -1,4 +1,9 @@
 smartcommerce-ai/node_modules/
 smartcommerce-ai/dist/
+smartcommerce-ai/.vercel/
+smartcommerce-ai/.env
+smartcommerce-ai/.env.*
+!smartcommerce-ai/.env.example
+smartcommerce-ai/coverage/
 *.log
 *.tsbuildinfo
