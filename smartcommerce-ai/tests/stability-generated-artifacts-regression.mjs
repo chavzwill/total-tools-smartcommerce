@@ -8,8 +8,11 @@ const forbiddenFiles = [
   "vite.config.js",
   "vite.config.cjs",
   "vite.config.mjs",
+  "vite.config.d.ts",
   "tsconfig.tsbuildinfo",
   "tsconfig.node.tsbuildinfo",
+  "vite.log",
+  "vite.err.log",
 ];
 
 for (const relative of forbiddenFiles) {
@@ -17,6 +20,37 @@ for (const relative of forbiddenFiles) {
     failures.push(`${relative}: generated or shadow build artifact must not be tracked`);
   }
 }
+
+const srcPath = path.resolve(root, "src");
+
+function walkForGeneratedSiblings(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkForGeneratedSiblings(full);
+      continue;
+    }
+
+    const relative = path.relative(root, full).replaceAll(path.sep, "/");
+    if (entry.name.endsWith(".js")) {
+      const tsSibling = full.slice(0, -3) + ".ts";
+      const tsxSibling = full.slice(0, -3) + ".tsx";
+      if (fs.existsSync(tsSibling) || fs.existsSync(tsxSibling)) {
+        failures.push(`${relative}: generated JavaScript shadows a TypeScript source sibling`);
+      }
+    }
+
+    if (entry.name.endsWith(".d.ts")) {
+      const tsSibling = full.slice(0, -5) + ".ts";
+      const tsxSibling = full.slice(0, -5) + ".tsx";
+      if (fs.existsSync(tsSibling) || fs.existsSync(tsxSibling)) {
+        failures.push(`${relative}: generated declaration file duplicates a TypeScript source sibling`);
+      }
+    }
+  }
+}
+
+if (fs.existsSync(srcPath)) walkForGeneratedSiblings(srcPath);
 
 const distPath = path.resolve(root, "dist");
 if (fs.existsSync(distPath)) {
@@ -30,6 +64,7 @@ if (fs.existsSync(gitignorePath)) {
     "smartcommerce-ai/node_modules/",
     "smartcommerce-ai/dist/",
     "*.tsbuildinfo",
+    "*.log",
   ];
 
   for (const rule of requiredRules) {
