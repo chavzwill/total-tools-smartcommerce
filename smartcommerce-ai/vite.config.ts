@@ -64,16 +64,10 @@ const firstHeader = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
 const resolvePlatformContext = (request: Request): PosAdapterContext => ({
-  businessAccountId:
-    request.headers.get("x-business-account-id") ||
-    process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID ||
-    "",
+  businessAccountId: process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID || "",
   providerId:
-    request.headers.get("x-provider-id") ||
     process.env.SMARTCOMMERCE_PROVIDER_ID ||
     (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "unsupported"),
-  connectionId: request.headers.get("x-connection-id") || undefined,
-  actorId: request.headers.get("x-actor-id") || undefined,
   requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
   locale: request.headers.get("accept-language") || undefined,
   timezone: request.headers.get("x-timezone") || undefined,
