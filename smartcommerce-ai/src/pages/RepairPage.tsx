@@ -1,4 +1,4 @@
-import { CheckCircle2, ImageUp, Loader2, MapPin, Sparkles, Wrench } from "lucide-react";
+import { CheckCircle2, Loader2, MapPin, Sparkles, Wrench } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { getRepairTypes, submitRepairRequestToPlatform } from "../data/repairs";
@@ -29,7 +29,6 @@ export default function RepairPage() {
   const [branch, setBranch] = useState(getInitialBranch);
   const [date, setDate] = useState("");
   const [contact, setContact] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -52,7 +51,6 @@ export default function RepairPage() {
     const notes = [
       branch ? `Preferred branch: ${branch}` : "",
       contact ? `Customer contact: ${contact}` : "",
-      photos.length ? `${photos.length} photo(s) selected; provider file-upload transfer is not configured in this frontend flow.` : "",
     ].filter(Boolean).join("\n");
 
     const result = await submitRepairRequestToPlatform({
@@ -82,7 +80,6 @@ export default function RepairPage() {
           <p>Identify the equipment, describe the symptom, choose where you want it handled, and send the request to the service team.</p>
           <div className="sc-repair-next__quick-actions">
             <a href={routeHref("/assistant?prompt=Help%20me%20describe%20an%20equipment%20fault")}><Sparkles size={16} /> Help me diagnose it</a>
-            <a href={routeHref("/account")}>View repair history</a>
             <a href={routeHref("/commercial?mode=maintenance")}>Commercial maintenance</a>
           </div>
         </section>
@@ -105,10 +102,7 @@ export default function RepairPage() {
             </div>
             <label>Describe the issue<textarea required value={issue} onChange={(event) => setIssue(event.target.value)} placeholder="For example: starts, loses pressure after a minute, then makes a rattling sound." /></label>
             {issueHints.length ? <div className="sc-repair-hints"><span>Common symptoms for this equipment</span>{issueHints.map((hint) => <button type="button" key={hint} onClick={() => setIssue(hint)}>{hint}</button>)}</div> : null}
-            <label>Photos
-              <span className="demo-file-input"><ImageUp size={20} /> Add equipment or model-plate photos<input type="file" accept="image/*" multiple onChange={(event) => setPhotos(Array.from(event.target.files || []))} /></span>
-              <small>{photos.length ? `${photos.length} selected. ` : ""}Photos are kept local until a provider upload connection is available.</small>
-            </label>
+            <p className="sc-flow-note">Photo attachments will appear here only after the connected service provider supports file transfer. SmartCommerce will not ask you to select files that it cannot submit.</p>
 
             <div className="sc-repair-next__step">
               <span>3</span>
