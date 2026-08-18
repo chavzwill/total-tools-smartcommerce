@@ -12,6 +12,7 @@ import "../../styles/home-experience.css";
 import "../../styles/service-commercial.css";
 import "../../styles/assistant-experience.css";
 import "../../styles/product-match-experience.css";
+import "../../styles/accessibility-responsive.css";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
