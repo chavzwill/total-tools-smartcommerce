@@ -147,7 +147,7 @@ export default defineConfig({
               platformBackendService
             );
             await sendFetchResponse(response, platformResponse);
-          } catch (error) {
+          } catch {
             await sendFetchResponse(
               response,
               new Response(
@@ -156,10 +156,6 @@ export default defineConfig({
                   error: {
                     code: "PLATFORM_REST_ROUTER_ERROR",
                     message: "The platform REST router failed to handle the request.",
-                    details:
-                      error instanceof Error
-                        ? { name: error.name, message: error.message }
-                        : error,
                     retryable: false,
                   },
                 }),
