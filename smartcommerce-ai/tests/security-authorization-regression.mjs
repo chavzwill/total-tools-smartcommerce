@@ -141,7 +141,7 @@ guard(
 guard("global anti-sniffing header", vercel, /"X-Content-Type-Options"[\s\S]*?"nosniff"/);
 guard("global anti-framing header", vercel, /"X-Frame-Options"[\s\S]*?"DENY"/);
 guard("global referrer policy", vercel, /"Referrer-Policy"[\s\S]*?"strict-origin-when-cross-origin"/);
-guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000"/);
+guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000(?:;[^\"]*)?"/);
 guard("global opener isolation header", vercel, /"Cross-Origin-Opener-Policy"[\s\S]*?"same-origin"/);
 guard("global browser capability policy", vercel, /"Permissions-Policy"[\s\S]*?camera=\(self\)[\s\S]*?microphone=\(\)[\s\S]*?geolocation=\(\)[\s\S]*?payment=\(\)[\s\S]*?usb=\(\)/);
 guard("global CSP object and frame restrictions", vercel, /"Content-Security-Policy"[\s\S]*?base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'/);
