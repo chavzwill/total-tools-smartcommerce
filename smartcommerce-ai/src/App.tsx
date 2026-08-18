@@ -96,7 +96,7 @@ export default function App() {
   else if (path === "/repairs") page = <RepairPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
   else if (path === "/deals") page = <DealsPage />;
-  else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} />;
+  else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} onAdd={actions.onAdd} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
   else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
   else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
