@@ -287,10 +287,11 @@ export default async function handler(request: any, response: any) {
         await recordSecurityEvent({ request, eventType: "email_verification_failed", eventStatus: "invalid_token", riskLevel: "medium" });
         return send(response, 400, { error: { code: "INVALID_TOKEN", message: "That verification link is invalid or expired." } });
       }
-      await enforceDurableRateLimit({ request, action: "verification_token", subject: rawToken, limit: 8 });
+      const tokenFingerprint = hashToken(rawToken);
+      await enforceDurableRateLimit({ request, action: "verification_token", subject: tokenFingerprint, limit: 8 });
       const customerId = await consumeVerification(rawToken);
       if (!customerId) {
-        await recordSecurityEvent({ request, eventType: "email_verification_failed", eventStatus: "invalid_or_expired", riskLevel: "medium", subject: rawToken });
+        await recordSecurityEvent({ request, eventType: "email_verification_failed", eventStatus: "invalid_or_expired", riskLevel: "medium", subject: tokenFingerprint });
         return send(response, 400, { error: { code: "INVALID_TOKEN", message: "That verification link is invalid or expired." } });
       }
       await recordSecurityEvent({ request, eventType: "email_verified", eventStatus: "success", riskLevel: "info", customerId });
@@ -321,14 +322,15 @@ export default async function handler(request: any, response: any) {
       await ipRateLimit(request, action, 20);
       const rawToken = String(input.token || "");
       const password = String(input.password || "");
-      if (rawToken) await enforceDurableRateLimit({ request, action: "password_reset_token", subject: rawToken, limit: 8 });
+      const tokenFingerprint = rawToken ? hashToken(rawToken) : null;
+      if (tokenFingerprint) await enforceDurableRateLimit({ request, action: "password_reset_token", subject: tokenFingerprint, limit: 8 });
       if (rawToken.length < 32 || rawToken.length > 128 || !passwordAllowed(password)) {
-        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_reset", riskLevel: "medium", subject: rawToken || null });
+        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_reset", riskLevel: "medium", subject: tokenFingerprint });
         return send(response, 400, { error: { code: "INVALID_RESET", message: "That reset link is invalid or expired, or the new password does not meet requirements." } });
       }
       const customerId = await consumePasswordReset(rawToken, password);
       if (!customerId) {
-        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_or_expired", riskLevel: "high", subject: rawToken });
+        await recordSecurityEvent({ request, eventType: "password_reset_failed", eventStatus: "invalid_or_expired", riskLevel: "high", subject: tokenFingerprint });
         return send(response, 400, { error: { code: "INVALID_RESET", message: "That reset link is invalid or expired." } });
       }
       await recordSecurityEvent({ request, eventType: "password_reset_succeeded", eventStatus: "success_sessions_revoked", riskLevel: "medium", customerId });
