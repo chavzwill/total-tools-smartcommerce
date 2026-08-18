@@ -1,4 +1,13 @@
-import { AlertCircle, Camera, CheckCircle2, ImageUp, ScanSearch, Store, UserCheck } from "lucide-react";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  ImageUp,
+  RefreshCw,
+  ScanSearch,
+  Store,
+  UserCheck,
+} from "lucide-react";
 import { ChangeEvent, useRef, useState } from "react";
 import Container from "../components/shared/Container";
 import toolsImage from "../assets/smartcommerce-tools-optimized.jpg";
@@ -11,7 +20,8 @@ type Props = { onAdd: (id: string) => void };
 type MatchState = "idle" | "preparing" | "scanning" | "results" | "error";
 
 function productImage(product: CommerceProduct) {
-  return [...(product.images || [])].sort((a, b) => (a.position || 0) - (b.position || 0))[0]?.url;
+  return [...(product.images || [])]
+    .sort((a, b) => (a.position || 0) - (b.position || 0))[0]?.url;
 }
 
 function productPrice(product: CommerceProduct) {
@@ -25,16 +35,39 @@ function productPrice(product: CommerceProduct) {
 function formatPrice(product: CommerceProduct) {
   const price = productPrice(product);
   if (!price) return "Price unavailable";
-  try { return new Intl.NumberFormat("en-JM", { style: "currency", currency: price.currency, maximumFractionDigits: 2 }).format(price.value); }
-  catch { return `${price.currency} ${price.value.toLocaleString("en-JM")}`; }
+  try {
+    return new Intl.NumberFormat("en-JM", {
+      style: "currency",
+      currency: price.currency,
+      maximumFractionDigits: 2,
+    }).format(price.value);
+  } catch {
+    return `${price.currency} ${price.value.toLocaleString("en-JM")}`;
+  }
 }
 
-function availabilityLabel(availability: InventoryAvailability[], branchNames: Record<string, string>) {
-  const available = availability.filter((item) => ["in_stock", "low_stock"].includes(item.status));
+function availabilityLabel(
+  availability: InventoryAvailability[],
+  branchNames: Record<string, string>
+) {
+  const available = availability.filter((item) =>
+    ["in_stock", "low_stock"].includes(item.status)
+  );
   if (!availability.length) return "Availability not returned by provider";
   if (!available.length) return "No confirmed branch stock";
-  const labels = available.map((item) => item.branchId ? branchNames[String(item.branchId)] || `Branch ${item.branchId}` : "Available");
+  const labels = available.map((item) =>
+    item.branchId
+      ? branchNames[String(item.branchId)] || `Branch ${item.branchId}`
+      : "Available"
+  );
   return Array.from(new Set(labels)).join(", ");
+}
+
+function confidenceLabel(value: number, needsClarification: boolean) {
+  if (needsClarification) return "Needs another clue";
+  if (value >= 0.85) return "Strong catalogue match";
+  if (value >= 0.65) return "Good catalogue match";
+  return "Possible catalogue match";
 }
 
 export default function ProductMatchPage({ onAdd }: Props) {
@@ -49,15 +82,21 @@ export default function ProductMatchPage({ onAdd }: Props) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+
     setState("preparing");
     setError("");
     setResult(null);
+
     try {
       const imageDataUrl = await prepareProductMatchImage(file);
       setPreview(imageDataUrl);
       setState("scanning");
       const response = await matchProductPhoto(imageDataUrl);
-      if (!response.success) { setError(response.error.message); setState("error"); return; }
+      if (!response.success) {
+        setError(response.error.message);
+        setState("error");
+        return;
+      }
       setResult(response.data);
       setState("results");
     } catch (cause) {
@@ -68,30 +107,265 @@ export default function ProductMatchPage({ onAdd }: Props) {
 
   const top = result?.candidates[0];
   const alternatives = result?.candidates.slice(1) || [];
-  const analysisSummary = result ? [result.analysis.brand, result.analysis.model, result.analysis.productType].filter(Boolean).join(" · ") : "";
+  const analysisSummary = result
+    ? [result.analysis.brand, result.analysis.model, result.analysis.productType]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  const evidence = result
+    ? Array.from(
+        new Set([
+          ...result.analysis.visibleText,
+          ...result.analysis.attributes,
+        ].filter(Boolean))
+      ).slice(0, 8)
+    : [];
 
   return (
-    <div className="demo-page match-page">
-      <section className="demo-page-hero match-hero"><Container><span>SmartCommerce Vision</span><h1>Show Us the Product.</h1><p>Upload a tool, part, label, or equipment photo. SmartCommerce reads visible clues, searches the connected catalogue, and ranks real candidates.</p></Container></section>
-      <Container className="match-layout">
-        <section className="match-upload">
-          <div className="match-preview"><img src={preview} alt="Product Match preview" />{(state === "preparing" || state === "scanning") && <div className="match-scanner" role="status"><ScanSearch size={38} /><strong>{state === "preparing" ? "Preparing image..." : "Reading product clues..."}</strong><span>{state === "preparing" ? "Optimizing the photo for secure matching" : "Then checking those clues against connected catalogue data"}</span></div>}</div>
-          <h2>Snap it. Match it.</h2><p>For the strongest match, include the full product and any brand, label, model plate, or packaging text you can see.</p>
-          <div className="match-upload__actions"><button type="button" onClick={() => uploadRef.current?.click()} disabled={state === "preparing" || state === "scanning"}><ImageUp size={18} /> Upload Photo</button><button type="button" onClick={() => cameraRef.current?.click()} disabled={state === "preparing" || state === "scanning"}><Camera size={18} /> Use Camera</button></div>
-          <input ref={uploadRef} type="file" accept="image/*" onChange={choose} hidden /><input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={choose} hidden />
+    <div className="demo-page match-page sc-match-next">
+      <section className="sc-match-next__hero">
+        <Container>
+          <span><ScanSearch size={15} /> Product Match</span>
+          <h1>Show SmartCommerce what you need.</h1>
+          <p>
+            Take a photo of a tool, part, label, model plate, or package. We read
+            visible clues, search the connected catalogue, and show the closest
+            real matches.
+          </p>
+        </Container>
+      </section>
+
+      <Container className="sc-match-next__layout">
+        <section className="sc-match-next__capture" aria-label="Product photo">
+          <div className="sc-match-next__preview">
+            <img src={preview} alt="Product Match preview" />
+            {(state === "preparing" || state === "scanning") && (
+              <div className="sc-match-next__scanner" role="status">
+                <ScanSearch size={38} />
+                <strong>
+                  {state === "preparing"
+                    ? "Preparing your photo…"
+                    : "Reading visible clues…"}
+                </strong>
+                <span>
+                  {state === "preparing"
+                    ? "Optimizing the image for secure matching"
+                    : "Checking those clues against the connected catalogue"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="sc-match-next__capture-copy">
+            <span>Best results</span>
+            <h2>Include the label if you can.</h2>
+            <p>
+              Brand names, model numbers, packaging text, fittings, ports, and
+              full-product shape can all improve the match.
+            </p>
+          </div>
+
+          <div className="sc-match-next__capture-actions">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              disabled={state === "preparing" || state === "scanning"}
+            >
+              <Camera size={18} /> Use camera
+            </button>
+            <button
+              type="button"
+              onClick={() => uploadRef.current?.click()}
+              disabled={state === "preparing" || state === "scanning"}
+            >
+              <ImageUp size={18} /> Upload photo
+            </button>
+          </div>
+
+          <input ref={uploadRef} type="file" accept="image/*" onChange={choose} hidden />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={choose}
+            hidden
+          />
         </section>
-        <section className="match-results" aria-live="polite">
-          {state === "idle" && <div className="match-waiting"><ScanSearch size={36} /><h2>Your closest matches appear here.</h2><p>No sample result is shown. Every result comes from the uploaded image and connected catalogue.</p></div>}
-          {state === "error" && <div className="match-waiting"><AlertCircle size={36} /><h2>Product Match is unavailable.</h2><p>{error}</p></div>}
-          {state === "results" && result && <>
-            <header><div>{result.needsClarification ? <AlertCircle size={22} /> : <CheckCircle2 size={22} />}<span>{result.needsClarification ? "Possible match" : "Match complete"}</span></div>{top && <strong>{Math.round(top.confidence * 100)}% catalogue match</strong>}</header>
-            {analysisSummary && <div className="match-availability"><ScanSearch size={20} /><div><strong>Visible clues</strong><span>{analysisSummary}</span></div></div>}
-            {result.needsClarification && result.clarification && <div className="match-availability"><AlertCircle size={20} /><div><strong>Help us narrow it down</strong><span>{result.clarification}</span></div></div>}
-            {top ? <article className="match-best">{productImage(top.product) ? <img src={productImage(top.product)} alt={top.product.name} /> : <div className="match-product-placeholder" aria-hidden="true"><ScanSearch size={32} /></div>}<div><span>{result.needsClarification ? "Closest candidate" : "Closest match"}</span><h2>{top.product.name}</h2><p>{top.product.brand || top.product.sku || "Connected catalogue item"}</p><strong>{formatPrice(top.product)}</strong>{top.reasons.length > 0 && <ul>{top.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}<div>{top.product.purchasable && <button type="button" onClick={() => onAdd(String(top.product.id))}>Add to Cart</button>}<a href={routeHref(`/product/${top.product.id}`)}>View Product</a></div></div></article> : <div className="match-waiting"><AlertCircle size={36} /><h2>No catalogue candidate found.</h2><p>{result.clarification || "Try another angle or a closer label photo."}</p></div>}
-            {top && <div className="match-availability"><Store size={20} /><div><strong>Provider availability</strong><span>{availabilityLabel(top.availability, result.branchNames)}</span></div></div>}
-            {alternatives.length > 0 && <><h3>Other possible matches</h3><div className="match-alternatives">{alternatives.map((candidate) => <a href={routeHref(`/product/${candidate.product.id}`)} key={candidate.product.id}>{productImage(candidate.product) ? <img src={productImage(candidate.product)} alt={candidate.product.name} /> : null}<span>{candidate.product.name}</span><strong>{Math.round(candidate.confidence * 100)}% match</strong></a>)}</div></>}
-            {top && <button className="match-verify" type="button" onClick={() => go(`/assistant?prompt=${encodeURIComponent(`Help me verify whether ${top.product.name} is the right match for my photo.`)}`)}><UserCheck size={18} /> Ask SmartCommerce to verify</button>}
-          </>}
+
+        <section className="sc-match-next__results" aria-live="polite">
+          {state === "idle" && (
+            <div className="sc-match-next__empty">
+              <ScanSearch size={36} />
+              <h2>Your real catalogue matches will appear here.</h2>
+              <p>
+                No sample product or invented confidence score is shown before
+                you upload a photo.
+              </p>
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="sc-match-next__empty is-error">
+              <AlertCircle size={36} />
+              <h2>We couldn’t complete the match.</h2>
+              <p>{error}</p>
+              <button type="button" onClick={() => cameraRef.current?.click()}>
+                <RefreshCw size={17} /> Try another photo
+              </button>
+            </div>
+          )}
+
+          {state === "results" && result && (
+            <>
+              <header className="sc-match-next__result-header">
+                <div>
+                  {result.needsClarification ? (
+                    <AlertCircle size={21} />
+                  ) : (
+                    <CheckCircle2 size={21} />
+                  )}
+                  <span>
+                    {top
+                      ? confidenceLabel(top.confidence, result.needsClarification)
+                      : "No catalogue match"}
+                  </span>
+                </div>
+                {top ? (
+                  <strong>{Math.round(top.confidence * 100)}% match score</strong>
+                ) : null}
+              </header>
+
+              {(analysisSummary || evidence.length > 0 || result.analysis.notes) && (
+                <section className="sc-match-next__evidence">
+                  <div>
+                    <ScanSearch size={19} />
+                    <div>
+                      <span>What SmartCommerce could see</span>
+                      <strong>{analysisSummary || "Visual product clues"}</strong>
+                    </div>
+                  </div>
+                  {evidence.length > 0 ? (
+                    <div className="sc-match-next__evidence-chips">
+                      {evidence.map((item) => <span key={item}>{item}</span>)}
+                    </div>
+                  ) : null}
+                  {result.analysis.notes ? <p>{result.analysis.notes}</p> : null}
+                </section>
+              )}
+
+              {result.needsClarification && result.clarification ? (
+                <section className="sc-match-next__clarification">
+                  <AlertCircle size={20} />
+                  <div>
+                    <strong>One more clue would help.</strong>
+                    <p>{result.clarification}</p>
+                    <button type="button" onClick={() => cameraRef.current?.click()}>
+                      <Camera size={16} /> Take another photo
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
+              {top ? (
+                <article className="sc-match-next__best">
+                  <div className="sc-match-next__best-image">
+                    {productImage(top.product) ? (
+                      <img src={productImage(top.product)} alt={top.product.name} />
+                    ) : (
+                      <ScanSearch size={36} aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="sc-match-next__best-copy">
+                    <span>{result.needsClarification ? "Closest candidate" : "Best match"}</span>
+                    <h2>{top.product.name}</h2>
+                    <p>{top.product.brand || top.product.sku || "Connected catalogue item"}</p>
+                    <strong className="sc-match-next__price">{formatPrice(top.product)}</strong>
+
+                    {top.reasons.length > 0 ? (
+                      <div className="sc-match-next__reasons">
+                        <span>Why this ranked first</span>
+                        <ul>
+                          {top.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    <div className="sc-match-next__best-actions">
+                      {top.product.purchasable ? (
+                        <button type="button" onClick={() => onAdd(String(top.product.id))}>
+                          Add to cart
+                        </button>
+                      ) : null}
+                      <a href={routeHref(`/product/${top.product.id}`)}>View product</a>
+                      <button
+                        type="button"
+                        className="is-secondary"
+                        onClick={() =>
+                          go(
+                            `/assistant?prompt=${encodeURIComponent(
+                              `Help me verify whether ${top.product.name} is the right match for my photo.`
+                            )}`
+                          )
+                        }
+                      >
+                        <UserCheck size={16} /> Ask AI to verify
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ) : (
+                <div className="sc-match-next__empty">
+                  <AlertCircle size={36} />
+                  <h2>No connected catalogue candidate was strong enough.</h2>
+                  <p>{result.clarification || "Try another angle or a closer label photo."}</p>
+                  <button type="button" onClick={() => cameraRef.current?.click()}>
+                    <RefreshCw size={17} /> Try another photo
+                  </button>
+                </div>
+              )}
+
+              {top ? (
+                <section className="sc-match-next__availability">
+                  <Store size={19} />
+                  <div>
+                    <span>Connected availability</span>
+                    <strong>{availabilityLabel(top.availability, result.branchNames)}</strong>
+                  </div>
+                </section>
+              ) : null}
+
+              {alternatives.length > 0 ? (
+                <section className="sc-match-next__alternatives">
+                  <header>
+                    <span>Other possibilities</span>
+                    <strong>Compare the visual evidence before choosing.</strong>
+                  </header>
+                  <div>
+                    {alternatives.map((candidate) => (
+                      <a
+                        href={routeHref(`/product/${candidate.product.id}`)}
+                        key={candidate.product.id}
+                      >
+                        <div>
+                          {productImage(candidate.product) ? (
+                            <img
+                              src={productImage(candidate.product)}
+                              alt={candidate.product.name}
+                            />
+                          ) : (
+                            <ScanSearch size={24} aria-hidden="true" />
+                          )}
+                        </div>
+                        <span>{candidate.product.name}</span>
+                        <strong>{Math.round(candidate.confidence * 100)}% match</strong>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </>
+          )}
         </section>
       </Container>
     </div>
