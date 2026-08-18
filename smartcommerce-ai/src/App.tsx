@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import PageShell from "./components/layout/PageShell";
 import { CART_FEEDBACK_EVENT, GUEST_CART_CHANGED_EVENT } from "./lib/commerceEvents";
 import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
 import { getRoute } from "./lib/router";
 import HomePageV3 from "./pages/HomePageV3";
-import AssistantPage from "./pages/AssistantPage";
-import CommercialPage from "./pages/CommercialPage";
-import ComparePage from "./pages/ComparePage";
-import { CategoriesPage, CategoryPage, ProductsPage, SearchPage } from "./pages/CatalogPages";
-import DealsPage from "./pages/DealsPage";
-import ProductDetailPage from "./pages/ProductDetailPage";
-import RepairPage from "./pages/RepairPage";
-import ProductMatchPage from "./pages/ProductMatchPage";
-import { RentalsPage } from "./pages/RentalPages";
-import OperationalRentalDetailPage from "./pages/OperationalRentalDetailPage";
-import { AccountPage, CartPage, CheckoutPage, ConfirmationPage, WishlistPage } from "./pages/UtilityPages";
+
+const AssistantPage = lazy(() => import("./pages/AssistantPage"));
+const CommercialPage = lazy(() => import("./pages/CommercialPage"));
+const ComparePage = lazy(() => import("./pages/ComparePage"));
+const CategoriesPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoriesPage })));
+const CategoryPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoryPage })));
+const ProductsPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.ProductsPage })));
+const SearchPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.SearchPage })));
+const DealsPage = lazy(() => import("./pages/DealsPage"));
+const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
+const RepairPage = lazy(() => import("./pages/RepairPage"));
+const ProductMatchPage = lazy(() => import("./pages/ProductMatchPage"));
+const RentalsPage = lazy(() => import("./pages/RentalPages").then((module) => ({ default: module.RentalsPage })));
+const OperationalRentalDetailPage = lazy(() => import("./pages/OperationalRentalDetailPage"));
+const AccountPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.AccountPage })));
+const CartPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CartPage })));
+const CheckoutPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CheckoutPage })));
+const ConfirmationPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.ConfirmationPage })));
+const WishlistPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.WishlistPage })));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 
@@ -32,6 +40,15 @@ function loadGuestCart(): GuestCheckoutItem[] {
 
 function announceCart(message: string, tone: "success" | "error" = "success") {
   window.dispatchEvent(new CustomEvent(CART_FEEDBACK_EVENT, { detail: { message, tone } }));
+}
+
+function RouteFallback() {
+  return (
+    <div className="sc-route-loading" role="status" aria-live="polite" aria-busy="true">
+      <span aria-hidden="true" />
+      <strong>Loading this part of SmartCommerce…</strong>
+    </div>
+  );
 }
 
 export default function App() {
@@ -108,5 +125,5 @@ export default function App() {
   else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/commercial-confirmation") page = <ConfirmationPage type="commercial" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
 
-  return <PageShell>{page}</PageShell>;
+  return <PageShell><Suspense fallback={<RouteFallback />}>{page}</Suspense></PageShell>;
 }
