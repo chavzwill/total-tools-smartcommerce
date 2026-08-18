@@ -37,6 +37,12 @@ const checks = [
   ["webhook idempotency lasts longer than ordinary writes", /path === "\/api\/platform\/integrations\/webhooks" \? 72 : 24/, source],
   ["dev router business identity comes only from server config", /businessAccountId:\s*process\.env\.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID\s*\|\|\s*""/, vite],
   ["dev router provider identity comes only from server config", /providerId:[\s\S]*?process\.env\.SMARTCOMMERCE_PROVIDER_ID/, vite],
+  ["dev router request bodies are bounded", /DEV_PLATFORM_MAX_BODY_BYTES\s*=\s*64\s*\*\s*1024/, vite],
+  ["dev router tracks request body bytes while streaming", /total\s*\+=\s*buffer\.length[\s\S]*total\s*>\s*maxBodyBytes/, vite],
+  ["dev router oversized requests return 413", /status:\s*tooLarge\s*\?\s*413\s*:\s*500/, vite],
+  ["dev router oversized response is sanitized", /code:\s*"PLATFORM_REQUEST_TOO_LARGE"[\s\S]*message:\s*"The platform request body is too large\."/, vite],
+  ["dev router error responses are no-store", /"Cache-Control":\s*"no-store"/, vite],
+  ["dev router error responses prevent MIME sniffing", /"X-Content-Type-Options":\s*"nosniff"/, vite],
 ];
 
 const forbidden = [
