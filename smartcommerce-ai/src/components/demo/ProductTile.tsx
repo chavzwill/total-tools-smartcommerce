@@ -18,8 +18,11 @@ export default function ProductTile({ product, wished, compared, onWishlist, onC
   const keySpec = Object.entries(product.specs || {}).find(([, value]) => value?.trim());
 
   const handleCompare = () => {
-    if (!compared) onCompare(product.id);
-    go("/compare");
+    if (compared) {
+      go("/compare");
+      return;
+    }
+    onCompare(product.id);
   };
 
   return (
@@ -39,8 +42,8 @@ export default function ProductTile({ product, wished, compared, onWishlist, onC
         </div>
         <button className="demo-add-button" onClick={() => onAdd(product.id)} type="button"><ShoppingCart size={17} /> Add to Cart</button>
         <div className="demo-card-tools" aria-label={`More actions for ${product.name}`}>
-          <button className={compared ? "active" : ""} onClick={handleCompare} type="button"><Scale size={15} /> {compared ? "Compare" : "Compare"}</button>
-          <button className={wished ? "active" : ""} onClick={() => onWishlist(product.id)} type="button"><Heart size={15} fill={wished ? "currentColor" : "none"} /> {wished ? "Saved" : "Save"}</button>
+          <button className={compared ? "active" : ""} onClick={handleCompare} type="button" aria-pressed={compared}><Scale size={15} /> {compared ? "View Compare" : "Add to Compare"}</button>
+          <button className={wished ? "active" : ""} onClick={() => onWishlist(product.id)} type="button" aria-pressed={wished}><Heart size={15} fill={wished ? "currentColor" : "none"} /> {wished ? "Saved" : "Save"}</button>
           <a href={routeHref(`/product/${product.id}`)}><Eye size={15} /> Details</a>
         </div>
       </div>
