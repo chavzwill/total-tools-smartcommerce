@@ -87,6 +87,13 @@ function branchDescription(branch: ShoppingBranch) {
   return branch === "Online" ? "Browse the widest online selection" : `Prioritize ${branch} stock and pickup`;
 }
 
+function branchAwareHref(href: string, branch: ShoppingBranch) {
+  if (branch === "Online") return href;
+  const isBranchScoped = href === "/products" || href === "/rentals" || href.startsWith("/category/");
+  if (!isBranchScoped) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}branch=${encodeURIComponent(branch)}`;
+}
+
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -242,7 +249,8 @@ export default function Header() {
         <nav className="v2-header__nav" aria-label="Primary commerce navigation">
           {navigation.map((item) => {
             const active = isActive(path, item.match);
-            return <a key={item.href} href={routeHref(item.href)} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined}>{item.label}</a>;
+            const destination = branchAwareHref(item.href, branch);
+            return <a key={item.href} href={routeHref(destination)} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined}>{item.label}</a>;
           })}
         </nav>
 
@@ -275,7 +283,11 @@ export default function Header() {
             <div className="v2-command-palette__top"><span>SmartCommerce</span><h2 id="v2-explore-title">What do you need to do?</h2><p>Jump to shopping, rentals, repairs, commercial support, product matching, or guided AI help.</p></div>
             <div className="v2-command-palette__search"><Search size={19} aria-hidden="true" /><label className="tt-sr-only" htmlFor="v2-explore-search">Search SmartCommerce destinations</label><input id="v2-explore-search" ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Search destinations and categories" /></div>
             <div className="v2-command-palette__results">
-              {filteredLauncherItems.map((item) => { const Icon = item.icon; return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(item.href); }}><Icon size={19} aria-hidden="true" /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>; })}
+              {filteredLauncherItems.map((item) => {
+                const Icon = item.icon;
+                const destination = branchAwareHref(item.href, branch);
+                return <button key={item.href} type="button" onClick={() => { setLauncherOpen(false); go(destination); }}><Icon size={19} aria-hidden="true" /><span><strong>{item.title}</strong><small>{item.description}</small></span></button>;
+              })}
               {!filteredLauncherItems.length ? <p role="status">No matching destination. Try the main search or Ask AI.</p> : null}
             </div>
           </section>
