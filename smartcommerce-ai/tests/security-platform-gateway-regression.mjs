@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -5,6 +6,7 @@ import path from "node:path";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sourcePath = path.resolve(here, "../api/platform/[...path].ts");
 const vitePath = path.resolve(here, "../vite.config.ts");
+const shadowVitePath = path.resolve(here, "../vite.config.js");
 const source = await readFile(sourcePath, "utf8");
 const vite = await readFile(vitePath, "utf8");
 
@@ -48,6 +50,9 @@ const failures = checks.filter(([, pattern, target]) => !pattern.test(target)).m
 for (const [name, pattern, target] of forbidden) {
   if (pattern.test(target)) failures.push(name);
 }
+if (existsSync(shadowVitePath)) {
+  failures.push("stale vite.config.js must not shadow the hardened TypeScript config");
+}
 
 if (failures.length) {
   console.error("Platform gateway security regression gate failed:");
@@ -55,4 +60,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Platform gateway security regression gate passed (${checks.length + forbidden.length} invariants).`);
+console.log(`Platform gateway security regression gate passed (${checks.length + forbidden.length + 1} invariants).`);
