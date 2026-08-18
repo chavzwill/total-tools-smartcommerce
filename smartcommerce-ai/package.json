@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run test:release-gate && tsc -b && vite build",
+    "build": "npm run test:release-gate && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json && vite build",
     "test:security-authz": "node tests/security-authorization-regression.mjs",
     "test:security-session": "node tests/security-session-regression.mjs",
     "test:security-session-management": "node tests/security-session-management-regression.mjs",
