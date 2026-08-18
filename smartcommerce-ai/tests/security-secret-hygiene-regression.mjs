@@ -5,10 +5,6 @@ const root = process.cwd();
 const excludedDirs = new Set(["node_modules", "dist", ".git", ".vercel"]);
 const excludedFiles = new Set(["package-lock.json", "security-secret-hygiene-regression.mjs"]);
 const forbiddenNames = new Set([
-  ".env",
-  ".env.local",
-  ".env.production",
-  ".env.development",
   "id_rsa",
   "id_ed25519",
 ]);
@@ -30,6 +26,9 @@ const textExtensions = new Set([
 
 const failures = [];
 
+const isForbiddenSecretFilename = (name) =>
+  forbiddenNames.has(name) || (/^\.env(?:\..+)?$/.test(name) && name !== ".env.example");
+
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (excludedDirs.has(entry.name)) continue;
@@ -41,7 +40,7 @@ function walk(dir) {
       continue;
     }
 
-    if (forbiddenNames.has(entry.name)) {
+    if (isForbiddenSecretFilename(entry.name)) {
       failures.push(`${relative}: forbidden secret-bearing filename`);
       continue;
     }
