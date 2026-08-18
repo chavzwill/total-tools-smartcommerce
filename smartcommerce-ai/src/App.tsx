@@ -25,6 +25,8 @@ const ConfirmationPage = lazy(() => import("./pages/UtilityPages").then((module)
 const WishlistPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.WishlistPage })));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
+const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
+const COMPARE_KEY = "smartcommerce_guest_compare_v1";
 
 function loadGuestCart(): GuestCheckoutItem[] {
   try {
@@ -33,6 +35,16 @@ function loadGuestCart(): GuestCheckoutItem[] {
     return parsed
       .map((item) => ({ productId: String(item?.productId || ""), quantity: Number(item?.quantity || 0) }))
       .filter((item) => item.productId && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 999);
+  } catch {
+    return [];
+  }
+}
+
+function loadIdList(key: string): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(parsed.map((value) => String(value || "").trim()).filter(Boolean))).slice(0, 100);
   } catch {
     return [];
   }
@@ -54,8 +66,8 @@ function RouteFallback() {
 export default function App() {
   const [route, setRoute] = useState(getRoute());
   const [cart, setCart] = useState<GuestCheckoutItem[]>(loadGuestCart);
-  const [wishlist, setWishlist] = useState<string[]>([]);
-  const [compared, setCompared] = useState<string[]>([]);
+  const [wishlist, setWishlist] = useState<string[]>(() => loadIdList(WISHLIST_KEY));
+  const [compared, setCompared] = useState<string[]>(() => loadIdList(COMPARE_KEY));
 
   useEffect(() => {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
@@ -75,6 +87,14 @@ export default function App() {
     window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
     window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED_EVENT, { detail: { count: cart.reduce((sum, item) => sum + item.quantity, 0) } }));
   }, [cart]);
+
+  useEffect(() => {
+    window.localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
+  }, [wishlist]);
+
+  useEffect(() => {
+    window.localStorage.setItem(COMPARE_KEY, JSON.stringify(compared));
+  }, [compared]);
 
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>, id: string) => setter((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
   const actions = useMemo(() => ({
