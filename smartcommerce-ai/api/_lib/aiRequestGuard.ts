@@ -56,13 +56,34 @@ export async function readJsonBody<T>(request: AsyncIterable<unknown> & { header
   catch { throw new RequestGuardError(400, "INVALID_JSON", "The request body must be valid JSON."); }
 }
 
+function publicGuardMessage(code: string) {
+  switch (code) {
+    case "RATE_LIMITED":
+      return "Too many AI requests. Please wait a moment and try again.";
+    case "PAYLOAD_TOO_LARGE":
+      return "The request payload is too large.";
+    case "INVALID_JSON":
+      return "The request body must be valid JSON.";
+    default:
+      return "The request could not be processed.";
+  }
+}
+
 export function sendGuardError(response: any, error: unknown, id: string) {
   if (!(error instanceof RequestGuardError)) return false;
   response.statusCode = error.statusCode;
   response.setHeader("Content-Type", "application/json");
   response.setHeader("X-Request-Id", id);
   if (error.retryAfterSeconds) response.setHeader("Retry-After", String(error.retryAfterSeconds));
-  response.end(JSON.stringify({ success: false, requestId: id, error: { code: error.code, message: error.message, retryable: error.statusCode === 429 } }));
+  response.end(JSON.stringify({
+    success: false,
+    requestId: id,
+    error: {
+      code: error.code,
+      message: publicGuardMessage(error.code),
+      retryable: error.statusCode === 429,
+    },
+  }));
   return true;
 }
 
