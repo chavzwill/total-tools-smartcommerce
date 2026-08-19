@@ -20,7 +20,7 @@ const RentalsPage = lazy(() => import("./pages/RentalPages").then((module) => ({
 const OperationalRentalDetailPage = lazy(() => import("./pages/OperationalRentalDetailPage"));
 const AccountPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.AccountPage })));
 const CartPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CartPage })));
-const CheckoutPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CheckoutPage })));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const ConfirmationPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.ConfirmationPage })));
 const WishlistPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.WishlistPage })));
 
