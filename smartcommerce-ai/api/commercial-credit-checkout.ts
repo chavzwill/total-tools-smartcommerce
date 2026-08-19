@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
 import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
+import { recordCommercialLedgerEntry } from "../src/server/commercialAccountingLedger.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
@@ -259,6 +260,31 @@ export default async function handler(request: any, response: any) {
     }
 
     await sql()`UPDATE customer_carts SET status = 'submitted', updated_at = NOW() WHERE id = ${quote.cart_id} AND customer_id = ${session.customer_id}`;
+    try {
+      await recordCommercialLedgerEntry({
+        commercialAccountId,
+        customerId: session.customer_id,
+        entryType: "order_charge",
+        reference: orderResult.data.id,
+        externalReference: orderResult.data.id,
+        orderId: orderResult.data.id,
+        purchaseOrderReference: purchaseOrderReference || null,
+        description: `Commercial account order ${orderResult.data.id}`,
+        currency: quoteCurrency,
+        debitMinor: totalMinor,
+        status: orderResult.data.status || "submitted",
+        source: "smartcommerce",
+        sourceCoverage: "smartcommerce_only",
+        metadata: {
+          checkoutQuoteId: quoteId,
+          paymentTermsCode: termsCode,
+          providerCommercialAccountId: trust.provider_account_id,
+        },
+      });
+    } catch (ledgerError) {
+      console.error("commercial_credit_ledger_record_failed", { orderId: orderResult.data.id, commercialAccountId, code: ledgerError instanceof Error ? ledgerError.message : "record_failed" });
+      await recordSecurityEvent({ request, eventType: "commercial_credit_ledger_record_failed", eventStatus: "reconciliation_required", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id } });
+    }
     await recordSecurityEvent({ request, eventType: "commercial_credit_order_created", eventStatus: "provider_accepted", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id, paymentTermsCode: termsCode } });
 
     return send(response, 201, {
