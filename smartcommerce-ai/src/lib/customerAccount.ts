@@ -54,6 +54,21 @@ function continueAccountIntent(state: CustomerAccountState) {
       rentalId = "";
     }
     window.location.hash = rentalId ? `/rental/${encodeURIComponent(rentalId)}` : "/rentals";
+    return;
+  }
+
+  if (intent === "checkout") {
+    window.location.hash = "/checkout";
+    return;
+  }
+
+  if (intent === "cart") {
+    window.location.hash = "/cart";
+    return;
+  }
+
+  if (intent === "commercial") {
+    window.location.hash = "/commercial";
   }
 }
 
