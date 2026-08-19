@@ -1,4 +1,9 @@
-import { recordCommercialLedgerEntry, type CommercialLedgerEntryType } from "./commercialAccountingLedger.js";
+import {
+  recordCommercialLedgerEntry,
+  recordCommercialReconciliationCheckpoint,
+  type CommercialLedgerEntryType,
+  type CommercialReconciliationCheckpointInput,
+} from "./commercialAccountingLedger.js";
 
 export type ProviderAccountingEvent = {
   commercialAccountId: string;
@@ -17,6 +22,8 @@ export type ProviderAccountingEvent = {
   status?: string;
   metadata?: Record<string, string | number | boolean | null>;
 };
+
+export type ProviderReconciliationCheckpoint = CommercialReconciliationCheckpointInput;
 
 function direction(type: ProviderAccountingEvent["type"], amountMinor: number) {
   const amount = Math.max(0, Math.trunc(Number(amountMinor || 0)));
@@ -67,4 +74,11 @@ export async function syncProviderAccountingBatch(events: ProviderAccountingEven
   const results = [];
   for (const event of events) results.push(await syncProviderAccountingEvent(event));
   return results;
+}
+
+export async function syncProviderReconciliationCheckpoint(checkpoint: ProviderReconciliationCheckpoint) {
+  if (!checkpoint.commercialAccountId?.trim()) throw new Error("ACCOUNTING_SYNC_ACCOUNT_REQUIRED");
+  if (!checkpoint.providerReference?.trim()) throw new Error("ACCOUNTING_SYNC_RECONCILIATION_REFERENCE_REQUIRED");
+  if (!checkpoint.currency?.trim()) throw new Error("ACCOUNTING_SYNC_CURRENCY_REQUIRED");
+  return recordCommercialReconciliationCheckpoint(checkpoint);
 }
