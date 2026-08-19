@@ -23,6 +23,7 @@ export type ProviderRentalLifecycleEvent = {
 };
 
 const TERMINAL_STATUSES = new Set(["returned", "completed", "cancelled", "declined"]);
+const EXTENSION_ACCEPTED_STATUSES = new Set(["confirmed", "reserved", "active", "extended"]);
 const ALLOWED_STATUSES = new Set([
   "requested",
   "pending",
@@ -74,7 +75,32 @@ export async function syncProviderRentalLifecycleEvent(event: ProviderRentalLife
       start_at, end_at, status, fulfillment, add_ons, extension_of_reservation_id, updated_at
   ` as unknown as Array<Record<string, unknown>>;
 
-  return { updated: rows.length, rental: rows[0] || null, terminal: TERMINAL_STATUSES.has(status) };
+  const rental = rows[0] || null;
+  let parentUpdated = 0;
+
+  if (rental && rental.extension_of_reservation_id && EXTENSION_ACCEPTED_STATUSES.has(status)) {
+    const extensionEndAt = new Date(String(rental.end_at));
+    if (Number.isFinite(extensionEndAt.getTime())) {
+      const parentRows = await sql()`
+        UPDATE customer_rental_lifecycle
+        SET
+          status = 'extended',
+          end_at = GREATEST(end_at, ${extensionEndAt.toISOString()}::timestamptz),
+          updated_at = NOW()
+        WHERE customer_id = ${String(rental.customer_id)}
+          AND provider_reservation_id = ${String(rental.extension_of_reservation_id)}
+        RETURNING id
+      ` as unknown as Array<{ id: string }>;
+      parentUpdated = parentRows.length;
+    }
+  }
+
+  return {
+    updated: rows.length,
+    parentUpdated,
+    rental,
+    terminal: TERMINAL_STATUSES.has(status),
+  };
 }
 
 export async function syncProviderRentalLifecycleBatch(events: ProviderRentalLifecycleEvent[]) {
