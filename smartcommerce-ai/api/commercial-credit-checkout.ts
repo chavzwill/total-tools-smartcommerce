@@ -246,7 +246,7 @@ export default async function handler(request: any, response: any) {
         commercialAccountName: trust.display_name,
         providerCommercialAccountId: trust.provider_account_id,
         paymentTermsCode: termsCode,
-        purchaseOrderReference: purchaseOrderReference || undefined,
+        purchaseOrderReference: purchaseOrderReference || null,
         checkoutQuoteId: quoteId,
         approvedCreditLimitMinor: String(control.credit_limit_minor || ""),
         creditCurrency: control.credit_currency || quoteCurrency,
