@@ -104,7 +104,7 @@ export function CartPage({
             <div><span>Current catalogue estimate</span><strong>{money(guestTotal)}</strong></div>
             <div><span>Tax & delivery</span><strong>Verified next</strong></div>
             <button className="sc-checkout-primary" disabled={!guestItems.length} onClick={() => go("/checkout")}>Checkout as guest</button>
-            <button className="sc-checkout-secondary" type="button" onClick={() => go("/account")}><UserRound size={17} /> Sign in instead</button>
+            <button className="sc-checkout-secondary" type="button" onClick={() => go("/account?intent=cart")}><UserRound size={17} /> Sign in instead</button>
             <p><ShieldCheck size={16} /> Guest checkout uses server-side provider validation. Local catalogue prices are never treated as authoritative.</p>
           </aside>
         </Container>
@@ -180,7 +180,7 @@ export function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutItem[] }) 
 
   if (loading) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Secure checkout</span><h1>Verifying every line.</h1><p>SmartCommerce is checking current provider pricing, product status and tax before showing your order.</p></section></Container></div>;
 
-  if (!quote) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Checkout unavailable</span><h1>We couldn’t prepare this order.</h1><p>{error}</p>{authRequired ? <><button onClick={() => go("/account")}>Sign in</button><button onClick={() => go("/cart")}>Return to cart</button></> : <button onClick={() => go("/cart")}>Return to cart</button>}</section></Container></div>;
+  if (!quote) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Checkout unavailable</span><h1>We couldn’t prepare this order.</h1><p>{authRequired ? "Sign in to continue with your saved cart. Your cart will still be here when you return." : error}</p>{authRequired ? <><button onClick={() => go("/account?intent=checkout")}>Sign in or create account</button><button onClick={() => go("/cart")}>Return to cart</button></> : <button onClick={() => go("/cart")}>Return to cart</button>}</section></Container></div>;
 
   return (
     <div className="demo-page sc-checkout-page">
