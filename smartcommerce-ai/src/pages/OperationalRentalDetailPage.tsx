@@ -2,6 +2,7 @@ import { CalendarDays, CheckCircle2, Loader2, MapPin, Sparkles, Truck } from "lu
 import { FormEvent, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { createRentalReservationWithPlatform, getRentalById } from "../data/rentals";
+import { getCustomerAccount } from "../lib/customerAccount";
 import { money } from "../lib/format";
 import { go, routeHref } from "../lib/router";
 import { company } from "../styles/theme";
@@ -18,7 +19,13 @@ type ReservationDraft = {
   phone: string;
 };
 
+type SavedRentalDraft = {
+  rentalId: string;
+  reservation: ReservationDraft;
+};
+
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+const RENTAL_DRAFT_KEY = "smartcommerce_rental_draft_v1";
 
 const readQuery = () => {
   const raw = window.location.hash.split("?")[1] || "";
@@ -34,6 +41,18 @@ const preferredPhysicalBranch = () => {
   }
 };
 
+const readSavedRentalDraft = (rentalId: string): ReservationDraft | null => {
+  try {
+    const raw = window.localStorage.getItem(RENTAL_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedRentalDraft;
+    if (!parsed || parsed.rentalId !== rentalId || !parsed.reservation) return null;
+    return parsed.reservation;
+  } catch {
+    return null;
+  }
+};
+
 const daysBetween = (startDate: string, endDate: string) => {
   if (!startDate || !endDate) return 0;
   const start = new Date(`${startDate}T12:00:00`);
@@ -45,7 +64,8 @@ const daysBetween = (startDate: string, endDate: string) => {
 export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const foundRental = getRentalById(id);
   const query = useMemo(readQuery, []);
-  const [reservation, setReservation] = useState<ReservationDraft>({
+  const savedDraft = useMemo(() => readSavedRentalDraft(id), [id]);
+  const [reservation, setReservation] = useState<ReservationDraft>(() => savedDraft || {
     startDate: query.get("start") || "",
     endDate: query.get("end") || "",
     branch: query.get("branch") || preferredPhysicalBranch(),
@@ -65,6 +85,15 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const rentalDays = daysBetween(reservation.startDate, reservation.endDate);
   const subtotal = rentalDays && rental.dailyRate > 0 ? rental.dailyRate * rentalDays : 0;
 
+  function saveDraft() {
+    try {
+      const draft: SavedRentalDraft = { rentalId: rental.id, reservation };
+      window.localStorage.setItem(RENTAL_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Account onboarding can continue even when storage is unavailable.
+    }
+  }
+
   async function submitReservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
@@ -79,7 +108,24 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
 
     setSubmitting(true);
     setError("");
+
+    let customerId = "";
+    try {
+      const accountState = await getCustomerAccount();
+      if (!accountState.customer) {
+        saveDraft();
+        go("/account?intent=rental");
+        return;
+      }
+      customerId = accountState.customer.id;
+    } catch {
+      saveDraft();
+      go("/account?intent=rental");
+      return;
+    }
+
     const result = await createRentalReservationWithPlatform({
+      customerAccountId: customerId,
       rentalAssetId: rental.id,
       startDate: new Date(`${reservation.startDate}T12:00:00`).toISOString(),
       endDate: new Date(`${reservation.endDate}T12:00:00`).toISOString(),
@@ -96,9 +142,20 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
     });
 
     if (!result.success) {
+      saveDraft();
       setSubmitting(false);
-      setError(result.error.message || "The rental request could not be submitted.");
+      setError(
+        result.error.code === "PLATFORM_CONTEXT_REQUIRED"
+          ? "Online rental requests are temporarily unavailable because the Total Tools rental service connection is not configured. Your reservation details are saved."
+          : result.error.message || "The rental request could not be submitted.",
+      );
       return;
+    }
+
+    try {
+      window.localStorage.removeItem(RENTAL_DRAFT_KEY);
+    } catch {
+      // A successful provider request must not fail because local cleanup is unavailable.
     }
 
     go(`/rental-confirmation?item=${encodeURIComponent(rental.id)}&ref=${encodeURIComponent(result.data.id)}&status=${encodeURIComponent(result.data.status)}`);
