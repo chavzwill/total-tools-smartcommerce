@@ -10,6 +10,7 @@ export type CustomerRental = {
   fulfillment?: string | null;
   add_ons?: unknown[];
   extension_of_reservation_id?: string | null;
+  extension_requestable?: boolean;
   daysRemaining: number;
   reminderLevel: "none" | "upcoming" | "due_soon" | "urgent" | "overdue";
 };
@@ -43,6 +44,7 @@ export async function trackCustomerRental(input: {
   fulfillment?: string;
   addOns?: unknown[];
   extensionOfReservationId?: string;
+  extensionRequestable?: boolean;
 }) {
   const response = await fetch("/api/customer-rentals", {
     method: "POST",
@@ -51,6 +53,11 @@ export async function trackCustomerRental(input: {
     body: JSON.stringify(input),
   });
   return parse<{ rental: unknown }>(response);
+}
+
+export function canRequestExtension(rental: CustomerRental) {
+  const terminal = ["returned", "completed", "cancelled", "declined"].includes(rental.status.toLowerCase());
+  return !terminal && rental.extension_requestable !== false;
 }
 
 export function extensionHref(rental: CustomerRental) {
