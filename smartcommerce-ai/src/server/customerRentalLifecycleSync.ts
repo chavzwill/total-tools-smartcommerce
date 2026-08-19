@@ -18,6 +18,7 @@ export type ProviderRentalLifecycleEvent = {
   endAt?: string;
   branch?: string | null;
   fulfillment?: string | null;
+  extensionRequestable?: boolean;
   occurredAt?: string;
   providerEventId?: string;
 };
@@ -69,10 +70,11 @@ export async function syncProviderRentalLifecycleEvent(event: ProviderRentalLife
       end_at = COALESCE(${endAt || null}::timestamptz, end_at),
       branch = COALESCE(${event.branch ?? null}, branch),
       fulfillment = COALESCE(${event.fulfillment ?? null}, fulfillment),
+      extension_requestable = COALESCE(${typeof event.extensionRequestable === "boolean" ? event.extensionRequestable : null}::boolean, extension_requestable),
       updated_at = NOW()
     WHERE provider_reservation_id = ${providerReservationId}
     RETURNING id, customer_id, provider_reservation_id, rental_asset_id, equipment_name, branch,
-      start_at, end_at, status, fulfillment, add_ons, extension_of_reservation_id, updated_at
+      start_at, end_at, status, fulfillment, add_ons, extension_of_reservation_id, extension_requestable, updated_at
   ` as unknown as Array<Record<string, unknown>>;
 
   const rental = rows[0] || null;
