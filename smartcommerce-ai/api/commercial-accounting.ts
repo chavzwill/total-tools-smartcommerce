@@ -129,6 +129,7 @@ export default async function handler(request: any, response: any) {
       ` as unknown as Promise<Array<any>>,
     ]);
     const control = controlsRows[0] || null;
+    const reconciled = statement.summary.coverage === "provider_reconciled";
 
     const payload = {
       account: {
@@ -150,9 +151,9 @@ export default async function handler(request: any, response: any) {
         reviewedAt: control.reviewed_at || null,
       } : null,
       statement,
-      disclosure: statement.summary.coverage === "provider_synced"
-        ? "This statement period is provider-synced and can be used as the official SmartCommerce account view."
-        : "This statement currently contains SmartCommerce-recorded activity only. Provider/accounting history is not yet fully synced, so no official outstanding balance is represented.",
+      disclosure: reconciled
+        ? "This statement period is covered by a provider reconciliation checkpoint, including certified opening and closing balances."
+        : "This statement contains recorded SmartCommerce and any synced provider activity available for the period. The accounting provider has not yet certified complete opening and closing balances for this period, so no official outstanding balance is represented.",
     };
 
     if (String(request.query?.format || "").toLowerCase() === "csv") {
