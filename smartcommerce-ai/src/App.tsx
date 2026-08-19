@@ -7,6 +7,7 @@ import HomePageV3 from "./pages/HomePageV3";
 
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const CommercialPage = lazy(() => import("./pages/CommercialPage"));
+const CommercialAccountingPage = lazy(() => import("./pages/CommercialAccountingPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
 const CategoriesPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoriesPage })));
 const CategoryPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoryPage })));
@@ -132,6 +133,7 @@ export default function App() {
   else if (path.startsWith("/rental/")) page = <OperationalRentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
+  else if (path === "/commercial/accounting") page = <CommercialAccountingPage />;
   else if (path === "/deals") page = <DealsPage />;
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} onAdd={actions.onAdd} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
