@@ -81,8 +81,9 @@ export default function CommercialAccountingPage() {
   const controls = data?.financialControls;
   const summary = data?.statement.summary;
   const reconciliation = data?.statement.reconciliation;
+  const receivables = data?.receivables;
   const reconciled = summary?.coverage === "provider_reconciled";
-  const currency = (reconciled ? summary?.officialCurrency : null) || controls?.creditCurrency || data?.statement.entries[0]?.currency || "JMD";
+  const currency = (reconciled ? summary?.officialCurrency : null) || controls?.creditCurrency || data?.statement.entries[0]?.currency || receivables?.invoices[0]?.currency || "JMD";
   const periodLabel = new Date(period.start).toLocaleDateString("en-JM", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return (
@@ -126,6 +127,24 @@ export default function CommercialAccountingPage() {
           </section>
 
           <div className={`sc-commercial-accounting__disclosure ${reconciled ? "is-complete" : ""}`}><FileText size={18} /><p>{data.disclosure}</p></div>
+
+          {receivables ? <section className="sc-commercial-accounting__statement">
+            <header><div><span>Receivables</span><h2>What is outstanding now</h2></div><strong>{formatMinor(receivables.totalOutstandingMinor, currency)}</strong></header>
+            <div className="sc-commercial-accounting__summary" aria-label="Accounts receivable aging">
+              <article><span>Current</span><strong>{formatMinor(receivables.currentMinor, currency)}</strong><small>Not yet overdue</small></article>
+              <article><span>1–30 days</span><strong>{formatMinor(receivables.overdue1To30Minor, currency)}</strong><small>Overdue</small></article>
+              <article><span>31–60 days</span><strong>{formatMinor(receivables.overdue31To60Minor, currency)}</strong><small>Overdue</small></article>
+              <article><span>61–90 days</span><strong>{formatMinor(receivables.overdue61To90Minor, currency)}</strong><small>Overdue</small></article>
+              <article><span>90+ days</span><strong>{formatMinor(receivables.overdue90PlusMinor, currency)}</strong><small>Overdue</small></article>
+            </div>
+            {receivables.invoices.length ? <div className="sc-commercial-accounting__entries">
+              {receivables.invoices.map((invoice) => <article key={invoice.id} className="sc-commercial-accounting__entry">
+                <div className="sc-commercial-accounting__entry-main"><span>{invoice.dueAt ? `Due ${new Date(invoice.dueAt).toLocaleDateString("en-JM", { day: "2-digit", month: "short", year: "numeric" })}` : "Due date unavailable"}</span><strong>{invoice.description}</strong><small>Invoice {invoice.reference}{invoice.purchaseOrderReference ? ` · PO ${invoice.purchaseOrderReference}` : ""}</small></div>
+                <div className="sc-commercial-accounting__entry-status"><span>{invoice.daysOverdue > 0 ? `${invoice.daysOverdue} days overdue` : "Current"}</span><small>{invoice.status}</small></div>
+                <strong className="is-debit">{formatMinor(invoice.outstandingMinor, invoice.currency)}</strong>
+              </article>)}
+            </div> : <div className="sc-commercial-accounting__empty-period"><ReceiptText size={28} /><strong>No provider-reported outstanding invoices.</strong><p>Receivables appear only when the connected accounting source supplies an invoice outstanding balance.</p></div>}
+          </section> : null}
 
           <section className="sc-commercial-accounting__statement">
             <header><div><span>Statement</span><h2>{periodLabel}</h2></div><strong>{data.account.displayName}</strong></header>
