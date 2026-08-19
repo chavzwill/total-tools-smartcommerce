@@ -1,6 +1,6 @@
 import { CalendarClock, ChevronRight, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { extensionHref, listCustomerRentals, type CustomerRental } from "../../services/customerRentalsClient";
+import { canRequestExtension, extensionHref, listCustomerRentals, type CustomerRental } from "../../services/customerRentalsClient";
 
 function priority(rental: CustomerRental) {
   if (rental.reminderLevel === "overdue") return 0;
@@ -19,7 +19,10 @@ function attentionTitle(rental: CustomerRental) {
 
 function attentionCopy(rental: CustomerRental) {
   const date = new Date(rental.end_at).toLocaleDateString("en-JM", { day: "numeric", month: "short", year: "numeric" });
-  return `Return by ${date}${rental.branch ? ` at ${rental.branch}` : ""}. If you need more time, request an extension before the deadline.`;
+  const returnCopy = `Return by ${date}${rental.branch ? ` at ${rental.branch}` : ""}.`;
+  return canRequestExtension(rental)
+    ? `${returnCopy} If you need more time, request an extension before the deadline.`
+    : `${returnCopy} This agreement is not currently eligible for an online extension request.`;
 }
 
 export default function AccountOverviewAttention({ onViewRentals }: { onViewRentals: () => void }) {
@@ -52,7 +55,7 @@ export default function AccountOverviewAttention({ onViewRentals }: { onViewRent
         <p>{attentionCopy(rental)}</p>
       </div>
       <div className="sc-account-recent__actions">
-        <a href={extensionHref(rental)}><RotateCcw size={15} /> Extend rental</a>
+        {canRequestExtension(rental) ? <a href={extensionHref(rental)}><RotateCcw size={15} /> Extend rental</a> : null}
         <button type="button" onClick={onViewRentals}>Manage rental <ChevronRight size={16} /></button>
       </div>
     </div>
