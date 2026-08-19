@@ -19,6 +19,7 @@ import Header from "./Header";
 import MobileCommerceNav from "./MobileCommerceNav";
 import PromoTicker from "./PromoTicker";
 import UtilityBar from "./UtilityBar";
+import RentalDueAlert from "../rentals/RentalDueAlert";
 
 type PageShellProps = {
   children: ReactNode;
@@ -31,6 +32,7 @@ export default function PageShell({ children }: PageShellProps) {
       <UtilityBar />
       <Header />
       <PromoTicker />
+      <RentalDueAlert />
       <main id="main-content" tabIndex={-1}>{children}</main>
       <Footer />
       <MobileCommerceNav />
