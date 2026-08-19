@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
 import { getCommercialLedgerStatement } from "../src/server/commercialAccountingLedger.js";
+import { getCommercialReceivablesSummary } from "../src/server/commercialReceivables.js";
 
 const COOKIE_NAME = "sc_session";
 const FINANCIAL_VIEW_ROLES = new Set(["owner", "admin", "approver", "buyer"]);
@@ -117,8 +118,9 @@ export default async function handler(request: any, response: any) {
       return send(response, 400, { error: { code: "INVALID_STATEMENT_PERIOD", message: "Choose a valid statement period of up to 12 months." } });
     }
 
-    const [statement, controlsRows] = await Promise.all([
+    const [statement, receivables, controlsRows] = await Promise.all([
       getCommercialLedgerStatement({ commercialAccountId: accountId, startAt: startAt.toISOString(), endAt: endAt.toISOString() }),
+      getCommercialReceivablesSummary(accountId),
       sql()`
         SELECT control_status, credit_enabled, credit_limit_minor, credit_currency,
                payment_terms_code, purchase_order_enabled, reviewed_at
@@ -151,6 +153,7 @@ export default async function handler(request: any, response: any) {
         reviewedAt: control.reviewed_at || null,
       } : null,
       statement,
+      receivables,
       disclosure: reconciled
         ? "This statement period is covered by a provider reconciliation checkpoint, including certified opening and closing balances."
         : "This statement contains recorded SmartCommerce and any synced provider activity available for the period. The accounting provider has not yet certified complete opening and closing balances for this period, so no official outstanding balance is represented.",
