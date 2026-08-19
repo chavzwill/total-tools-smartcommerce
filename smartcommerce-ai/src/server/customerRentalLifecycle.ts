@@ -25,6 +25,7 @@ export type CustomerRentalLifecycleInput = {
   fulfillment?: string | null;
   addOns?: unknown[];
   extensionOfReservationId?: string | null;
+  extensionRequestable?: boolean;
 };
 
 export async function ensureCustomerRentalLifecycleSchema() {
@@ -44,11 +45,13 @@ export async function ensureCustomerRentalLifecycleSchema() {
       fulfillment TEXT,
       add_ons JSONB NOT NULL DEFAULT '[]'::jsonb,
       extension_of_reservation_id TEXT,
+      extension_requestable BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT customer_rental_lifecycle_dates CHECK (end_at >= start_at)
     )
   `;
+  await db`ALTER TABLE customer_rental_lifecycle ADD COLUMN IF NOT EXISTS extension_requestable BOOLEAN NOT NULL DEFAULT TRUE`;
   await db`CREATE UNIQUE INDEX IF NOT EXISTS customer_rental_lifecycle_provider_uidx ON customer_rental_lifecycle(customer_id, provider_reservation_id)`;
   await db`CREATE INDEX IF NOT EXISTS customer_rental_lifecycle_customer_end_idx ON customer_rental_lifecycle(customer_id, end_at DESC)`;
   schemaReady = true;
@@ -61,14 +64,15 @@ export async function recordCustomerRentalLifecycle(input: CustomerRentalLifecyc
   if (!input.customerId || !input.providerReservationId || !input.rentalAssetId || !input.equipmentName) throw new Error("CUSTOMER_RENTAL_FIELDS_REQUIRED");
   if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt < startAt) throw new Error("CUSTOMER_RENTAL_DATES_INVALID");
   const id = `crl_${randomBytes(16).toString("hex")}`;
+  const extensionRequestable = input.extensionRequestable !== false;
   const rows = await sql()`
     INSERT INTO customer_rental_lifecycle (
       id, customer_id, provider_reservation_id, rental_asset_id, equipment_name, branch,
-      start_at, end_at, status, fulfillment, add_ons, extension_of_reservation_id
+      start_at, end_at, status, fulfillment, add_ons, extension_of_reservation_id, extension_requestable
     ) VALUES (
       ${id}, ${input.customerId}, ${input.providerReservationId}, ${input.rentalAssetId}, ${input.equipmentName}, ${input.branch || null},
       ${startAt.toISOString()}, ${endAt.toISOString()}, ${input.status || "requested"}, ${input.fulfillment || null},
-      ${JSON.stringify(input.addOns || [])}::jsonb, ${input.extensionOfReservationId || null}
+      ${JSON.stringify(input.addOns || [])}::jsonb, ${input.extensionOfReservationId || null}, ${extensionRequestable}
     )
     ON CONFLICT (customer_id, provider_reservation_id)
     DO UPDATE SET
@@ -77,6 +81,7 @@ export async function recordCustomerRentalLifecycle(input: CustomerRentalLifecyc
       branch = COALESCE(EXCLUDED.branch, customer_rental_lifecycle.branch),
       fulfillment = COALESCE(EXCLUDED.fulfillment, customer_rental_lifecycle.fulfillment),
       add_ons = EXCLUDED.add_ons,
+      extension_requestable = EXCLUDED.extension_requestable,
       updated_at = NOW()
     RETURNING *
   ` as unknown as Array<Record<string, unknown>>;
@@ -87,7 +92,7 @@ export async function listCustomerRentalLifecycle(customerId: string) {
   await ensureCustomerRentalLifecycleSchema();
   return await sql()`
     SELECT id, provider_reservation_id, rental_asset_id, equipment_name, branch, start_at, end_at,
-           status, fulfillment, add_ons, extension_of_reservation_id, created_at, updated_at
+           status, fulfillment, add_ons, extension_of_reservation_id, extension_requestable, created_at, updated_at
     FROM customer_rental_lifecycle
     WHERE customer_id = ${customerId}
     ORDER BY end_at ASC
