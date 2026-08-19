@@ -38,13 +38,25 @@ export type CommercialAccountingStatement = {
   };
   statement: {
     entries: CommercialAccountingEntry[];
+    reconciliation: null | {
+      providerReference: string;
+      currency: string;
+      coverageStart: string;
+      coverageEnd: string;
+      openingBalanceMinor: number;
+      closingBalanceMinor: number;
+      reconciledAt: string;
+    };
     summary: {
       totalEntries: number;
+      providerSyncedEntries: number;
       debitMinor: number;
       creditMinor: number;
       activityNetMinor: number;
-      coverage: "smartcommerce_only" | "provider_synced";
+      coverage: "smartcommerce_only" | "provider_reconciled";
+      officialOpeningBalanceMinor: number | null;
       officialBalanceMinor: number | null;
+      officialCurrency: string | null;
     };
   };
   disclosure: string;
