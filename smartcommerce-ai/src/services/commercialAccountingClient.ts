@@ -17,6 +17,21 @@ export type CommercialAccountingEntry = {
   source_coverage: "smartcommerce_only" | "provider_synced" | string;
 };
 
+export type CommercialReceivableInvoice = {
+  id: string;
+  reference: string;
+  invoiceId?: string | null;
+  externalReference?: string | null;
+  purchaseOrderReference?: string | null;
+  description: string;
+  currency: string;
+  occurredAt: string;
+  dueAt?: string | null;
+  status: string;
+  outstandingMinor: number;
+  daysOverdue: number;
+};
+
 export type CommercialAccountingStatement = {
   account: {
     id: string;
@@ -58,6 +73,17 @@ export type CommercialAccountingStatement = {
       officialBalanceMinor: number | null;
       officialCurrency: string | null;
     };
+  };
+  receivables: {
+    totalOutstandingMinor: number;
+    currentMinor: number;
+    overdue1To30Minor: number;
+    overdue31To60Minor: number;
+    overdue61To90Minor: number;
+    overdue90PlusMinor: number;
+    invoices: CommercialReceivableInvoice[];
+    authoritative: true;
+    basis: "provider_invoice_outstanding";
   };
   disclosure: string;
 };
