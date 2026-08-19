@@ -1,0 +1,60 @@
+.sc-account-rentals { display: grid; gap: 18px; }
+.sc-account-rentals__summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.sc-account-rentals__summary > div { display: grid; gap: 5px; padding: 16px 18px; border: 1px solid rgba(20,42,29,.09); border-radius: 17px; background: #fff; box-shadow: 0 12px 30px rgba(8,40,23,.035); }
+.sc-account-rentals__summary span { color: #758078; font-size: .72rem; font-weight: 850; letter-spacing: .035em; text-transform: uppercase; }
+.sc-account-rentals__summary strong { color: #14241a; font-size: 1.55rem; letter-spacing: -.04em; }
+.sc-account-rentals__section { display: grid; gap: 11px; }
+.sc-account-rentals__section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.sc-account-rentals__section-heading h3 { margin: 4px 0 0; color: #15251b; font-size: 1.08rem; letter-spacing: -.025em; }
+.sc-account-rentals__section-heading > a { display: inline-flex; align-items: center; gap: 5px; color: #08763f; font-size: .8rem; font-weight: 850; text-decoration: none; }
+.sc-account-rentals__list { display: grid; gap: 9px; }
+.sc-account-rental { display: grid; gap: 13px; padding: 17px 18px; border: 1px solid rgba(20,42,29,.09); border-radius: 18px; background: #fff; box-shadow: 0 12px 30px rgba(8,40,23,.035); }
+.sc-account-rental.is-upcoming { border-color: rgba(8,118,63,.18); background: linear-gradient(135deg,#fff,#f8fbf9); }
+.sc-account-rental.is-due_soon { border-color: rgba(201,139,20,.27); background: linear-gradient(135deg,#fff,#fffaf0); }
+.sc-account-rental.is-urgent { border-color: rgba(190,113,14,.34); background: linear-gradient(135deg,#fff,#fff7e8); }
+.sc-account-rental.is-overdue { border-color: rgba(172,67,47,.3); background: linear-gradient(135deg,#fff,#fff7f5); }
+.sc-account-rental__top { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.sc-account-rental__top > div { min-width: 0; }
+.sc-account-rental__top span { display: block; color: #748078; font-size: .68rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.sc-account-rental__top h4 { margin: 4px 0 0; color: #14241a; font-size: 1.05rem; letter-spacing: -.025em; }
+.sc-account-rental__top > strong { flex: 0 0 auto; color: #08763f; font-size: .82rem; }
+.sc-account-rental.is-due_soon .sc-account-rental__top > strong,
+.sc-account-rental.is-urgent .sc-account-rental__top > strong { color: #956311; }
+.sc-account-rental.is-overdue .sc-account-rental__top > strong { color: #a54837; }
+.sc-account-rental__meta { display: flex; flex-wrap: wrap; gap: 7px 13px; color: #66736b; font-size: .78rem; }
+.sc-account-rental__meta span { display: inline-flex; align-items: center; gap: 5px; }
+.sc-account-rental__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sc-account-rental__actions a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid rgba(20,42,29,.1); border-radius: 11px; background: #fff; color: #304138; font-size: .78rem; font-weight: 850; text-decoration: none; }
+.sc-account-rental__actions a.is-primary { border-color: #08763f; background: #08763f; color: #fff; }
+.sc-account-rentals__history { overflow: hidden; border: 1px solid rgba(20,42,29,.09); border-radius: 17px; background: #fff; }
+.sc-account-rentals__history > div { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 16px; align-items: center; padding: 12px 15px; border-top: 1px solid rgba(20,42,29,.07); font-size: .78rem; }
+.sc-account-rentals__history > div:first-child { border-top: 0; }
+.sc-account-rentals__history > div > span:first-child { color: #203128; font-weight: 800; }
+.sc-account-rentals__history > div > span:nth-child(2) { color: #748078; }
+.sc-account-rentals__history strong { color: #607168; font-size: .7rem; text-transform: capitalize; }
+.sc-account-rentals__state { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 20px; border: 1px solid rgba(20,42,29,.09); border-radius: 18px; background: #fafcfa; }
+.sc-account-rentals__state > svg { color: #08763f; }
+.sc-account-rentals__state > div { display: grid; gap: 3px; }
+.sc-account-rentals__state strong { color: #17271e; }
+.sc-account-rentals__state span { color: #748078; font-size: .82rem; line-height: 1.4; }
+.sc-account-rentals__state a { color: #08763f; font-size: .8rem; font-weight: 850; text-decoration: none; }
+@media (max-width: 760px) {
+  .sc-account-rentals__summary { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+  .sc-account-rentals__summary > div { padding: 12px 10px; border-radius: 14px; }
+  .sc-account-rentals__summary span { font-size: .59rem; line-height: 1.2; }
+  .sc-account-rentals__summary strong { font-size: 1.25rem; }
+  .sc-account-rentals__section-heading { align-items: start; flex-direction: column; gap: 7px; }
+  .sc-account-rental { padding: 14px; border-radius: 16px; }
+  .sc-account-rental__top { gap: 10px; }
+  .sc-account-rental__top > strong { font-size: .75rem; text-align: right; }
+  .sc-account-rental__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .sc-account-rental__actions a { min-height: 44px; }
+  .sc-account-rentals__history > div { grid-template-columns: 1fr auto; gap: 5px 10px; }
+  .sc-account-rentals__history strong { grid-column: 1 / -1; }
+  .sc-account-rentals__state { grid-template-columns: 30px minmax(0,1fr); padding: 16px; }
+  .sc-account-rentals__state a { grid-column: 2; }
+}
+@media (max-width: 390px) {
+  .sc-account-rentals__summary span { font-size: .55rem; }
+  .sc-account-rental__actions { grid-template-columns: 1fr; }
+}
