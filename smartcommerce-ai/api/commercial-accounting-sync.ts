@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
-import { syncProviderAccountingBatch, type ProviderAccountingEvent } from "../src/server/commercialAccountingSync.js";
+import {
+  syncProviderAccountingBatch,
+  syncProviderReconciliationCheckpoint,
+  type ProviderAccountingEvent,
+  type ProviderReconciliationCheckpoint,
+} from "../src/server/commercialAccountingSync.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -52,14 +57,25 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const input = await readJsonBody<{ events?: ProviderAccountingEvent[] }>(request);
-    const results = await syncProviderAccountingBatch(input.events || []);
-    return send(response, 202, { accepted: results.length });
+    const input = await readJsonBody<{ events?: ProviderAccountingEvent[]; reconciliation?: ProviderReconciliationCheckpoint }>(request);
+    const events = input.events || [];
+    if (!events.length && !input.reconciliation) {
+      return send(response, 400, { error: { code: "ACCOUNTING_SYNC_EMPTY", message: "Provide accounting events or a reconciliation checkpoint." } });
+    }
+
+    const results = events.length ? await syncProviderAccountingBatch(events) : [];
+    const reconciliation = input.reconciliation
+      ? await syncProviderReconciliationCheckpoint(input.reconciliation)
+      : null;
+
+    return send(response, 202, { accepted: results.length, reconciliationAccepted: Boolean(reconciliation) });
   } catch (error) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if ((error as any)?.status === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The accounting sync payload is too large." } });
     const code = error instanceof Error ? error.message : "ACCOUNTING_SYNC_FAILED";
-    if (code.startsWith("ACCOUNTING_SYNC_")) return send(response, 400, { error: { code, message: "One or more accounting records failed validation." } });
+    if (code.startsWith("ACCOUNTING_SYNC_") || code.startsWith("RECONCILIATION_")) {
+      return send(response, 400, { error: { code, message: "One or more accounting records failed validation." } });
+    }
     console.error("commercial_accounting_sync_error", { code: "sync_failed" });
     return send(response, 503, { error: { code: "ACCOUNTING_SYNC_UNAVAILABLE", message: "Accounting synchronization is temporarily unavailable.", retryable: true } });
   }
