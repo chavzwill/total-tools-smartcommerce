@@ -5,6 +5,7 @@ import { createRentalReservationWithPlatform, getRentalById } from "../data/rent
 import { getCustomerAccount } from "../lib/customerAccount";
 import { money } from "../lib/format";
 import { go, routeHref } from "../lib/router";
+import { trackCustomerRental } from "../services/customerRentalsClient";
 import { company } from "../styles/theme";
 import type { RentalAddOn } from "../types";
 import "../styles/rental-addons.css";
@@ -93,6 +94,7 @@ function addOnIcon(addOn: RentalAddOn) {
 export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const foundRental = getRentalById(id);
   const query = useMemo(readQuery, []);
+  const extensionOf = query.get("extensionOf") || "";
   const savedDraft = useMemo(() => readSavedRentalDraft(id), [id]);
   const [reservation, setReservation] = useState<ReservationDraft>(() => savedDraft || {
     startDate: query.get("start") || "",
@@ -153,14 +155,17 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
       return addOn ? { id: addOn.id, name: addOn.name, category: addOn.category, quantity: selection.quantity, rateBasis: addOn.rateBasis, unitPrice: addOn.unitPrice ?? null, currency: addOn.currency ?? null, availability: addOn.availability ?? "requires_confirmation", scheduleRequired: Boolean(addOn.scheduleRequired) } : null;
     }).filter(Boolean);
 
+    const startAt = new Date(`${reservation.startDate}T12:00:00`).toISOString();
+    const endAt = new Date(`${reservation.endDate}T12:00:00`).toISOString();
     const result = await createRentalReservationWithPlatform({
       customerAccountId: customerId,
       rentalAssetId: rental.id,
-      startDate: new Date(`${reservation.startDate}T12:00:00`).toISOString(),
-      endDate: new Date(`${reservation.endDate}T12:00:00`).toISOString(),
+      startDate: startAt,
+      endDate: endAt,
       quantity: 1,
       deliveryRequested: reservation.fulfillment === "delivery",
       customerNotes: [
+        extensionOf ? `Extension of reservation: ${extensionOf}` : "",
         `Preferred branch: ${reservation.branch}`,
         `Customer: ${reservation.fullName}`,
         `Email: ${reservation.email}`,
@@ -172,6 +177,7 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
         source: "smartcommerce_frontend",
         rental_add_ons_json: JSON.stringify(selectedAddOns),
         rental_add_ons_count: selectedAddOns.length,
+        rental_extension_of: extensionOf || null,
       },
     });
 
@@ -181,8 +187,22 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
       return;
     }
 
+    await trackCustomerRental({
+      customerId,
+      providerReservationId: result.data.id,
+      rentalAssetId: rental.id,
+      equipmentName: rental.name,
+      branch: reservation.branch,
+      startAt,
+      endAt,
+      status: result.data.status,
+      fulfillment: reservation.fulfillment,
+      addOns: selectedAddOns as unknown[],
+      extensionOfReservationId: extensionOf || undefined,
+    }).catch(() => undefined);
+
     try { window.localStorage.removeItem(RENTAL_DRAFT_KEY); } catch { /* non-blocking */ }
-    go(`/rental-confirmation?item=${encodeURIComponent(rental.id)}&ref=${encodeURIComponent(result.data.id)}&status=${encodeURIComponent(result.data.status)}`);
+    go(`/rental-confirmation?item=${encodeURIComponent(rental.id)}&ref=${encodeURIComponent(result.data.id)}&status=${encodeURIComponent(result.data.status)}${extensionOf ? "&extension=1" : ""}`);
   }
 
   return (
@@ -200,16 +220,16 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
               <div><span>Weekly</span><strong>{rental.weeklyRate ? money(rental.weeklyRate) : "Confirm rate"}</strong></div>
               <div><span>Monthly</span><strong>{rental.monthlyRate ? money(rental.monthlyRate) : "Confirm rate"}</strong></div>
             </div>
-            <div className="rental-detail-next__actions"><a className="rental-detail-next__reserve-link" href="#rental-reservation"><CalendarDays size={16} /> Reserve this equipment</a><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Is ${rental.name} suitable for my job?`)}`)}><Sparkles size={16} /> Ask SmartCommerce</a></div>
+            <div className="rental-detail-next__actions"><a className="rental-detail-next__reserve-link" href="#rental-reservation"><CalendarDays size={16} /> {extensionOf ? "Extend this rental" : "Reserve this equipment"}</a><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Is ${rental.name} suitable for my job?`)}`)}><Sparkles size={16} /> Ask SmartCommerce</a></div>
           </div>
         </section>
 
         <form id="rental-reservation" className="rental-detail-next__reservation" onSubmit={submitReservation}>
-          <header><span>Reservation</span><h2>Choose the details for your job.</h2><p>We only show a confirmation after the rental request is accepted.</p></header>
+          <header><span>{extensionOf ? "Rental extension" : "Reservation"}</span><h2>{extensionOf ? "Choose the new return period." : "Choose the details for your job."}</h2><p>{extensionOf ? "Your current rental stays unchanged until Total Tools accepts the extension request." : "We only show a confirmation after the rental request is accepted."}</p></header>
           <div className="rental-detail-next__reservation-grid">
             <label>Branch<select required value={reservation.branch} onChange={(event) => setReservation((prev) => ({ ...prev, branch: event.target.value }))}><option value="">Select branch</option>{company.branches.map((branch) => <option key={branch.name} value={branch.name}>{branch.name}</option>)}</select></label>
-            <label>Start date<input type="date" required value={reservation.startDate} onChange={(event) => setReservation((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
-            <label>End date<input type="date" required value={reservation.endDate} onChange={(event) => setReservation((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
+            <label>{extensionOf ? "Extension starts" : "Start date"}<input type="date" required value={reservation.startDate} onChange={(event) => setReservation((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
+            <label>{extensionOf ? "New return date" : "End date"}<input type="date" required value={reservation.endDate} onChange={(event) => setReservation((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
             <label>Pickup or delivery<select required value={reservation.fulfillment} onChange={(event) => setReservation((prev) => ({ ...prev, fulfillment: event.target.value as FulfillmentMode }))}><option value="unspecified">Choose</option><option value="pickup">Pickup</option><option value="delivery">Delivery</option></select></label>
             <label>Full name<input autoComplete="name" required value={reservation.fullName} onChange={(event) => setReservation((prev) => ({ ...prev, fullName: event.target.value }))} /></label>
             <label>Email<input autoComplete="email" type="email" required value={reservation.email} onChange={(event) => setReservation((prev) => ({ ...prev, email: event.target.value }))} /></label>
@@ -240,7 +260,7 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
           </div>
 
           {error ? <p className="rental-context-bar__error" role="alert">{error}</p> : null}
-          <button type="submit" disabled={submitting}>{submitting ? <><Loader2 size={16} /> Submitting…</> : "Request reservation"}</button>
+          <button type="submit" disabled={submitting}>{submitting ? <><Loader2 size={16} /> Submitting…</> : extensionOf ? "Request extension" : "Request reservation"}</button>
         </form>
 
         <section className="rental-detail-next__grid rental-detail-next__supporting">
