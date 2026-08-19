@@ -1,6 +1,6 @@
 import { BriefcaseBusiness, CalendarClock, ChevronRight, MapPin, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { extensionHref, listCustomerRentals, type CustomerRental } from "../../services/customerRentalsClient";
+import { canRequestExtension, extensionHref, listCustomerRentals, type CustomerRental } from "../../services/customerRentalsClient";
 import { routeHref } from "../../lib/router";
 import "../../styles/account-rentals.css";
 
@@ -73,7 +73,7 @@ export default function AccountRentalsPanel() {
                 {Array.isArray(rental.add_ons) && rental.add_ons.length ? <span>{rental.add_ons.length} add-on{rental.add_ons.length === 1 ? "" : "s"}</span> : null}
               </div>
               <div className="sc-account-rental__actions">
-                <a className="is-primary" href={extensionHref(rental)}><RotateCcw size={15} /> Request extension</a>
+                {canRequestExtension(rental) ? <a className="is-primary" href={extensionHref(rental)}><RotateCcw size={15} /> Request extension</a> : null}
                 <a href={routeHref(`/rental/${encodeURIComponent(rental.rental_asset_id)}`)}>View equipment <ChevronRight size={15} /></a>
               </div>
             </article>
