@@ -37,9 +37,12 @@ function send(response: any, status: number, payload: unknown) {
 function daysUntil(endAt: string) { return Math.ceil((new Date(endAt).getTime() - Date.now()) / 86400000); }
 function reminderLevel(days: number) { return days < 0 ? "overdue" : days <= 1 ? "urgent" : days <= 3 ? "due_soon" : days <= 7 ? "upcoming" : "none"; }
 
+type RentalApiRow = Record<string, any> & { status?: string; end_at?: string };
+type RentalApiItem = RentalApiRow & { daysRemaining: number; reminderLevel: string };
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
-  if (!['GET','POST'].includes(method)) { response.setHeader("Allow", "GET, POST"); return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "GET or POST is required." } }); }
+  if (!["GET", "POST"].includes(method)) { response.setHeader("Allow", "GET, POST"); return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "GET or POST is required." } }); }
   try {
     const customerId = await currentCustomerId(request);
     if (!customerId) return send(response, 401, { error: { code: "AUTH_REQUIRED", message: "Sign in to view your rentals." } });
@@ -63,12 +66,12 @@ export default async function handler(request: any, response: any) {
       return send(response, 201, { rental: row });
     }
 
-    const rows = await listCustomerRentalLifecycle(customerId);
-    const rentals = rows.map((row) => {
-      const daysRemaining = daysUntil(String(row.end_at));
+    const rows = await listCustomerRentalLifecycle(customerId) as RentalApiRow[];
+    const rentals: RentalApiItem[] = rows.map((row) => {
+      const daysRemaining = daysUntil(String(row.end_at || ""));
       return { ...row, daysRemaining, reminderLevel: reminderLevel(daysRemaining) };
     });
-    return send(response, 200, { rentals, dueSoon: rentals.filter((item) => item.reminderLevel !== "none" && !["completed","cancelled","declined"].includes(String(item.status))) });
+    return send(response, 200, { rentals, dueSoon: rentals.filter((item) => item.reminderLevel !== "none" && !["completed", "cancelled", "declined"].includes(String(item.status || ""))) });
   } catch (error) {
     console.error("customer_rentals_error", { code: error instanceof Error ? error.message : "request_failed" });
     return send(response, 503, { error: { code: "CUSTOMER_RENTALS_UNAVAILABLE", message: "Rental activity is temporarily unavailable." } });
