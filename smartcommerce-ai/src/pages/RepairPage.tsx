@@ -2,10 +2,21 @@ import { CheckCircle2, Loader2, MapPin, Sparkles, Wrench } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { getRepairTypes, submitRepairRequestToPlatform } from "../data/repairs";
-import { routeHref } from "../lib/router";
+import { getCustomerAccount } from "../lib/customerAccount";
+import { go, routeHref } from "../lib/router";
 import { company } from "../styles/theme";
 
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+const REPAIR_DRAFT_KEY = "smartcommerce_repair_draft_v1";
+
+type RepairDraft = {
+  equipment: string;
+  model: string;
+  issue: string;
+  branch: string;
+  date: string;
+  contact: string;
+};
 
 const getInitialEquipment = () => {
   const raw = window.location.hash.split("?")[1] || "";
@@ -21,14 +32,26 @@ const getInitialBranch = () => {
   }
 };
 
+const getSavedDraft = (): Partial<RepairDraft> => {
+  try {
+    const raw = window.localStorage.getItem(REPAIR_DRAFT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 export default function RepairPage() {
+  const savedDraft = useMemo(getSavedDraft, []);
   const [repairs, setRepairs] = useState(() => getRepairTypes());
-  const [equipment, setEquipment] = useState(getInitialEquipment);
-  const [model, setModel] = useState("");
-  const [issue, setIssue] = useState("");
-  const [branch, setBranch] = useState(getInitialBranch);
-  const [date, setDate] = useState("");
-  const [contact, setContact] = useState("");
+  const [equipment, setEquipment] = useState(() => savedDraft.equipment || getInitialEquipment());
+  const [model, setModel] = useState(() => savedDraft.model || "");
+  const [issue, setIssue] = useState(() => savedDraft.issue || "");
+  const [branch, setBranch] = useState(() => savedDraft.branch || getInitialBranch());
+  const [date, setDate] = useState(() => savedDraft.date || "");
+  const [contact, setContact] = useState(() => savedDraft.contact || "");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -41,11 +64,33 @@ export default function RepairPage() {
   const issueHints = useMemo(() => repairs.find((item) => item.toolType === equipment)?.commonIssues || [], [equipment, repairs]);
   const selectedBranch = company.branches.find((item) => item.name === branch);
 
+  function saveDraft() {
+    const draft: RepairDraft = { equipment, model, issue, branch, date, contact };
+    try {
+      window.localStorage.setItem(REPAIR_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // If local storage is unavailable, account onboarding can still continue.
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (status === "submitting") return;
     setStatus("submitting");
     setMessage("");
+
+    try {
+      const accountState = await getCustomerAccount();
+      if (!accountState.customer) {
+        saveDraft();
+        go("/account?intent=repair");
+        return;
+      }
+    } catch {
+      saveDraft();
+      go("/account?intent=repair");
+      return;
+    }
 
     const preferredDate = date ? new Date(`${date}T12:00:00`).toISOString() : undefined;
     const notes = [
@@ -63,10 +108,19 @@ export default function RepairPage() {
 
     if (!result.success) {
       setStatus("error");
-      setMessage(result.error.message);
+      setMessage(
+        result.error.code === "PLATFORM_CONTEXT_REQUIRED"
+          ? "Repairs are temporarily unavailable online because the Total Tools service connection is not configured. Your repair details are still saved."
+          : result.error.message,
+      );
       return;
     }
 
+    try {
+      window.localStorage.removeItem(REPAIR_DRAFT_KEY);
+    } catch {
+      // Successful submission should not fail because storage cleanup is unavailable.
+    }
     setStatus("success");
     setMessage(`Repair request ${result.data.id} was accepted with status “${result.data.status}”.`);
   }
@@ -113,7 +167,7 @@ export default function RepairPage() {
             <label>Phone or email<input required value={contact} onChange={(event) => setContact(event.target.value)} placeholder="How should the service team contact you?" /></label>
 
             <button type="submit" disabled={status === "submitting"}>{status === "submitting" ? <><Loader2 size={17} /> Sending request…</> : "Send repair request"}</button>
-            {status === "error" ? <p className="sc-flow-status is-error" role="status">Request not submitted: {message}</p> : null}
+            {status === "error" ? <p className="sc-flow-status is-error" role="status">{message}</p> : null}
             {status === "success" ? <p className="sc-flow-status is-success" role="status"><CheckCircle2 size={16} /> {message}</p> : null}
           </form>
 
