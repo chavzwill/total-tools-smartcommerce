@@ -200,7 +200,7 @@ export async function getCommercialLedgerStatement(input: {
         AND occurred_at >= ${input.startAt}
         AND occurred_at < ${input.endAt}
       ORDER BY occurred_at ASC, created_at ASC
-    ` as Promise<Array<any>>,
+    ` as unknown as Promise<Array<any>>,
     db`
       SELECT
         COUNT(*)::int AS total_count,
@@ -211,7 +211,7 @@ export async function getCommercialLedgerStatement(input: {
       WHERE commercial_account_id = ${input.commercialAccountId}
         AND occurred_at >= ${input.startAt}
         AND occurred_at < ${input.endAt}
-    ` as Promise<Array<{ total_count: number; provider_synced_count: number; debit_minor: number | string; credit_minor: number | string }>>,
+    ` as unknown as Promise<Array<{ total_count: number; provider_synced_count: number; debit_minor: number | string; credit_minor: number | string }>>,
     db`
       SELECT provider_reference, currency, coverage_start, coverage_end,
              opening_balance_minor, closing_balance_minor, reconciled_at
@@ -221,7 +221,7 @@ export async function getCommercialLedgerStatement(input: {
         AND coverage_end >= ${input.endAt}
       ORDER BY coverage_end ASC, reconciled_at DESC
       LIMIT 1
-    ` as Promise<Array<any>>,
+    ` as unknown as Promise<Array<any>>,
   ]);
 
   const summary = coverageRows[0] || { total_count: 0, provider_synced_count: 0, debit_minor: 0, credit_minor: 0 };
