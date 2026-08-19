@@ -2,6 +2,7 @@ import { BadgeCheck, Bot, BriefcaseBusiness, ChevronRight, KeyRound, LayoutDashb
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
+import AccountRentalsPanel from "../components/account/AccountRentalsPanel";
 import "../styles/accountTabs.css";
 import {
   getCustomerAccount,
@@ -198,7 +199,7 @@ export default function CustomerAccountPage() {
 
               {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
 
-              {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage rental agreements, active equipment, extensions and returns.</p></div><div className="sc-account-placeholder"><BriefcaseBusiness size={28} /><h3>Rental history is coming online</h3><p>Connected rental agreements and active rental status will appear here.</p></div></section>}
+              {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage active equipment, return deadlines, extensions and rental history without leaving your account.</p></div><AccountRentalsPanel /></section>}
 
               {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
 
