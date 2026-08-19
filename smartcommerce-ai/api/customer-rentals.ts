@@ -62,6 +62,7 @@ export default async function handler(request: any, response: any) {
         fulfillment: input.fulfillment ? String(input.fulfillment) : null,
         addOns: Array.isArray(input.addOns) ? input.addOns : [],
         extensionOfReservationId: input.extensionOfReservationId ? String(input.extensionOfReservationId) : null,
+        extensionRequestable: typeof input.extensionRequestable === "boolean" ? input.extensionRequestable : undefined,
       });
       return send(response, 201, { rental: row });
     }
@@ -71,7 +72,7 @@ export default async function handler(request: any, response: any) {
       const daysRemaining = daysUntil(String(row.end_at || ""));
       return { ...row, daysRemaining, reminderLevel: reminderLevel(daysRemaining) };
     });
-    return send(response, 200, { rentals, dueSoon: rentals.filter((item) => item.reminderLevel !== "none" && !["completed", "cancelled", "declined"].includes(String(item.status || ""))) });
+    return send(response, 200, { rentals, dueSoon: rentals.filter((item) => item.reminderLevel !== "none" && !["completed", "cancelled", "declined", "returned"].includes(String(item.status || ""))) });
   } catch (error) {
     console.error("customer_rentals_error", { code: error instanceof Error ? error.message : "request_failed" });
     return send(response, 503, { error: { code: "CUSTOMER_RENTALS_UNAVAILABLE", message: "Rental activity is temporarily unavailable." } });
