@@ -17,6 +17,7 @@ export type ProviderAccountingEvent = {
   description: string;
   currency: string;
   amountMinor: number;
+  outstandingMinor?: number | null;
   occurredAt: string;
   dueAt?: string | null;
   status?: string;
@@ -42,11 +43,17 @@ export async function syncProviderAccountingEvent(event: ProviderAccountingEvent
   if (!event.providerReference?.trim()) throw new Error("ACCOUNTING_SYNC_REFERENCE_REQUIRED");
   if (!event.description?.trim()) throw new Error("ACCOUNTING_SYNC_DESCRIPTION_REQUIRED");
   if (!Number.isSafeInteger(event.amountMinor) || event.amountMinor < 0) throw new Error("ACCOUNTING_SYNC_AMOUNT_INVALID");
+  if (event.outstandingMinor !== undefined && event.outstandingMinor !== null && (!Number.isSafeInteger(event.outstandingMinor) || event.outstandingMinor < 0)) throw new Error("ACCOUNTING_SYNC_OUTSTANDING_INVALID");
   if (!event.currency?.trim()) throw new Error("ACCOUNTING_SYNC_CURRENCY_REQUIRED");
   if (!Number.isFinite(new Date(event.occurredAt).getTime())) throw new Error("ACCOUNTING_SYNC_OCCURRED_AT_INVALID");
   if (event.dueAt && !Number.isFinite(new Date(event.dueAt).getTime())) throw new Error("ACCOUNTING_SYNC_DUE_AT_INVALID");
 
   const amounts = direction(event.type, event.amountMinor);
+  const metadata = { ...(event.metadata || {}) };
+  if (event.type === "invoice" && event.outstandingMinor !== undefined && event.outstandingMinor !== null) {
+    metadata.outstandingMinor = event.outstandingMinor;
+  }
+
   return recordCommercialLedgerEntry({
     commercialAccountId: event.commercialAccountId.trim(),
     customerId: event.customerId || null,
@@ -65,7 +72,7 @@ export async function syncProviderAccountingEvent(event: ProviderAccountingEvent
     status: event.status || "posted",
     source: "accounting_sync",
     sourceCoverage: "provider_synced",
-    metadata: event.metadata || {},
+    metadata,
   });
 }
 
