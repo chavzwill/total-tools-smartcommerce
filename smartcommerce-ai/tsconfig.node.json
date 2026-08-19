@@ -1,16 +1,18 @@
 {
   "compilerOptions": {
-    "composite": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true
   },
   "include": [
     "vite.config.ts",
+    "api/**/*.ts",
     "src/backend/**/*.ts",
     "src/integrations/**/*.ts",
     "src/platform/**/*.ts",
     "src/server/**/*.ts",
+    "src/types/**/*.ts",
     "src/types.ts"
   ]
 }

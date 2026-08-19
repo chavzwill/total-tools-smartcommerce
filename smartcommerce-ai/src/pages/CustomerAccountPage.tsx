@@ -1,7 +1,9 @@
-import { BadgeCheck, Bot, BriefcaseBusiness, ChevronRight, KeyRound, LayoutDashboard, LockKeyhole, LogIn, LogOut, MailCheck, PackageCheck, ShieldCheck, ShoppingBag, UserRound, UserRoundPlus, Wrench } from "lucide-react";
+import { BadgeCheck, Bot, BriefcaseBusiness, ChevronRight, KeyRound, LayoutDashboard, LockKeyhole, LogIn, LogOut, MailCheck, PackageCheck, ReceiptText, ShieldCheck, ShoppingBag, UserRound, UserRoundPlus, Wrench } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
+import AccountRentalsPanel from "../components/account/AccountRentalsPanel";
+import AccountOverviewAttention from "../components/account/AccountOverviewAttention";
 import "../styles/accountTabs.css";
 import {
   getCustomerAccount,
@@ -189,20 +191,27 @@ export default function CustomerAccountPage() {
                     </div>
                   </div>
 
-                  <div className="sc-account-recent">
-                    <div><span className="sc-eyebrow">Recent activity</span><h3>Nothing needs your attention</h3><p>Orders, rentals and repairs will surface here when connected activity exists.</p></div>
-                    <button type="button" onClick={() => selectAccountTab("orders")}>View orders <ChevronRight size={16} /></button>
-                  </div>
+                  <AccountOverviewAttention onViewRentals={() => selectAccountTab("rentals")} />
                 </section>
               )}
 
               {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
 
-              {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage rental agreements, active equipment, extensions and returns.</p></div><div className="sc-account-placeholder"><BriefcaseBusiness size={28} /><h3>Rental history is coming online</h3><p>Connected rental agreements and active rental status will appear here.</p></div></section>}
+              {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage active equipment, return deadlines, extensions and rental history without leaving your account.</p></div><AccountRentalsPanel /></section>}
 
               {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
 
-              {accountTab === "commercial" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Commercial</span><h2>Business account</h2><p>Manage business verification, purchasing authority, credit and commercial controls.</p></div><div className="sc-account-placeholder"><BadgeCheck size={28} /><h3>Commercial access is restricted</h3><p>Approved organizations and authorized members will use this area for business purchasing features.</p></div></section>}
+              {accountTab === "commercial" && (
+                <section className="sc-account-tab-panel">
+                  <div className="sc-account-section__heading"><span className="sc-eyebrow">Commercial</span><h2>Business account & finance</h2><p>Manage organisation verification, purchasing authority, credit controls, transactions and statements.</p></div>
+                  <div className="sc-account-action-grid">
+                    <a href={routeHref("/commercial#commercial-account")}><BadgeCheck size={19} /><span><strong>Commercial account</strong><small>Apply, verify the organisation, manage sites and projects.</small></span><ChevronRight size={17} /></a>
+                    <a href={routeHref("/commercial/accounting")}><ReceiptText size={19} /><span><strong>Statements & transactions</strong><small>Review account activity, approved credit controls and statement periods.</small></span><ChevronRight size={17} /></a>
+                    <a href={routeHref("/commercial?mode=quote")}><BriefcaseBusiness size={19} /><span><strong>Request commercial pricing</strong><small>Send products, quantities and project requirements to the commercial team.</small></span><ChevronRight size={17} /></a>
+                  </div>
+                  <div className="sc-account-placeholder"><ShieldCheck size={28} /><h3>Financial access is permission controlled</h3><p>Statements, account credit and purchasing controls are only shown to authorised commercial members. Official balances are displayed only when the provider/accounting ledger is fully synchronized.</p></div>
+                </section>
+              )}
 
               {accountTab === "security" && (
                 <section className="sc-account-tab-panel">

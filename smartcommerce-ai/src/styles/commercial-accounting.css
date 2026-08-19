@@ -1,0 +1,242 @@
+.sc-commercial-accounting {
+  background: linear-gradient(180deg, #fbfcfa 0%, #f5f7f4 100%);
+  color: #18211c;
+  min-height: 100vh;
+}
+
+.sc-commercial-accounting__hero {
+  padding: clamp(2.5rem, 6vw, 5rem) 0 2rem;
+  background: #fff;
+  border-bottom: 1px solid #e4e9e5;
+}
+
+.sc-commercial-accounting__hero span {
+  display: block;
+  margin-bottom: .55rem;
+  color: #08763f;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.sc-commercial-accounting__hero h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(2.1rem, 6vw, 4.8rem);
+  line-height: .98;
+  letter-spacing: -.05em;
+}
+
+.sc-commercial-accounting__hero p {
+  margin: 1rem 0 0;
+  max-width: 640px;
+  color: #647068;
+  font-size: 1rem;
+}
+
+.sc-commercial-accounting__body {
+  padding-top: 1.5rem;
+  padding-bottom: 7rem;
+}
+
+.sc-commercial-accounting__toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, .8fr) auto;
+  align-items: end;
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+
+.sc-commercial-accounting__toolbar label {
+  display: grid;
+  gap: .4rem;
+  font-size: .78rem;
+  font-weight: 800;
+  color: #4e5d54;
+}
+
+.sc-commercial-accounting__toolbar select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 .9rem;
+  border: 1px solid #ccd6cf;
+  border-radius: 14px;
+  background: #fff;
+  color: #18211c;
+  font: inherit;
+  font-size: .95rem;
+}
+
+.sc-commercial-accounting__download {
+  min-height: 48px;
+  padding: 0 1rem;
+  border: 1px solid #08763f;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  color: #08763f;
+  font-weight: 800;
+  text-decoration: none;
+  background: #fff;
+}
+
+.sc-commercial-accounting__summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .8rem;
+  margin: 1rem 0;
+}
+
+.sc-commercial-accounting__summary article {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e0e6e1;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 30px rgb(14 37 24 / 4%);
+}
+
+.sc-commercial-accounting__summary svg {
+  color: #08763f;
+  margin-bottom: .9rem;
+}
+
+.sc-commercial-accounting__summary span,
+.sc-commercial-accounting__summary small {
+  display: block;
+  color: #68756d;
+}
+
+.sc-commercial-accounting__summary span {
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.sc-commercial-accounting__summary strong {
+  display: block;
+  margin: .28rem 0;
+  font-size: clamp(1.15rem, 2.1vw, 1.7rem);
+  line-height: 1.05;
+  letter-spacing: -.03em;
+}
+
+.sc-commercial-accounting__summary small {
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
+.sc-commercial-accounting__disclosure {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  padding: .9rem 1rem;
+  border: 1px solid #e6dcc1;
+  border-radius: 14px;
+  background: #fff9ea;
+  color: #655527;
+  font-size: .86rem;
+}
+
+.sc-commercial-accounting__disclosure.is-complete {
+  border-color: #cde2d5;
+  background: #f1f8f4;
+  color: #28543b;
+}
+
+.sc-commercial-accounting__disclosure p { margin: 0; }
+
+.sc-commercial-accounting__statement {
+  margin-top: 1rem;
+  overflow: hidden;
+  border: 1px solid #dde5df;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.sc-commercial-accounting__statement > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #e7ece8;
+}
+
+.sc-commercial-accounting__statement > header span {
+  color: #08763f;
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+
+.sc-commercial-accounting__statement > header h2 { margin: .2rem 0 0; font-size: 1.4rem; }
+.sc-commercial-accounting__statement > header > strong { color: #526158; text-align: right; }
+
+.sc-commercial-accounting__entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px minmax(120px, auto);
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-top: 1px solid #edf0ed;
+}
+
+.sc-commercial-accounting__entry:first-child { border-top: 0; }
+.sc-commercial-accounting__entry-main { min-width: 0; }
+.sc-commercial-accounting__entry-main > span,
+.sc-commercial-accounting__entry-main > small,
+.sc-commercial-accounting__entry-status small { color: #758078; font-size: .76rem; }
+.sc-commercial-accounting__entry-main > strong { display: block; margin: .15rem 0; font-size: .98rem; }
+.sc-commercial-accounting__entry-main > small { display: block; overflow-wrap: anywhere; }
+.sc-commercial-accounting__entry-status { text-align: right; }
+.sc-commercial-accounting__entry-status span { display: block; font-weight: 800; font-size: .82rem; text-transform: capitalize; }
+.sc-commercial-accounting__entry > strong { text-align: right; font-size: 1rem; }
+.sc-commercial-accounting__entry > strong.is-credit { color: #08763f; }
+
+.sc-commercial-accounting__empty,
+.sc-commercial-accounting__empty-period,
+.sc-commercial-accounting__loading {
+  display: grid;
+  justify-items: start;
+  gap: .55rem;
+  padding: 2rem;
+  border: 1px solid #e0e6e1;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.sc-commercial-accounting__empty h1,
+.sc-commercial-accounting__empty p,
+.sc-commercial-accounting__empty-period p { margin: 0; }
+.sc-commercial-accounting__empty a { color: #08763f; font-weight: 800; }
+
+@media (max-width: 900px) {
+  .sc-commercial-accounting__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .sc-commercial-accounting__hero { padding: 1.8rem 0 1.4rem; }
+  .sc-commercial-accounting__hero h1 { font-size: clamp(2rem, 11vw, 3.1rem); }
+  .sc-commercial-accounting__body { padding-top: 1rem; padding-bottom: calc(8.5rem + env(safe-area-inset-bottom)); }
+  .sc-commercial-accounting__toolbar { grid-template-columns: 1fr 1fr; gap: .65rem; }
+  .sc-commercial-accounting__download { grid-column: 1 / -1; }
+  .sc-commercial-accounting__summary { grid-template-columns: 1fr 1fr; gap: .55rem; }
+  .sc-commercial-accounting__summary article { padding: .85rem; border-radius: 15px; }
+  .sc-commercial-accounting__summary strong { font-size: 1.08rem; }
+  .sc-commercial-accounting__statement { border-radius: 16px; }
+  .sc-commercial-accounting__statement > header { align-items: flex-start; flex-direction: column; }
+  .sc-commercial-accounting__statement > header > strong { text-align: left; }
+  .sc-commercial-accounting__entry {
+    grid-template-columns: 1fr auto;
+    gap: .45rem .75rem;
+    padding: .9rem;
+  }
+  .sc-commercial-accounting__entry-status { grid-column: 1; grid-row: 2; text-align: left; display: flex; gap: .5rem; align-items: center; }
+  .sc-commercial-accounting__entry > strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}

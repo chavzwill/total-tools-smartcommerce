@@ -26,9 +26,50 @@ type SecurityResponse = {
 };
 
 export const CUSTOMER_ACCOUNT_CHANGED_EVENT = "smartcommerce:account-changed";
+const RENTAL_DRAFT_KEY = "smartcommerce_rental_draft_v1";
 
 function announceAccountChange(state: CustomerAccountState) {
   window.dispatchEvent(new CustomEvent(CUSTOMER_ACCOUNT_CHANGED_EVENT, { detail: state }));
+}
+
+function continueAccountIntent(state: CustomerAccountState) {
+  if (!state.customer || typeof window === "undefined") return;
+
+  const raw = window.location.hash.slice(1);
+  const [path, queryString = ""] = raw.split("?");
+  if (path !== "/account") return;
+
+  const intent = new URLSearchParams(queryString).get("intent");
+  if (intent === "repair") {
+    window.location.hash = "/repairs";
+    return;
+  }
+
+  if (intent === "rental") {
+    let rentalId = "";
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(RENTAL_DRAFT_KEY) || "null");
+      rentalId = typeof parsed?.rentalId === "string" ? parsed.rentalId : "";
+    } catch {
+      rentalId = "";
+    }
+    window.location.hash = rentalId ? `/rental/${encodeURIComponent(rentalId)}` : "/rentals";
+    return;
+  }
+
+  if (intent === "checkout") {
+    window.location.hash = "/checkout";
+    return;
+  }
+
+  if (intent === "cart") {
+    window.location.hash = "/cart";
+    return;
+  }
+
+  if (intent === "commercial") {
+    window.location.hash = "/commercial";
+  }
 }
 
 async function readResponse(response: Response) {
@@ -80,6 +121,7 @@ export async function signUpCustomer(input: {
   });
   const state = await readResponse(response);
   announceAccountChange(state);
+  continueAccountIntent(state);
   return state;
 }
 
@@ -92,6 +134,7 @@ export async function loginCustomer(input: { email: string; password: string }) 
   });
   const state = await readResponse(response);
   announceAccountChange(state);
+  continueAccountIntent(state);
   return state;
 }
 

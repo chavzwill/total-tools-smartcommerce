@@ -1,0 +1,143 @@
+/* Cross-cutting accessibility and responsive safeguards.
+   This layer owns keyboard visibility, touch targets, iOS form sizing,
+   dialog viewport containment, safe-area behavior, and reduced-motion fallbacks. */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgba(8, 118, 63, .34) !important;
+  outline-offset: 3px !important;
+}
+
+:where(button, a, input, select, textarea) {
+  touch-action: manipulation;
+}
+
+:where(img, video, canvas, svg) {
+  max-width: 100%;
+}
+
+[role="dialog"] {
+  overscroll-behavior: contain;
+}
+
+.v2-command-palette {
+  max-height: min(78vh, calc(100dvh - 32px)) !important;
+  position: relative;
+}
+
+.v2-command-palette__close {
+  align-items: center;
+  background: #f5f7f4 !important;
+  border: 1px solid #dfe5df !important;
+  border-radius: 999px !important;
+  color: #344038 !important;
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  padding: 0 !important;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 44px;
+  z-index: 2;
+}
+
+.v2-command-palette__close:hover,
+.v2-command-palette__close:focus-visible {
+  background: #edf6f0 !important;
+  color: #08763f !important;
+}
+
+.v2-command-palette__top {
+  padding-right: 52px;
+}
+
+.tt-app-shell main:focus {
+  outline: none;
+}
+
+.tt-app-shell :where(h1, h2, h3, [id]) {
+  scroll-margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .v2-global-command input,
+  .v2-command-palette input,
+  .tt-app-shell input,
+  .tt-app-shell select,
+  .tt-app-shell textarea {
+    font-size: 16px !important;
+  }
+
+  .v2-photo-match,
+  .v2-ai-submit {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  .sc-signal-rail__pager button {
+    height: 44px !important;
+    width: 44px !important;
+  }
+
+  .v2-command-overlay {
+    align-items: flex-start;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .v2-command-palette {
+    border-radius: 20px !important;
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+    padding: 18px !important;
+  }
+
+  .v2-command-palette__top {
+    padding-right: 48px;
+  }
+
+  .v2-command-palette__results {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .v2-header__primary {
+    gap: 6px !important;
+    padding-inline: 10px !important;
+  }
+
+  .v2-branch-selector__trigger {
+    max-width: 116px !important;
+  }
+
+  .v2-brand {
+    width: min(154px, 40vw) !important;
+  }
+
+  .v2-header__command-row {
+    padding-inline: 10px !important;
+  }
+
+  .v2-global-command {
+    padding-left: 10px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

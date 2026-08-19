@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
-import { firstHeader, recordSecurityEvent, requestUserAgent } from "../src/server/securityInfrastructure.js";
+import { enforceDurableRateLimit, firstHeader, recordSecurityEvent, requestIp, requestUserAgent } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 8_000;
@@ -69,6 +69,10 @@ export default async function handler(request:any,response:any) {
     }
     if (method !== "POST") { response.setHeader("Allow","GET, POST"); return send(response,405,{error:{code:"METHOD_NOT_ALLOWED",message:"GET or POST is required."}}); }
     if (!sameOrigin(request)) return send(response,403,{error:{code:"ORIGIN_REJECTED",message:"This request was rejected."}});
+
+    await enforceDurableRateLimit({ request, action: "session_management_ip", subject: requestIp(request), limit: 30, windowSeconds: 900 });
+    await enforceDurableRateLimit({ request, action: "session_management_account", subject: current.customer_id, limit: 20, windowSeconds: 900 });
+
     const body = await readJsonBody(request) as { action?: string; sessionId?: string };
     const action=String(body.action||"");
     if (action === "revoke") {
@@ -87,7 +91,14 @@ export default async function handler(request:any,response:any) {
     return send(response,400,{error:{code:"INVALID_ACTION",message:"That session action is not supported."}});
   } catch (error) {
     if (error instanceof SyntaxError) return send(response,400,{error:{code:"INVALID_JSON",message:"The request body is invalid."}});
-    if (Number((error as any)?.status) === 413) return send(response,413,{error:{code:"REQUEST_TOO_LARGE",message:"The request is too large."}});
+    const status = Number((error as any)?.status || 500);
+    if (status === 429) {
+      const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || 900));
+      response.setHeader("Retry-After", String(retryAfter));
+      await recordSecurityEvent({request,eventType:"session_management_rate_limited",eventStatus:"blocked",riskLevel:"medium"}).catch(()=>undefined);
+      return send(response,429,{error:{code:"RATE_LIMITED",message:"Too many session-management attempts. Try again later."}});
+    }
+    if (status === 413) return send(response,413,{error:{code:"REQUEST_TOO_LARGE",message:"The request is too large."}});
     console.error("account_sessions_error",{code:"session_management_failed"});
     return send(response,503,{error:{code:"SESSION_MANAGEMENT_UNAVAILABLE",message:"Session management is temporarily unavailable.",retryable:true}});
   }

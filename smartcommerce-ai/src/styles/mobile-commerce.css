@@ -1,0 +1,541 @@
+/* Mobile commerce layout corrections driven by real iPhone preview QA. */
+
+@media (max-width: 760px) {
+  html {
+    scroll-padding-top: 18px;
+  }
+
+  body {
+    padding-bottom: 0 !important;
+  }
+
+  /* Fixed commerce nav must never cover page or footer content. */
+  .tt-app-shell main {
+    padding-bottom: 106px !important;
+  }
+
+  .tt-footer {
+    background: linear-gradient(180deg, #fffaf0 0%, #f3f8f2 100%) !important;
+    border-top: 1px solid #dce8df !important;
+    color: #17372a !important;
+    padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .tt-footer__lead,
+  .tt-footer__grid,
+  .tt-footer__bottom {
+    color: #17372a !important;
+  }
+
+  .tt-footer__lead {
+    align-items: flex-start !important;
+    border-bottom-color: #dce8df !important;
+    text-align: left !important;
+  }
+
+  .tt-footer__brand img {
+    filter: none !important;
+    object-position: left center !important;
+  }
+
+  .tt-footer__lead p {
+    color: #5f7167 !important;
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+    text-align: left !important;
+  }
+
+  .tt-footer__grid a,
+  .tt-footer__contact span,
+  .tt-footer__bottom span {
+    color: #5f7167 !important;
+  }
+
+  .tt-footer__grid h2,
+  .tt-footer__contact strong {
+    color: #176b45 !important;
+  }
+
+  .tt-footer__grid {
+    gap: 30px 18px !important;
+  }
+
+  .tt-footer__grid h2 {
+    font-size: 13px !important;
+  }
+
+  .tt-footer__grid a,
+  .tt-footer__grid section > span,
+  .tt-footer__grid section > div,
+  .tt-footer__grid section > a > strong {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+  }
+
+  .tt-footer__grid section > a > span,
+  .tt-footer__contact > a > span,
+  .tt-footer__contact > div > span {
+    font-size: 12px !important;
+  }
+
+  .tt-footer__contact > a > strong,
+  .tt-footer__contact > div > strong {
+    font-size: 14px !important;
+  }
+
+  .tt-footer__bottom {
+    font-size: 12px !important;
+  }
+
+  /* Global mobile reading floor on customer-facing copy. */
+  .demo-home p,
+  .demo-page p,
+  .sc-account-real p,
+  .primary-action p {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .sc-eyebrow,
+  .sc-commerce-modes__heading > span,
+  .primary-action__copy > span,
+  .sc-order-summary__eyebrow {
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    letter-spacing: .075em !important;
+  }
+
+  /* Signed-out account: mode switch stays in normal flow and cannot cover fields. */
+  .sc-account-real--signed-out {
+    width: min(100% - 24px, 620px) !important;
+    padding: 24px 20px 28px !important;
+    border-radius: 24px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__intro h1 {
+    font-size: clamp(2rem, 9vw, 2.8rem) !important;
+    line-height: 1.02 !important;
+  }
+
+  .sc-account-real__tabs {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    margin: 24px 0 18px !important;
+    gap: 6px !important;
+  }
+
+  .sc-account-real__tabs button {
+    min-height: 52px !important;
+    font-size: 16px !important;
+  }
+
+  .sc-account-real__form {
+    display: grid !important;
+    gap: 18px !important;
+  }
+
+  .sc-account-real__form label,
+  .demo-flow-form label,
+  .demo-reserve-form label {
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+    gap: 8px !important;
+  }
+
+  .sc-account-real__form input,
+  .demo-flow-form input,
+  .demo-flow-form select,
+  .demo-flow-form textarea,
+  .demo-reserve-form input,
+  .demo-reserve-form select {
+    min-height: 54px !important;
+    font-size: 16px !important;
+    padding: 12px 14px !important;
+  }
+
+  .sc-account-real__text-action {
+    font-size: 16px !important;
+  }
+
+  .sc-account-real__form > button:not(.sc-account-real__text-action) {
+    min-height: 54px !important;
+    font-size: 17px !important;
+  }
+
+  /* Homepage commerce modes: readable, compact swipe rail rather than tall clipped cards. */
+  .sc-commerce-modes {
+    overflow: hidden !important;
+    padding-block: 52px !important;
+  }
+
+  .sc-commerce-modes__heading {
+    margin-bottom: 22px !important;
+  }
+
+  .sc-commerce-modes__heading h2 {
+    font-size: clamp(2rem, 8.5vw, 2.7rem) !important;
+    line-height: 1.02 !important;
+    letter-spacing: -.04em !important;
+  }
+
+  .primary-actions__grid {
+    display: flex !important;
+    gap: 14px !important;
+    grid-template-columns: none !important;
+    overflow-x: auto !important;
+    padding: 2px 18px 12px 0 !important;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .primary-actions__grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .primary-action {
+    flex: 0 0 min(84vw, 330px) !important;
+    min-height: 0 !important;
+    height: 250px !important;
+    display: grid !important;
+    grid-template-columns: 43% 57% !important;
+    grid-template-rows: 1fr !important;
+    overflow: hidden !important;
+    border-radius: 22px !important;
+    scroll-snap-align: start;
+  }
+
+  .primary-action__image {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    order: 0 !important;
+  }
+
+  .primary-action__image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .primary-action__copy {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    align-content: center !important;
+    min-width: 0 !important;
+    padding: 18px 16px !important;
+  }
+
+  .primary-action__icon {
+    width: 40px !important;
+    height: 40px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .primary-action__copy h3 {
+    margin: 4px 0 7px !important;
+    font-size: 23px !important;
+    line-height: 1.02 !important;
+  }
+
+  .primary-action__copy p {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden !important;
+    margin: 0 0 13px !important;
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+  }
+
+  .primary-action__copy a {
+    min-height: 44px !important;
+    padding-inline: 15px !important;
+    font-size: 15px !important;
+  }
+
+  /* Rental intent chips should scroll naturally, not become an overlay layer. */
+  .rental-intent-nav {
+    position: static !important;
+    top: auto !important;
+  }
+
+  .rental-intent-nav__inner {
+    padding: 8px 16px !important;
+  }
+
+  .rental-page-header {
+    padding: 22px 0 12px !important;
+  }
+
+  .rental-page-header__inner {
+    gap: 12px !important;
+  }
+
+  .rental-page-header__inner h1 {
+    font-size: clamp(34px, 9vw, 46px) !important;
+    line-height: .98 !important;
+    margin: 6px 0 10px !important;
+  }
+
+  .rental-page-header__inner > div:first-child > p {
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+    margin: 0 !important;
+  }
+
+  .rental-page-header__assistant {
+    background: linear-gradient(135deg, #f3faef, #fff8dc) !important;
+    border-color: #dbe8d6 !important;
+    box-shadow: none !important;
+    gap: 5px !important;
+    padding: 15px 16px !important;
+  }
+
+  .rental-page-header__assistant strong {
+    font-size: 18px !important;
+  }
+
+  .rental-page-header__assistant p {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+  }
+
+  .rental-page-content-next {
+    gap: 10px !important;
+  }
+
+  .rental-context-bar {
+    border-color: #dce7df !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+  }
+
+  .rental-context-bar__mobile-toggle {
+    background: #fff !important;
+    border: 1px solid #cfe0d5 !important;
+    border-radius: 999px !important;
+    color: #176b45 !important;
+    min-height: 44px !important;
+    padding: 0 14px !important;
+    width: fit-content !important;
+    font-size: 15px !important;
+  }
+
+  .rental-context-bar__missing {
+    color: #5f6f66 !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    margin: 0 !important;
+  }
+
+  .rental-discovery-toolbar {
+    gap: 8px !important;
+  }
+
+  .rental-discovery-toolbar__search {
+    border-radius: 14px !important;
+    gap: 7px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    padding: 8px !important;
+  }
+
+  .rental-discovery-toolbar__search label {
+    display: none !important;
+  }
+
+  .rental-discovery-toolbar__search input {
+    font-size: 16px !important;
+    min-width: 0 !important;
+    padding-inline: 12px !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+  }
+
+  .rental-discovery-toolbar__search button {
+    min-width: 88px !important;
+    min-height: 46px !important;
+    padding-inline: 14px !important;
+    font-size: 16px !important;
+  }
+
+  .rental-discovery-toolbar__actions {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  .rental-discovery-toolbar__actions > button {
+    min-height: 44px !important;
+    font-size: 15px !important;
+  }
+
+  .rental-discovery-toolbar__actions label {
+    min-width: 0 !important;
+  }
+
+  .rental-discovery-toolbar__actions select {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 16px !important;
+  }
+
+  .rental-grid-next {
+    gap: 14px !important;
+  }
+
+  .rental-card-next {
+    border-color: #dfe8e2 !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 30px rgba(20, 73, 49, .055) !important;
+    overflow: hidden !important;
+  }
+
+  .rental-card-next .demo-rental-card__image,
+  .rental-card-next .rental-card__image {
+    max-height: 250px !important;
+  }
+
+  .rental-card-next .demo-rental-card__image img,
+  .rental-card-next .rental-card__image img {
+    max-height: 250px !important;
+    object-fit: cover !important;
+  }
+
+  .rental-card-next .demo-rental-card__body,
+  .rental-card-next .rental-card__body {
+    padding: 20px !important;
+  }
+
+  .rental-card-next h3 {
+    font-size: 27px !important;
+    line-height: 1.08 !important;
+    margin-block: 9px 12px !important;
+  }
+
+  .rental-card-next .demo-available,
+  .rental-card-next .rental-card__availability {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    column-gap: 7px !important;
+    row-gap: 7px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
+  .rental-card-next .rental-card-next__rates,
+  .rental-card-next .rental-rate-grid,
+  .rental-card-next .demo-rates {
+    margin-top: 16px !important;
+  }
+
+  .rental-card-next .demo-rates span,
+  .rental-card-next .rental-rate-grid span,
+  .rental-card-next .rental-card-next__rates span {
+    font-size: 13px !important;
+  }
+
+  .rental-card-next .demo-rates b,
+  .rental-card-next .rental-rate-grid b,
+  .rental-card-next .rental-card-next__rates strong {
+    font-size: clamp(16px, 4.7vw, 20px) !important;
+    white-space: nowrap !important;
+  }
+
+  /* Keep primary rental action visible before the fixed nav. */
+  .rental-card-next :where(.demo-add-button, .rental-primary-action, a[href*="/rental/"]) {
+    min-height: 50px !important;
+    font-size: 16px !important;
+    scroll-margin-bottom: 122px !important;
+  }
+
+  .rental-page-next {
+    padding-bottom: 150px !important;
+  }
+
+  /* Cart should be transactional, bright and compact instead of a dark billboard. */
+  .sc-cart-hero {
+    padding-block: 42px !important;
+  }
+
+  .sc-cart-hero h1 {
+    font-size: clamp(2.25rem, 10vw, 3rem) !important;
+  }
+
+  .demo-cart-layout.sc-cart-premium {
+    gap: 22px !important;
+    padding-top: 28px !important;
+  }
+
+  .sc-order-summary {
+    background: #fffdf8 !important;
+    color: #17231b !important;
+    border: 1px solid rgba(8,118,63,.14) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 18px 48px rgba(20,34,26,.08) !important;
+    padding: 24px 20px !important;
+  }
+
+  .sc-order-summary h2 {
+    color: #17231b !important;
+    font-size: 28px !important;
+    margin: 6px 0 18px !important;
+  }
+
+  .sc-order-summary > div {
+    min-height: 58px !important;
+  }
+
+  .sc-order-summary > div span,
+  .sc-order-summary > div strong {
+    font-size: 16px !important;
+    color: #314139 !important;
+  }
+
+  .sc-order-summary > div strong {
+    color: #17231b !important;
+  }
+
+  .sc-checkout-primary,
+  .sc-checkout-secondary {
+    min-height: 54px !important;
+    font-size: 17px !important;
+  }
+
+  .sc-checkout-primary:disabled {
+    opacity: .48 !important;
+  }
+
+  .sc-order-summary > p {
+    color: #65726b !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+  }
+
+  .sc-mobile-commerce-nav {
+    bottom: 0 !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .primary-action {
+    flex-basis: 88vw !important;
+    height: 238px !important;
+  }
+
+  .primary-action__copy h3 {
+    font-size: 21px !important;
+  }
+
+  .rental-card-next .demo-rates b,
+  .rental-card-next .rental-rate-grid b,
+  .rental-card-next .rental-card-next__rates strong {
+    font-size: 15px !important;
+  }
+}

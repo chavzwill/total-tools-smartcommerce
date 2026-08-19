@@ -11,6 +11,8 @@ import type {
   PosAdapterContext,
 } from "./src/platform/index.js";
 
+const DEV_PLATFORM_MAX_BODY_BYTES = 64 * 1024;
+
 const unsupported = <T,>(operation: string): PlatformApiResult<T> => ({
   success: false,
   error: {
@@ -64,16 +66,10 @@ const firstHeader = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
 const resolvePlatformContext = (request: Request): PosAdapterContext => ({
-  businessAccountId:
-    request.headers.get("x-business-account-id") ||
-    process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID ||
-    "",
+  businessAccountId: process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID || "",
   providerId:
-    request.headers.get("x-provider-id") ||
     process.env.SMARTCOMMERCE_PROVIDER_ID ||
     (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "unsupported"),
-  connectionId: request.headers.get("x-connection-id") || undefined,
-  actorId: request.headers.get("x-actor-id") || undefined,
   requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
   locale: request.headers.get("accept-language") || undefined,
   timezone: request.headers.get("x-timezone") || undefined,
@@ -84,11 +80,24 @@ const platformBackendService = createPlatformBackendService({
   resolveContext: resolvePlatformContext,
 });
 
-const readRequestBody = async (request: IncomingMessage) => {
+const readRequestBody = async (
+  request: IncomingMessage,
+  maxBodyBytes = DEV_PLATFORM_MAX_BODY_BYTES
+) => {
   const chunks: Buffer[] = [];
+  let total = 0;
 
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > maxBodyBytes) {
+      const error = new Error("PLATFORM_REQUEST_TOO_LARGE") as Error & {
+        status?: number;
+      };
+      error.status = 413;
+      throw error;
+    }
+    chunks.push(buffer);
   }
 
   return Buffer.concat(chunks);
@@ -148,24 +157,33 @@ export default defineConfig({
             );
             await sendFetchResponse(response, platformResponse);
           } catch (error) {
+            const tooLarge =
+              Number((error as { status?: number })?.status) === 413 ||
+              (error as Error)?.message === "PLATFORM_REQUEST_TOO_LARGE";
             await sendFetchResponse(
               response,
               new Response(
                 JSON.stringify({
                   success: false,
-                  error: {
-                    code: "PLATFORM_REST_ROUTER_ERROR",
-                    message: "The platform REST router failed to handle the request.",
-                    details:
-                      error instanceof Error
-                        ? { name: error.name, message: error.message }
-                        : error,
-                    retryable: false,
-                  },
+                  error: tooLarge
+                    ? {
+                        code: "PLATFORM_REQUEST_TOO_LARGE",
+                        message: "The platform request body is too large.",
+                        retryable: false,
+                      }
+                    : {
+                        code: "PLATFORM_REST_ROUTER_ERROR",
+                        message: "The platform REST router failed to handle the request.",
+                        retryable: false,
+                      },
                 }),
                 {
-                  status: 500,
-                  headers: { "Content-Type": "application/json" },
+                  status: tooLarge ? 413 : 500,
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                  },
                 }
               )
             );

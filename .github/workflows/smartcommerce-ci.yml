@@ -1,9 +1,11 @@
 name: SmartCommerce CI
 
+# Runner diagnostic retrigger: no application behavior change.
 on:
   push:
     branches:
       - main
+      - frontend-consolidation
       - 'feature/**'
       - 'preview/**'
       - 'security/**'
@@ -40,6 +42,51 @@ jobs:
 
       - name: Authorization regression gate
         run: npm run test:security-authz
+
+      - name: Session security regression gate
+        run: npm run test:security-session
+
+      - name: Session management security regression gate
+        run: npm run test:security-session-management
+
+      - name: Account recovery security regression gate
+        run: npm run test:security-account-recovery
+
+      - name: Authenticated commerce security regression gate
+        run: npm run test:security-authenticated-commerce
+
+      - name: Platform gateway security regression gate
+        run: npm run test:security-platform-gateway
+
+      - name: Assistant gateway security regression gate
+        run: npm run test:security-assistant-gateway
+
+      - name: Integrity endpoint security regression gate
+        run: npm run test:security-integrity-endpoint
+
+      - name: Security monitor endpoint regression gate
+        run: npm run test:security-monitor-endpoint
+
+      - name: Guest checkout security regression gate
+        run: npm run test:security-guest-checkout
+
+      - name: Password step-up security regression gate
+        run: npm run test:security-step-up
+
+      - name: Commercial financial policy security regression gate
+        run: npm run test:security-commercial-financial-policy
+
+      - name: Commercial account security regression gate
+        run: npm run test:security-commercial-account
+
+      - name: MFA security regression gate
+        run: npm run test:security-mfa
+
+      - name: Passkey security regression gate
+        run: npm run test:security-passkey
+
+      - name: Storefront stability regression gate
+        run: npm run test:stability
 
       - name: Production build
         run: npm run build

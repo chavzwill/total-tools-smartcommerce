@@ -1,0 +1,136 @@
+/* Total Tools brand correction.
+   The existing SmartCommerce brand source of truth uses #08763f.
+   Do not redraw or substitute the company logo; render the supplied logo asset. */
+
+:root {
+  --tt-brand-green: #08763f;
+  --tt-brand-green-hover: #066a39;
+  --tt-brand-yellow: #f5c928;
+  --tt-brand-ink: #18211c;
+  --tt-brand-cream: #fffaf0;
+
+  --joy-green: var(--tt-brand-green);
+  --joy-green-strong: var(--tt-brand-green);
+  --joy-ink: var(--tt-brand-ink);
+  --sc-green-700: var(--tt-brand-green);
+  --sc-green-600: var(--tt-brand-green);
+  --sc-green-500: var(--tt-brand-green);
+  --sc-ink-950: var(--tt-brand-ink);
+  --sc-ink-900: #263029;
+  --sc-ink-800: #344038;
+}
+
+/* Always render the real supplied Total Tools logo asset. */
+.v2-brand,
+.tt-footer__brand {
+  align-items: center !important;
+  display: inline-flex !important;
+  overflow: visible !important;
+  text-decoration: none !important;
+}
+
+.v2-brand::before,
+.v2-brand::after,
+.tt-footer__brand::before,
+.tt-footer__brand::after {
+  content: none !important;
+  display: none !important;
+}
+
+.v2-brand img,
+.tt-footer__brand img {
+  display: block !important;
+  height: 100% !important;
+  max-height: 72px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  width: 100% !important;
+}
+
+/* Company green is used for actions and accents, not as a full dark canvas. */
+.v2-search-submit,
+.demo-add-button,
+.demo-flow-form > button[type="submit"],
+.rental-detail-next__reservation > button[type="submit"],
+.rental-discovery-toolbar__search button,
+.rental-sheet footer button:last-child {
+  background: var(--tt-brand-green) !important;
+}
+
+.v2-search-submit:hover,
+.demo-add-button:hover,
+.demo-add-button:focus-visible,
+.rental-discovery-toolbar__search button:hover {
+  background: var(--tt-brand-green-hover) !important;
+}
+
+/* Dark utility surfaces are neutral charcoal, never a substitute brand green. */
+.v3-hero,
+.v3-hero__scene-card,
+.v3-hero__tabs button,
+.demo-cart-layout > aside,
+.sc-checkout-summary,
+.tt-utility {
+  background-color: var(--tt-brand-ink) !important;
+}
+
+/* Footer remains bright and neutral; brand is carried by the real logo and accent green. */
+.tt-footer,
+.tt-footer__surface {
+  background: #fffaf0 !important;
+  color: var(--tt-brand-ink) !important;
+}
+
+.tt-footer {
+  border-top: 1px solid #dde3d9 !important;
+}
+
+.tt-footer__surface {
+  min-height: 100%;
+  width: 100%;
+}
+
+.tt-footer :where(p,a,span,strong) {
+  color: #59645a !important;
+}
+
+.tt-footer h2 {
+  color: var(--tt-brand-green) !important;
+}
+
+.tt-footer__bottom {
+  border-color: #d9dfd6 !important;
+}
+
+@media (max-width: 760px) {
+  .v2-brand {
+    height: 58px !important;
+    justify-content: center !important;
+    width: min(220px, 48vw) !important;
+  }
+
+  .v2-brand img {
+    max-height: 58px !important;
+  }
+
+  .tt-footer__brand {
+    height: 72px !important;
+    width: min(280px, 72vw) !important;
+  }
+
+  .tt-footer__brand img {
+    max-height: 72px !important;
+  }
+
+  .tt-footer {
+    padding-bottom: 0 !important;
+  }
+
+  .tt-footer__surface {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .sc-mobile-commerce-nav a.is-active {
+    color: var(--tt-brand-green) !important;
+  }
+}

@@ -24,6 +24,22 @@ export type Category = {
   icon: string;
 };
 
+export type RentalAddOn = {
+  id: string;
+  name: string;
+  description?: string;
+  category: "accessory" | "attachment" | "battery_power" | "operator" | "delivery_service" | "protection" | "consumable" | string;
+  rateBasis: "flat" | "daily" | "weekly" | "monthly" | "hourly" | "per_unit" | "provider_quote" | string;
+  unitPrice?: number;
+  currency?: string;
+  minimumQuantity?: number;
+  maximumQuantity?: number;
+  required?: boolean;
+  availability?: "available" | "limited" | "requires_confirmation" | "unavailable" | string;
+  scheduleRequired?: boolean;
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
 export type RentalItem = {
   id: string;
   name: string;
@@ -36,6 +52,7 @@ export type RentalItem = {
   image: string;
   description: string;
   specs: Record<string, string>;
+  addOns?: RentalAddOn[];
 };
 
 export type RepairType = {

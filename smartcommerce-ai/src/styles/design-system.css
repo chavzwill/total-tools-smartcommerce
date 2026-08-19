@@ -1,0 +1,345 @@
+/*
+ * SmartCommerce canonical design system.
+ * This file owns semantic tokens and shared primitives only.
+ * Do not add page-specific fixes, version suffixes, or brand reinterpretations here.
+ */
+
+:root {
+  /* Brand — source of truth is the established Total Tools Jamaica identity. */
+  --sc-brand-green: #08763f;
+  --sc-brand-green-hover: #066635;
+  --sc-brand-green-soft: #eaf5ef;
+  --sc-brand-yellow: #f5c928;
+  --sc-brand-yellow-hover: #e5b916;
+
+  /* Neutral surfaces. Premium does not mean dark. */
+  --sc-ink-950: #151b17;
+  --sc-ink-900: #1d251f;
+  --sc-ink-800: #2f3932;
+  --sc-text: #202820;
+  --sc-muted: #667169;
+  --sc-subtle: #7d8780;
+  --sc-paper: #ffffff;
+  --sc-warm: #fffaf0;
+  --sc-cream: #f7f5ef;
+  --sc-mist: #f1f4f1;
+  --sc-line: #e0e5e0;
+  --sc-line-strong: #cbd3cc;
+
+  /* Compatibility aliases while legacy CSS is consolidated. */
+  --sc-green-700: var(--sc-brand-green-hover);
+  --sc-green-600: var(--sc-brand-green);
+  --sc-green-500: var(--sc-brand-green);
+  --sc-green-300: #83bc96;
+  --sc-lime: var(--sc-brand-yellow);
+  --sc-success: var(--sc-brand-green);
+  --sc-danger: #a33c32;
+
+  /* Spacing — 4px base with deliberate larger retail rhythm. */
+  --sc-space-1: 4px;
+  --sc-space-2: 8px;
+  --sc-space-3: 12px;
+  --sc-space-4: 16px;
+  --sc-space-5: 20px;
+  --sc-space-6: 24px;
+  --sc-space-8: 32px;
+  --sc-space-10: 40px;
+  --sc-space-12: 48px;
+  --sc-space-16: 64px;
+  --sc-space-20: 80px;
+  --sc-space-24: 96px;
+
+  /* Type */
+  --sc-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sc-text-xs: 12px;
+  --sc-text-sm: 14px;
+  --sc-text-md: 16px;
+  --sc-text-lg: 18px;
+  --sc-text-xl: 22px;
+  --sc-text-2xl: 28px;
+  --sc-text-3xl: clamp(34px, 4vw, 52px);
+  --sc-leading-tight: 1.08;
+  --sc-leading-copy: 1.55;
+
+  /* Geometry */
+  --sc-radius-xs: 8px;
+  --sc-radius-sm: 12px;
+  --sc-radius-md: 16px;
+  --sc-radius-lg: 22px;
+  --sc-radius-xl: 30px;
+  --sc-radius-pill: 999px;
+
+  /* Elevation — restrained, neutral, not green-tinted. */
+  --sc-shadow-xs: 0 1px 2px rgba(20, 28, 22, .05);
+  --sc-shadow-sm: 0 8px 24px rgba(20, 28, 22, .07);
+  --sc-shadow-md: 0 18px 48px rgba(20, 28, 22, .10);
+  --sc-shadow-lg: 0 30px 80px rgba(20, 28, 22, .14);
+
+  /* Interaction */
+  --sc-focus: 0 0 0 3px rgba(8, 118, 63, .22);
+  --sc-ease: cubic-bezier(.2, .75, .25, 1);
+  --sc-fast: 140ms;
+  --sc-standard: 200ms;
+
+  --sc-content: 1480px;
+}
+
+html {
+  color: var(--sc-text);
+  font-family: var(--sc-font-sans);
+}
+
+body {
+  background: var(--sc-paper);
+  color: var(--sc-text);
+}
+
+/* Shared interactive baseline */
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+:where(button, a, input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--sc-focus);
+}
+
+:where(button, a) {
+  transition-duration: var(--sc-standard);
+  transition-timing-function: var(--sc-ease);
+}
+
+/* Canonical buttons. Existing pages can migrate to these classes incrementally. */
+.sc-button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--sc-radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: var(--sc-space-2);
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 var(--sc-space-5);
+  text-decoration: none;
+}
+
+.sc-button--primary {
+  background: var(--sc-brand-green);
+  color: #fff;
+}
+
+.sc-button--primary:hover,
+.sc-button--primary:focus-visible {
+  background: var(--sc-brand-green-hover);
+}
+
+.sc-button--ai {
+  background: var(--sc-brand-yellow);
+  color: var(--sc-ink-950);
+}
+
+.sc-button--ai:hover,
+.sc-button--ai:focus-visible {
+  background: var(--sc-brand-yellow-hover);
+}
+
+.sc-button--secondary {
+  background: #fff;
+  border-color: var(--sc-line-strong);
+  color: var(--sc-text);
+}
+
+.sc-button--secondary:hover,
+.sc-button--secondary:focus-visible {
+  background: var(--sc-mist);
+  border-color: #aeb9b0;
+}
+
+.sc-button:disabled,
+.sc-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+/* Inputs */
+.sc-field {
+  display: grid;
+  gap: var(--sc-space-2);
+}
+
+.sc-field > label,
+.sc-field__label {
+  color: var(--sc-ink-800);
+  font-size: var(--sc-text-sm);
+  font-weight: 760;
+}
+
+.sc-input,
+.sc-select,
+.sc-textarea {
+  background: #fff;
+  border: 1px solid var(--sc-line-strong);
+  border-radius: var(--sc-radius-sm);
+  color: var(--sc-text);
+  min-height: 46px;
+  padding: 0 var(--sc-space-4);
+  width: 100%;
+}
+
+.sc-textarea {
+  min-height: 120px;
+  padding-block: var(--sc-space-3);
+  resize: vertical;
+}
+
+.sc-input::placeholder,
+.sc-textarea::placeholder {
+  color: var(--sc-subtle);
+}
+
+.sc-input:focus,
+.sc-select:focus,
+.sc-textarea:focus {
+  border-color: rgba(8, 118, 63, .58);
+}
+
+/* Chips / status */
+.sc-chip {
+  align-items: center;
+  background: var(--sc-mist);
+  border: 1px solid var(--sc-line);
+  border-radius: var(--sc-radius-pill);
+  color: var(--sc-ink-800);
+  display: inline-flex;
+  font-size: var(--sc-text-sm);
+  font-weight: 720;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 var(--sc-space-3);
+}
+
+.sc-chip--active {
+  background: var(--sc-brand-green-soft);
+  border-color: rgba(8, 118, 63, .22);
+  color: var(--sc-brand-green-hover);
+}
+
+.sc-badge {
+  align-items: center;
+  border-radius: var(--sc-radius-pill);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  min-height: 26px;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.sc-badge--success {
+  background: var(--sc-brand-green-soft);
+  color: var(--sc-brand-green-hover);
+}
+
+.sc-badge--ai {
+  background: #fff3b8;
+  color: #5c4b00;
+}
+
+/* Shared card primitive. Product is more important than the container. */
+.sc-card {
+  background: #fff;
+  border: 1px solid var(--sc-line);
+  border-radius: var(--sc-radius-md);
+  box-shadow: var(--sc-shadow-xs);
+}
+
+/* Accessible section headings */
+.sc-section-heading {
+  display: grid;
+  gap: var(--sc-space-3);
+  margin-bottom: var(--sc-space-8);
+}
+
+.sc-section-heading__eyebrow {
+  color: var(--sc-brand-green);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.sc-section-heading h2 {
+  color: var(--sc-text);
+  font-size: var(--sc-text-3xl);
+  letter-spacing: -.04em;
+  line-height: var(--sc-leading-tight);
+  margin: 0;
+  text-wrap: balance;
+}
+
+.sc-section-heading p {
+  color: var(--sc-muted);
+  font-size: var(--sc-text-lg);
+  line-height: var(--sc-leading-copy);
+  margin: 0;
+  max-width: 720px;
+}
+
+/* Empty state: recovery-oriented rather than decorative. */
+.sc-empty-state {
+  align-items: start;
+  background: var(--sc-warm);
+  border: 1px solid #ece3ca;
+  border-radius: var(--sc-radius-lg);
+  display: grid;
+  gap: var(--sc-space-4);
+  padding: clamp(24px, 5vw, 44px);
+}
+
+.sc-empty-state h2,
+.sc-empty-state h3,
+.sc-empty-state p {
+  margin: 0;
+}
+
+.sc-empty-state p {
+  color: var(--sc-muted);
+  line-height: var(--sc-leading-copy);
+}
+
+/* Skeleton */
+.sc-skeleton {
+  animation: sc-skeleton-pulse 1.35s ease-in-out infinite alternate;
+  background: #e9ede9;
+  border-radius: var(--sc-radius-sm);
+}
+
+@keyframes sc-skeleton-pulse {
+  from { opacity: .62; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --sc-text-3xl: clamp(30px, 9vw, 42px);
+  }
+
+  .sc-button {
+    min-height: 48px;
+  }
+
+  .sc-section-heading {
+    margin-bottom: var(--sc-space-6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

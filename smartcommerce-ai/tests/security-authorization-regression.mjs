@@ -137,10 +137,19 @@ guard(
   /SMARTCOMMERCE_BUSINESS_ACCOUNT_ID[\s\S]*?SMARTCOMMERCE_PROVIDER_ID/,
 );
 
-// Baseline browser responses must carry anti-sniffing, anti-framing, referrer, and HSTS controls.
+// Baseline browser responses must carry transport, isolation, framing, capability, and document controls.
 guard("global anti-sniffing header", vercel, /"X-Content-Type-Options"[\s\S]*?"nosniff"/);
 guard("global anti-framing header", vercel, /"X-Frame-Options"[\s\S]*?"DENY"/);
 guard("global referrer policy", vercel, /"Referrer-Policy"[\s\S]*?"strict-origin-when-cross-origin"/);
-guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000"/);
+guard("global HSTS header", vercel, /"Strict-Transport-Security"[\s\S]*?"max-age=31536000(?:;[^\"]*)?"/);
+guard("global opener isolation header", vercel, /"Cross-Origin-Opener-Policy"[\s\S]*?"same-origin"/);
+guard("global browser capability policy", vercel, /"Permissions-Policy"[\s\S]*?camera=\(self\)[\s\S]*?microphone=\(\)[\s\S]*?geolocation=\(\)[\s\S]*?payment=\(\)[\s\S]*?usb=\(\)/);
+guard("global CSP object and frame restrictions", vercel, /"Content-Security-Policy"[\s\S]*?base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'/);
+guard("global cross-domain policy lockout", vercel, /"X-Permitted-Cross-Domain-Policies"[\s\S]*?"none"/);
+
+// API responses may contain customer, quote, inventory, and workflow data and must never be cached or indexed.
+guard("API responses are no-store", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"Cache-Control"[\s\S]*?"private, no-store, max-age=0"/);
+guard("API responses disable legacy caches", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"Pragma"[\s\S]*?"no-cache"/);
+guard("API responses are excluded from search indexing", vercel, /"source":\s*"\/api\/\(\.\*\)"[\s\S]*?"X-Robots-Tag"[\s\S]*?"noindex, nofollow, noarchive"/);
 
 console.log(`Authorization regression gate passed: ${checks.length} invariants verified.`);

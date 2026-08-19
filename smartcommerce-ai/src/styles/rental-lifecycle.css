@@ -1,0 +1,47 @@
+.sc-rental-due-alert {
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: min(1180px, calc(100% - 28px));
+  margin: 10px auto 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(8,118,63,.14);
+  border-radius: 16px;
+  background: #f7fbf8;
+  box-shadow: 0 10px 26px rgba(22,48,33,.045);
+  color: #17271e;
+}
+.sc-rental-due-alert__icon { display:grid; place-items:center; width:38px; height:38px; border-radius:12px; background:#e9f5ed; color:#08763f; }
+.sc-rental-due-alert__copy { display:grid; gap:2px; min-width:0; }
+.sc-rental-due-alert__copy strong { font-size:.86rem; letter-spacing:-.01em; }
+.sc-rental-due-alert__copy span { color:#68766d; font-size:.76rem; line-height:1.35; }
+.sc-rental-due-alert__actions { display:flex; gap:7px; align-items:center; }
+.sc-rental-due-alert__actions a { display:inline-flex; align-items:center; gap:5px; min-height:38px; padding:0 10px; border-radius:10px; color:#08763f; font-size:.76rem; font-weight:850; text-decoration:none; white-space:nowrap; }
+.sc-rental-due-alert__actions a:first-child { background:#08763f; color:#fff; }
+.sc-rental-due-alert.is-due_soon { background:#fffaf0; border-color:rgba(174,112,15,.18); }
+.sc-rental-due-alert.is-due_soon .sc-rental-due-alert__icon { background:#fff1d0; color:#98610c; }
+.sc-rental-due-alert.is-urgent,
+.sc-rental-due-alert.is-overdue { background:#fff7f5; border-color:rgba(180,62,46,.18); }
+.sc-rental-due-alert.is-urgent .sc-rental-due-alert__icon,
+.sc-rental-due-alert.is-overdue .sc-rental-due-alert__icon { background:#fde9e5; color:#a33d2e; }
+
+.sc-account-rentals { display:grid; gap:10px; }
+.sc-account-rental-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:center; padding:16px 17px; border:1px solid rgba(20,42,29,.09); border-radius:17px; background:#fff; box-shadow:0 12px 30px rgba(8,40,23,.04); }
+.sc-account-rental-card__main { display:grid; gap:5px; }
+.sc-account-rental-card__main > span { color:#08763f; font-size:.7rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.sc-account-rental-card h3 { margin:0; font-size:1rem; color:#17271e; }
+.sc-account-rental-card p { margin:0; color:#6d7b72; font-size:.8rem; }
+.sc-account-rental-card__actions { display:flex; gap:7px; }
+.sc-account-rental-card__actions a { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 11px; border-radius:10px; border:1px solid rgba(8,118,63,.14); color:#08763f; font-size:.78rem; font-weight:850; text-decoration:none; white-space:nowrap; }
+.sc-account-rental-card__actions a:first-child { background:#08763f; color:#fff; }
+
+@media (max-width: 760px) {
+  .sc-rental-due-alert { grid-template-columns:34px minmax(0,1fr); width:calc(100% - 18px); margin-top:7px; padding:10px; border-radius:14px; }
+  .sc-rental-due-alert__icon { width:34px; height:34px; border-radius:10px; }
+  .sc-rental-due-alert__actions { grid-column:2; justify-content:flex-start; flex-wrap:wrap; }
+  .sc-rental-due-alert__actions a { min-height:36px; padding-inline:9px; }
+  .sc-account-rental-card { grid-template-columns:1fr; gap:12px; padding:14px; }
+  .sc-account-rental-card__actions { width:100%; }
+  .sc-account-rental-card__actions a { flex:1; }
+}
