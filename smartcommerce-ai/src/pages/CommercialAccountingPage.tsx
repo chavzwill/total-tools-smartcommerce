@@ -80,7 +80,9 @@ export default function CommercialAccountingPage() {
 
   const controls = data?.financialControls;
   const summary = data?.statement.summary;
-  const currency = controls?.creditCurrency || data?.statement.entries[0]?.currency || "JMD";
+  const reconciliation = data?.statement.reconciliation;
+  const reconciled = summary?.coverage === "provider_reconciled";
+  const currency = (reconciled ? summary?.officialCurrency : null) || controls?.creditCurrency || data?.statement.entries[0]?.currency || "JMD";
   const periodLabel = new Date(period.start).toLocaleDateString("en-JM", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return (
@@ -120,13 +122,14 @@ export default function CommercialAccountingPage() {
             <article><WalletCards size={22} /><span>Approved credit</span><strong>{controls?.creditEnabled && controls.creditLimitMinor ? formatMinor(controls.creditLimitMinor, controls.creditCurrency || "JMD") : "Not enabled"}</strong><small>{controls?.paymentTermsCode ? `Terms ${controls.paymentTermsCode}` : "No approved payment terms"}</small></article>
             <article><ReceiptText size={22} /><span>{periodLabel} charges</span><strong>{formatMinor(summary?.debitMinor, currency)}</strong><small>{summary?.totalEntries || 0} ledger entr{summary?.totalEntries === 1 ? "y" : "ies"}</small></article>
             <article><Landmark size={22} /><span>{periodLabel} credits</span><strong>{formatMinor(summary?.creditMinor, currency)}</strong><small>Payments, credits and adjustments</small></article>
-            <article><ShieldCheck size={22} /><span>{summary?.coverage === "provider_synced" ? "Official balance" : "SmartCommerce activity net"}</span><strong>{summary?.coverage === "provider_synced" && summary.officialBalanceMinor !== null ? formatMinor(summary.officialBalanceMinor, currency) : formatMinor(summary?.activityNetMinor, currency)}</strong><small>{summary?.coverage === "provider_synced" ? "Provider-synced period" : "Official provider balance not yet represented"}</small></article>
+            <article><ShieldCheck size={22} /><span>{reconciled ? "Official closing balance" : "SmartCommerce activity net"}</span><strong>{reconciled && summary?.officialBalanceMinor !== null ? formatMinor(summary?.officialBalanceMinor, currency) : formatMinor(summary?.activityNetMinor, currency)}</strong><small>{reconciled ? "Provider-reconciled statement period" : "Awaiting provider reconciliation"}</small></article>
           </section>
 
-          <div className={`sc-commercial-accounting__disclosure ${summary?.coverage === "provider_synced" ? "is-complete" : ""}`}><FileText size={18} /><p>{data.disclosure}</p></div>
+          <div className={`sc-commercial-accounting__disclosure ${reconciled ? "is-complete" : ""}`}><FileText size={18} /><p>{data.disclosure}</p></div>
 
           <section className="sc-commercial-accounting__statement">
             <header><div><span>Statement</span><h2>{periodLabel}</h2></div><strong>{data.account.displayName}</strong></header>
+            {reconciliation ? <div className="sc-commercial-accounting__disclosure is-complete"><ShieldCheck size={18} /><p><strong>Reconciled by provider.</strong> Opening balance {formatMinor(reconciliation.openingBalanceMinor, reconciliation.currency)} · closing balance {formatMinor(reconciliation.closingBalanceMinor, reconciliation.currency)} · reference {reconciliation.providerReference}.</p></div> : null}
             {data.statement.entries.length ? <div className="sc-commercial-accounting__entries">
               {data.statement.entries.map((entry) => {
                 const debit = Number(entry.debit_minor || 0);
@@ -137,7 +140,7 @@ export default function CommercialAccountingPage() {
                   <strong className={credit > 0 ? "is-credit" : "is-debit"}>{credit > 0 ? `−${formatMinor(credit, entry.currency)}` : formatMinor(debit, entry.currency)}</strong>
                 </article>;
               })}
-            </div> : <div className="sc-commercial-accounting__empty-period"><ReceiptText size={28} /><strong>No SmartCommerce financial activity in this period.</strong><p>Provider/accounting transactions will appear here when the accounting feed is connected.</p></div>}
+            </div> : <div className="sc-commercial-accounting__empty-period"><ReceiptText size={28} /><strong>No financial activity in this period.</strong><p>Provider/accounting transactions will appear here as they are synchronized.</p></div>}
           </section>
         </> : accountId && !message ? <div className="sc-commercial-accounting__loading"><Loader2 size={20} /> Loading statement…</div> : null}
       </Container>
