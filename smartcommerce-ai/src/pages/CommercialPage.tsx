@@ -2,7 +2,8 @@ import { AlertTriangle, BriefcaseBusiness, Building2, CheckCircle2, FolderKanban
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { createSmartCommercePlatformApi } from "../apiClient";
-import { routeHref } from "../lib/router";
+import { getCustomerAccount } from "../lib/customerAccount";
+import { go, routeHref } from "../lib/router";
 import {
   createCommercialAccount,
   createCommercialProject,
@@ -15,6 +16,15 @@ import {
 import { company } from "../styles/theme";
 
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
+const COMMERCIAL_DRAFT_KEY = "smartcommerce_commercial_request_draft_v1";
+
+type CommercialDraft = {
+  businessName: string;
+  contactName: string;
+  email: string;
+  need: string;
+  details: string;
+};
 
 const getProviderContext = () => {
   const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
@@ -39,6 +49,17 @@ const getRequestContext = () => {
   };
 };
 
+const getSavedCommercialDraft = (): Partial<CommercialDraft> => {
+  try {
+    const raw = window.localStorage.getItem(COMMERCIAL_DRAFT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 function verificationLabel(status?: string) {
   if (status === "verified") return "Verified organisation";
   if (status === "pending_review") return "Pending review";
@@ -49,11 +70,12 @@ function verificationLabel(status?: string) {
 
 export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   const requestContext = useMemo(getRequestContext, []);
-  const [businessName, setBusinessName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [need, setNeed] = useState(quote || requestContext.mode === "quote" ? "Bulk product pricing" : requestContext.mode === "maintenance" ? "Project support" : "Project support");
-  const [details, setDetails] = useState(requestContext.item ? `I need commercial support for: ${requestContext.item}` : "");
+  const savedDraft = useMemo(getSavedCommercialDraft, []);
+  const [businessName, setBusinessName] = useState(() => savedDraft.businessName || "");
+  const [contactName, setContactName] = useState(() => savedDraft.contactName || "");
+  const [email, setEmail] = useState(() => savedDraft.email || "");
+  const [need, setNeed] = useState(() => savedDraft.need || (quote || requestContext.mode === "quote" ? "Bulk product pricing" : requestContext.mode === "maintenance" ? "Project support" : "Project support"));
+  const [details, setDetails] = useState(() => savedDraft.details || (requestContext.item ? `I need commercial support for: ${requestContext.item}` : ""));
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [accounts, setAccounts] = useState<CommercialAccountSummary[]>([]);
@@ -99,6 +121,15 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       .then(({ details: value }) => setAccountDetails(value))
       .catch((error: Error) => setWorkspaceMessage(error.message));
   }, [selectedAccountId]);
+
+  function saveCommercialDraft() {
+    const draft: CommercialDraft = { businessName, contactName, email, need, details };
+    try {
+      window.localStorage.setItem(COMMERCIAL_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Account onboarding can still continue when local storage is unavailable.
+    }
+  }
 
   async function refreshAccount(accountId: string) {
     const [{ accounts: found }, { details: refreshed }] = await Promise.all([
@@ -177,16 +208,36 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!providerContext) {
-      setStatus("error");
-      setMessage("A connected provider is required before SmartCommerce can submit this request. Use phone, WhatsApp, or email below for human support.");
+    if (status === "submitting") return;
+    setStatus("submitting");
+    setMessage("");
+
+    let customerAccountId = "";
+    try {
+      const accountState = await getCustomerAccount();
+      if (!accountState.customer) {
+        saveCommercialDraft();
+        go("/account?intent=commercial");
+        return;
+      }
+      customerAccountId = accountState.customer.id;
+    } catch {
+      saveCommercialDraft();
+      go("/account?intent=commercial");
       return;
     }
-    setStatus("submitting");
+
+    if (!providerContext) {
+      saveCommercialDraft();
+      setStatus("error");
+      setMessage("Commercial requests are temporarily unavailable online because the Total Tools provider connection is not configured. Your request details are saved; use phone, WhatsApp, or email below for human support.");
+      return;
+    }
+
     const api = createSmartCommercePlatformApi({ context: providerContext });
     const result = await api.createCommercialQuote({
       businessAccountId: providerContext.businessAccountId,
-      customerAccountId: undefined,
+      customerAccountId,
       companyName: businessName,
       requestDetails: `${need}: ${details}`,
       customerNotes: [
@@ -196,9 +247,18 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       ].filter(Boolean).join("\n"),
     });
     if (!result.success) {
+      saveCommercialDraft();
       setStatus("error");
-      setMessage(result.error.message);
+      setMessage(result.error.code === "PLATFORM_CONTEXT_REQUIRED"
+        ? "Commercial requests are temporarily unavailable online because the Total Tools provider connection is not configured. Your request details are saved."
+        : result.error.message || "The commercial request could not be submitted. Your request details are saved.");
       return;
+    }
+
+    try {
+      window.localStorage.removeItem(COMMERCIAL_DRAFT_KEY);
+    } catch {
+      // A successful provider submission must not fail because storage cleanup is unavailable.
     }
     setStatus("success");
     setMessage(`Request ${result.data.id} was accepted with status “${result.data.status}”.`);
@@ -241,7 +301,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
           <span className="sc-flow-kicker">Commercial account</span>
           <h2>Apply, verify, then unlock account privileges.</h2>
           {accountState === "loading" ? <p><Loader2 size={16} /> Loading commercial access…</p> : null}
-          {accountState === "signed-out" ? <div className="sc-commercial-contact"><strong>Sign in to apply for or manage a commercial account.</strong><a href={routeHref("/account")}>Sign in or create an account</a></div> : null}
+          {accountState === "signed-out" ? <div className="sc-commercial-contact"><strong>Sign in to apply for or manage a commercial account.</strong><a href={routeHref("/account?intent=commercial")}>Sign in or create an account</a></div> : null}
           {accountState === "error" ? <p className="sc-flow-status is-error">Commercial accounts are temporarily unavailable.</p> : null}
 
           {accountState === "ready" ? <>
