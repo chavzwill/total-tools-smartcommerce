@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
 import AccountRentalsPanel from "../components/account/AccountRentalsPanel";
+import AccountOverviewAttention from "../components/account/AccountOverviewAttention";
 import "../styles/accountTabs.css";
 import {
   getCustomerAccount,
@@ -190,10 +191,7 @@ export default function CustomerAccountPage() {
                     </div>
                   </div>
 
-                  <div className="sc-account-recent">
-                    <div><span className="sc-eyebrow">Recent activity</span><h3>Nothing needs your attention</h3><p>Orders, rentals and repairs will surface here when connected activity exists.</p></div>
-                    <button type="button" onClick={() => selectAccountTab("orders")}>View orders <ChevronRight size={16} /></button>
-                  </div>
+                  <AccountOverviewAttention onViewRentals={() => selectAccountTab("rentals")} />
                 </section>
               )}
 
