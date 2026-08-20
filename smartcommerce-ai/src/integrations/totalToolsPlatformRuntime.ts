@@ -1,4 +1,5 @@
 import { createPlatformBackendService } from "../backend/platformBackendService.js";
+import { buildGroundedProductComparison } from "../backend/assistantComparisonEngine.js";
 import { runGroundedAssistantIntelligence } from "../backend/assistantIntelligenceEngine.js";
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
@@ -126,10 +127,14 @@ export const createConfiguredTotalToolsPlatformService = () => {
     });
 
     const hasRecommendations = grounded.products.length > 0 || grounded.rentals.length > 0;
+    const comparison = grounded.understanding.intent === "compare"
+      ? await buildGroundedProductComparison(adapter, context, grounded.products, input.branchId)
+      : undefined;
+
     return {
       success: true,
       data: {
-        response: assistantSummary({
+        response: comparison || assistantSummary({
           job: grounded.understanding.job,
           needsClarification: grounded.understanding.needsClarification,
           clarificationQuestion: grounded.understanding.clarificationQuestion,
