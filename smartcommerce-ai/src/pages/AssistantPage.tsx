@@ -9,6 +9,7 @@ import {
 } from "../lib/advisor";
 import { routeHref } from "../lib/router";
 import type { CommerceProduct } from "../platform";
+import type { AssistantConversationTurn } from "../backend";
 
 const prompts = [
   "I need a generator for my farm.",
@@ -43,6 +44,7 @@ function productPrice(product: CommerceProduct) {
 export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
   const [prompt, setPrompt] = useState(initialPrompt || "");
   const [response, setResponse] = useState<AdvisorUiResult | null>(null);
+  const [history, setHistory] = useState<AssistantConversationTurn[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -51,17 +53,22 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
     if (!clean) return;
     setStatus("loading");
     setError("");
-    const result = await getAdvisorResponse(clean);
+    const context = history.slice(-6);
+    const result = await getAdvisorResponse(clean, context);
 
     if (!result.success) {
       setStatus("error");
-      setResponse(null);
       setError(result.error.message);
       return;
     }
 
     setStatus("idle");
     setResponse(result.data);
+    setHistory((current) => [
+      ...current,
+      { role: "user", content: clean },
+      { role: "assistant", content: result.data.summary },
+    ].slice(-6) as AssistantConversationTurn[]);
   };
 
   useEffect(() => {
@@ -94,7 +101,22 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                 onClick={() => {
                   const next = advisorPrompts[index] || item;
                   setPrompt(next);
-                  void submitPrompt(next);
+                  setHistory([]);
+                  void getAdvisorResponse(next, []).then((result) => {
+                    if (!result.success) {
+                      setStatus("error");
+                      setError(result.error.message);
+                      return;
+                    }
+                    setStatus("idle");
+                    setResponse(result.data);
+                    setHistory([
+                      { role: "user", content: next },
+                      { role: "assistant", content: result.data.summary },
+                    ]);
+                  });
+                  setStatus("loading");
+                  setError("");
                 }}
               >
                 {item}
