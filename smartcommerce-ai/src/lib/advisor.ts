@@ -11,6 +11,7 @@ import type {
   AssistantResult,
   AssistantWorkflowHandoff,
 } from "../backend";
+import { getCustomerAccount } from "./customerAccount";
 
 export const advisorPrompts = [
   "I need a generator for my farm with no electricity",
@@ -52,14 +53,27 @@ async function resolveSelectedBranchId() {
   return selected?.id;
 }
 
+async function resolveCustomerId() {
+  try {
+    const state = await getCustomerAccount();
+    return state.customer?.id;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getAdvisorResponse(
   prompt: string,
   history: AssistantConversationTurn[] = [],
 ): Promise<PlatformApiResult<AdvisorUiResult>> {
-  const branchId = await resolveSelectedBranchId();
+  const [branchId, customerId] = await Promise.all([
+    resolveSelectedBranchId(),
+    resolveCustomerId(),
+  ]);
   const request: AssistantRequest = {
     prompt,
     branchId,
+    customerId,
     history: history.slice(-6).map((turn) => ({
       role: turn.role,
       content: turn.content.trim().slice(0, 600),
