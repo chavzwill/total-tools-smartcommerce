@@ -41,8 +41,11 @@ export type AssistantWorkflowHandoff = {
   kind: "rental" | "repair" | "commercial";
   label: string;
   href: string;
+  readiness: "needs_input" | "ready_to_continue" | "verification_required";
   requiresMoreInput: boolean;
+  knownFields: string[];
   missingFields: string[];
+  verificationNote?: string;
 };
 
 export type AssistantRequest = {
