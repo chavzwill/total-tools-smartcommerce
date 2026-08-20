@@ -1,7 +1,7 @@
 import type { CommerceProduct, PlatformEntityId, RentalAsset } from "../platform";
 import type { PosAdapter, PosAdapterContext } from "../platform";
 import type { AssistantConversationTurn } from "./platformBackendTypes";
-import { fetchWithTimeoutAndRetry, retryPlatformRead } from "./aiReliability";
+import { fetchWithTimeoutAndRetry, retryPlatformRead } from "./aiReliability.js";
 
 export type AssistantIntent = "buy" | "rent" | "repair" | "compare" | "identify" | "commercial" | "general";
 
