@@ -28,6 +28,10 @@ const assistantRequired = [
   ["assistant verifies branch inventory", 'retryPlatformRead("assistant inventory availability"'],
   ["assistant ranks explicit in-stock state highest", 'status === "in_stock"'],
   ["assistant uses actual pricing for cheapest refinements", 'understanding.pricePreference === "cheapest"'],
+  ["assistant tracks per-query job-kit coverage", "type QueryCoverage"],
+  ["assistant selects grounded products with query coverage", "selectProductsWithQueryCoverage"],
+  ["assistant fills distinct needs before global remainder", "for (const bucket of coverage)"],
+  ["assistant keeps each provider search result tied to its query", "queryCoverage.push({ query: uniqueQueries[index], productIds })"],
 ];
 
 for (const [description, fragment] of assistantRequired) {
