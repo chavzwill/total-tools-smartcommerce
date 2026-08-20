@@ -32,10 +32,16 @@ export type PlatformBackendRuntime = {
   resolveContext(request: Request): PosAdapterContext | Promise<PosAdapterContext>;
 };
 
+export type AssistantConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type AssistantRequest = {
   prompt: string;
   branchId?: PlatformEntityId;
   customerId?: PlatformEntityId;
+  history?: AssistantConversationTurn[];
 };
 
 export type AssistantResult = {
