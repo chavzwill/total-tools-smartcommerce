@@ -18,9 +18,13 @@ type RepairDraft = {
   contact: string;
 };
 
-const getInitialEquipment = () => {
+const getInitialRepairContext = () => {
   const raw = window.location.hash.split("?")[1] || "";
-  return new URLSearchParams(raw).get("equipment") || "";
+  const query = new URLSearchParams(raw);
+  return {
+    equipment: (query.get("equipment") || "").slice(0, 200),
+    issue: (query.get("issue") || "").slice(0, 700),
+  };
 };
 
 const getInitialBranch = () => {
@@ -45,10 +49,11 @@ const getSavedDraft = (): Partial<RepairDraft> => {
 
 export default function RepairPage() {
   const savedDraft = useMemo(getSavedDraft, []);
+  const initialContext = useMemo(getInitialRepairContext, []);
   const [repairs, setRepairs] = useState(() => getRepairTypes());
-  const [equipment, setEquipment] = useState(() => savedDraft.equipment || getInitialEquipment());
+  const [equipment, setEquipment] = useState(() => savedDraft.equipment || initialContext.equipment);
   const [model, setModel] = useState(() => savedDraft.model || "");
-  const [issue, setIssue] = useState(() => savedDraft.issue || "");
+  const [issue, setIssue] = useState(() => savedDraft.issue || initialContext.issue);
   const [branch, setBranch] = useState(() => savedDraft.branch || getInitialBranch());
   const [date, setDate] = useState(() => savedDraft.date || "");
   const [contact, setContact] = useState(() => savedDraft.contact || "");
