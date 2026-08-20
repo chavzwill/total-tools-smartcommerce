@@ -9,6 +9,7 @@ const totalToolsRuntime = await readFile(new URL("../src/integrations/totalTools
 const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
 const assistantPage = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
 const repairPage = await readFile(new URL("../src/pages/RepairPage.tsx", import.meta.url), "utf8");
+const commercialPage = await readFile(new URL("../src/pages/CommercialPage.tsx", import.meta.url), "utf8");
 const productMatchEngine = await readFile(new URL("../src/backend/productMatchEngine.ts", import.meta.url), "utf8");
 const productMatchClient = await readFile(new URL("../src/lib/productMatch.ts", import.meta.url), "utf8");
 const productMatchPage = await readFile(new URL("../src/pages/ProductMatchPage.tsx", import.meta.url), "utf8");
@@ -97,6 +98,33 @@ assert.ok(
   platformBackendService.includes("...(providerVerification ? { verification: providerVerification } : {})") &&
     !platformBackendService.includes("verification: input.verification"),
   "Reservation creation must only forward server-produced provider verification",
+);
+
+const commercialHandoffRequired = [
+  ["commercial handoff bounds grounded item name", 'query.set("item", input.productName.slice(0, 180))'],
+  ["commercial handoff bounds request context", 'query.set("details", input.job.trim().slice(0, 700))'],
+  ["commercial handoff carries validated quantity", 'query.set("qty", String(input.quantity))'],
+  ["commercial page bounds handoff text", "boundedHandoffText"],
+  ["commercial page validates bounded positive quantity", "boundedHandoffQuantity"],
+  ["commercial submission uses structured requestedItems", "requestedItems: requestContext.item"],
+  ["commercial prefill remains explicitly customer editable", "Review and edit the requirement below before sending. Nothing has been quoted or submitted yet."],
+  ["commercial privileges remain locked until organisation verification", "Commercial pricing, credit, purchase orders, charge-to-account and provider terms are locked."],
+];
+
+for (const [description, fragment] of commercialHandoffRequired.slice(0, 3)) {
+  assert.ok(totalToolsRuntime.includes(fragment), `Missing commercial handoff invariant: ${description}`);
+}
+for (const [description, fragment] of commercialHandoffRequired.slice(3)) {
+  assert.ok(commercialPage.includes(fragment), `Missing commercial handoff invariant: ${description}`);
+}
+assert.ok(
+  commercialPage.includes("requestContext.details") && commercialPage.includes("requestContext.quantity"),
+  "Commercial form must consume bounded project context and quantity from the assistant handoff",
+);
+assert.ok(
+  commercialPage.includes('notes: "Grounded assistant handoff; customer reviewed the editable commercial request before submission."') &&
+    !commercialPage.includes("productId: requestContext"),
+  "Commercial requested item must preserve grounded name/quantity without inventing a product ID",
 );
 
 assert.ok(
@@ -206,4 +234,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + rentalVerificationRequired.length + matchRequired.length + 31} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + rentalVerificationRequired.length + commercialHandoffRequired.length + matchRequired.length + 33} invariants).`);
