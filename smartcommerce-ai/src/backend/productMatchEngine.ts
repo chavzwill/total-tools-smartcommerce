@@ -21,6 +21,7 @@ const STOPWORDS = new Set([
 const normalize = (value: unknown) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const compact = (value: unknown) => normalize(value).replace(/\s+/g, "");
 const tokens = (value: unknown) => normalize(value).split(/\s+/).filter((token) => token.length > 2 && !STOPWORDS.has(token));
+const boundedList = (values: unknown[], max = 24) => Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean))).slice(0, max);
 
 function productSearchText(product: CommerceProduct) {
   const attributes = Object.entries(product.attributes || {}).flatMap(([key, value]) => [key, value]);
@@ -142,6 +143,38 @@ async function analyzeImage(imageDataUrl: string): Promise<ProductVisualAnalysis
   return JSON.parse(text) as ProductVisualAnalysis;
 }
 
+function consistentClue(previous: string, current: string) {
+  const left = String(previous || "").trim();
+  const right = String(current || "").trim();
+  if (!left) return right;
+  if (!right) return left;
+  return compact(left) === compact(right) ? right : "";
+}
+
+function combineVisualAnalyses(previous: ProductVisualAnalysis | undefined, current: ProductVisualAnalysis): ProductVisualAnalysis {
+  if (!previous) return current;
+  const brandConflict = Boolean(previous.brand && current.brand && compact(previous.brand) !== compact(current.brand));
+  const modelConflict = Boolean(previous.model && current.model && compact(previous.model) !== compact(current.model));
+  const conflictPenalty = brandConflict || modelConflict ? 0.18 : 0;
+  const confidence = Math.max(0, Math.min(1, ((previous.confidence || 0) + (current.confidence || 0)) / 2 - conflictPenalty));
+
+  return {
+    productType: consistentClue(previous.productType, current.productType) || current.productType || previous.productType,
+    brand: consistentClue(previous.brand, current.brand),
+    model: consistentClue(previous.model, current.model),
+    visibleText: boundedList([...previous.visibleText, ...current.visibleText], 30),
+    attributes: boundedList([...previous.attributes, ...current.attributes], 30),
+    searchTerms: boundedList([...previous.searchTerms, ...current.searchTerms], 20),
+    confidence,
+    notes: boundedList([
+      previous.notes,
+      current.notes,
+      brandConflict ? "Brand clues conflict across supplied photos." : "",
+      modelConflict ? "Model clues conflict across supplied photos." : "",
+    ], 6).join(" "),
+  };
+}
+
 function searchQueries(analysis: ProductVisualAnalysis) {
   const identifierLikeText = analysis.visibleText.filter((value) => /[a-z].*\d|\d.*[a-z]|\d{5,}/i.test(value));
   return Array.from(new Set([
@@ -157,13 +190,15 @@ function searchQueries(analysis: ProductVisualAnalysis) {
 
 export async function runGroundedProductMatch(adapter: PosAdapter, context: PosAdapterContext, request: ProductMatchRequest): Promise<PlatformApiResult<ProductMatchResult>> {
   try {
-    const [analysis, branchesResult] = await Promise.all([
+    const [currentAnalysis, branchesResult] = await Promise.all([
       analyzeImage(request.imageDataUrl),
       retryPlatformRead("branch listing", () => adapter.listBranches(context), { timeoutMs: 6_000, retries: 1 }),
     ]);
+    const analysis = combineVisualAnalyses(request.priorAnalysis, currentAnalysis);
+    const evidenceImages = request.priorAnalysis ? 2 : 1;
     const branchNames = branchesResult.success ? Object.fromEntries(branchesResult.data.map((branch) => [String(branch.id), branch.name])) : {};
     const queries = searchQueries(analysis);
-    if (!queries.length) return { success: true, data: { analysis, candidates: [], branchNames, needsClarification: true, clarification: "I could not identify enough visible product details. Try a clearer photo of the whole item, label, model plate, barcode, or packaging." } };
+    if (!queries.length) return { success: true, data: { analysis, candidates: [], branchNames, evidenceImages, needsClarification: true, clarification: "I could not identify enough visible product details. Try a clearer photo of the whole item, label, model plate, barcode, or packaging." } };
 
     const searchResults = await Promise.all(queries.map((search) => retryPlatformRead("product search", () => adapter.searchProducts(context, { search, branchId: request.branchId, pageSize: 12 }), { timeoutMs: 8_000, retries: 1 })));
     const products = new Map<string, CommerceProduct>();
@@ -194,9 +229,12 @@ export async function runGroundedProductMatch(adapter: PosAdapter, context: PosA
         analysis,
         candidates,
         branchNames,
+        evidenceImages,
         needsClarification,
         clarification: needsClarification
-          ? "I found possible catalogue matches, but the image does not support an exact identification yet. Try a closer photo of the model/SKU/barcode label or another angle before relying on the result."
+          ? evidenceImages > 1
+            ? "The additional photo refined the evidence, but the combined clues still do not support an exact identification. Try a clear model/SKU/barcode label or another non-duplicate angle."
+            : "I found possible catalogue matches, but the image does not support an exact identification yet. Try a closer photo of the model/SKU/barcode label or another angle before relying on the result."
           : undefined,
       },
     };
