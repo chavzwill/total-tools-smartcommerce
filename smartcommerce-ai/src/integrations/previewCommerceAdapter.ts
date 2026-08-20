@@ -17,7 +17,6 @@ import type {
 } from "../platform/contracts.js";
 import type {
   PosAdapter,
-  PosAdapterContext,
   PosAdapterHealthStatus,
   ProductSearchQuery,
   RentalAssetQuery,
@@ -160,10 +159,7 @@ export function createPreviewCommerceAdapter(): PosAdapter {
       return { success: true, data: { providerId: PROVIDER_ID, businessAccountId: context.businessAccountId || BUSINESS_ID, connected: true, checkedAt: new Date().toISOString(), displayName: "SmartCommerce Preview Catalogue", capabilities: { branches: true, categories: true, products: true, inventory: true, pricing: true, rentals: true, realTimeAvailability: false, metadata: { preview: true } }, message: "Preview catalogue source is active. Live Total Tools POS inventory and availability are not connected.", metadata: { preview: true, liveVerified: false } } };
     },
     async listBranches() { return { success: true, data: branches }; },
-    async listCategories(_context, query) {
-      const result = query?.search ? categories.filter((item) => normalize(item.name).includes(normalize(query.search))) : categories;
-      return { success: true, data: page(result, query?.pageSize || result.length) };
-    },
+    async listCategories() { return { success: true, data: page(categories, categories.length) }; },
     async searchProducts(_context, query: ProductSearchQuery = {}) {
       const ranked = products
         .filter((product) => query.includeInactive || product.active)
@@ -183,8 +179,8 @@ export function createPreviewCommerceAdapter(): PosAdapter {
     },
     async getInventoryAvailability(_context, query: InventoryAvailabilityQuery) { return { success: true, data: previewInventory(query.productId, query.branchId) }; },
     async listRentalAssets(_context, query: RentalAssetQuery = {}) {
-      const filtered = rentals.filter((asset) => !query.productId || asset.productId === query.productId)
-        .filter((asset) => !query.branchId || true)
+      const filtered = rentals
+        .filter((asset) => !query.productId || asset.productId === query.productId)
         .filter((asset) => !query.status || query.status === "available" || asset.status === query.status);
       return { success: true, data: page(filtered, query.pageSize || 20) };
     },
