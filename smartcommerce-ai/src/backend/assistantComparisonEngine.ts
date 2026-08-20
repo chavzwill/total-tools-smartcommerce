@@ -1,6 +1,6 @@
 import type { CommerceProduct, PlatformEntityId } from "../platform";
 import type { PosAdapter, PosAdapterContext } from "../platform";
-import { retryPlatformRead } from "./aiReliability";
+import { retryPlatformRead } from "./aiReliability.js";
 
 type ProductPriceFact = {
   value: number;
