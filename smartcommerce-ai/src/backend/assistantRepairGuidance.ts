@@ -1,6 +1,6 @@
 import type { PosAdapter, PosAdapterContext } from "../platform";
 import type { RepairType } from "../types";
-import { retryPlatformRead } from "./aiReliability";
+import { retryPlatformRead } from "./aiReliability.js";
 
 const normalize = (value: unknown) =>
   String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
