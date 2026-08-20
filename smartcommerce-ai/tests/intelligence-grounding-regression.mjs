@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const assistantEngine = await readFile(new URL("../src/backend/assistantIntelligenceEngine.ts", import.meta.url), "utf8");
+const comparisonEngine = await readFile(new URL("../src/backend/assistantComparisonEngine.ts", import.meta.url), "utf8");
 const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes.ts", import.meta.url), "utf8");
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
 const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
@@ -38,6 +39,19 @@ for (const [description, fragment] of assistantRequired) {
   assert.ok(assistantEngine.includes(fragment), `Missing assistant intelligence invariant: ${description}`);
 }
 
+const comparisonRequired = [
+  ["comparison is deterministic and grounded", "export async function buildGroundedProductComparison"],
+  ["comparison uses provider-listed pricing", "pricing.salePrice ?? pricing.listPrice ?? pricing.commercialPrice"],
+  ["comparison verifies selected-branch inventory", 'retryPlatformRead("assistant comparison inventory"'],
+  ["comparison compares only differing catalogue attributes", "comparableAttributeFacts"],
+  ["comparison refuses cross-currency price ranking", "currencies.size === 1"],
+  ["comparison states when technical evidence is insufficient", "does not provide enough differing technical attributes"],
+];
+
+for (const [description, fragment] of comparisonRequired) {
+  assert.ok(comparisonEngine.includes(fragment), `Missing grounded comparison invariant: ${description}`);
+}
+
 assert.ok(
   backendTypes.includes("export type AssistantConversationTurn") && backendTypes.includes("history?: AssistantConversationTurn[]"),
   "Assistant request contract must support bounded recent conversation context",
@@ -45,6 +59,10 @@ assert.ok(
 assert.ok(
   totalToolsRuntime.includes("runGroundedAssistantIntelligence") && totalToolsRuntime.includes("history: input.history"),
   "Configured Total Tools runtime must use the grounded assistant intelligence engine with recent task context",
+);
+assert.ok(
+  totalToolsRuntime.includes("buildGroundedProductComparison") && totalToolsRuntime.includes('grounded.understanding.intent === "compare"'),
+  "Compare intent must invoke grounded product comparison reasoning",
 );
 assert.ok(
   totalToolsRuntime.includes("Show me cheaper options") && totalToolsRuntime.includes("Can I rent instead?"),
@@ -88,4 +106,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + matchRequired.length + 8} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + matchRequired.length + 9} invariants).`);
