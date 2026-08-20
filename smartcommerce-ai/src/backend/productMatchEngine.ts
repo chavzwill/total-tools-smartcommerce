@@ -1,6 +1,6 @@
 import type { CommerceProduct, PlatformApiResult, PosAdapter, PosAdapterContext } from "../platform";
 import type { ProductMatchCandidate, ProductMatchRequest, ProductMatchResult, ProductVisualAnalysis } from "../types/productMatch";
-import { fetchWithTimeoutAndRetry, retryPlatformRead } from "./aiReliability";
+import { fetchWithTimeoutAndRetry, retryPlatformRead } from "./aiReliability.js";
 
 export type { ProductMatchCandidate, ProductMatchRequest, ProductMatchResult, ProductVisualAnalysis } from "../types/productMatch";
 
