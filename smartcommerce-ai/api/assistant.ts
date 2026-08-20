@@ -91,11 +91,18 @@ function sendJson(response: any, status: number, payload: unknown) {
   response.end(JSON.stringify(payload));
 }
 
+function previewCatalogueContextEnabled() {
+  return !process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL &&
+    (process.env.VERCEL_ENV === "preview" || process.env.SMARTCOMMERCE_ENABLE_PREVIEW_CATALOGUE === "1");
+}
+
 function trustedPlatformRequest(request: any, body: Record<string, unknown>, customerId?: string) {
   const headers = new Headers();
-  const configuredBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim() || "public-catalog";
+  const preview = previewCatalogueContextEnabled();
+  const configuredBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim() ||
+    (preview ? "preview-total-tools" : "public-catalog");
   const configuredProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim() ||
-    (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "public-unsupported");
+    (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : preview ? "preview-catalogue" : "public-unsupported");
 
   headers.set("Content-Type", "application/json");
   headers.set("Accept", "application/json");
