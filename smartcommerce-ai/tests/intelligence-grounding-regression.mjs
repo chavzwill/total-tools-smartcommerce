@@ -7,6 +7,7 @@ const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
 const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
 const assistantPage = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
+const repairPage = await readFile(new URL("../src/pages/RepairPage.tsx", import.meta.url), "utf8");
 const productMatchEngine = await readFile(new URL("../src/backend/productMatchEngine.ts", import.meta.url), "utf8");
 const productMatchClient = await readFile(new URL("../src/lib/productMatch.ts", import.meta.url), "utf8");
 const productMatchPage = await readFile(new URL("../src/pages/ProductMatchPage.tsx", import.meta.url), "utf8");
@@ -54,6 +55,22 @@ for (const [description, fragment] of comparisonRequired) {
   assert.ok(comparisonEngine.includes(fragment), `Missing grounded comparison invariant: ${description}`);
 }
 
+const handoffRequired = [
+  ["assistant contract exposes typed workflow handoff", "export type AssistantWorkflowHandoff"],
+  ["workflow handoff reports missing required customer data", "missingFields: string[]"],
+  ["rental handoff goes to real rental detail when grounded asset exists", 'href: `/rental/${encodeURIComponent(input.rentalAssetId)}`'],
+  ["repair handoff goes to real repair form", 'kind: "repair"'],
+  ["commercial handoff goes to real commercial quote form", 'kind: "commercial"'],
+  ["handoff always declares more input is required", "requiresMoreInput: true"],
+];
+
+for (const [description, fragment] of handoffRequired.slice(0, 2)) {
+  assert.ok(backendTypes.includes(fragment), `Missing workflow handoff invariant: ${description}`);
+}
+for (const [description, fragment] of handoffRequired.slice(2)) {
+  assert.ok(totalToolsRuntime.includes(fragment), `Missing workflow handoff invariant: ${description}`);
+}
+
 assert.ok(
   backendTypes.includes("export type AssistantConversationTurn") && backendTypes.includes("history?: AssistantConversationTurn[]"),
   "Assistant request contract must support bounded recent conversation context",
@@ -65,6 +82,10 @@ assert.ok(
 assert.ok(
   totalToolsRuntime.includes("buildGroundedProductComparison") && totalToolsRuntime.includes('grounded.understanding.intent === "compare"'),
   "Compare intent must invoke grounded product comparison reasoning",
+);
+assert.ok(
+  totalToolsRuntime.includes("workflowHandoff: handoff") && !totalToolsRuntime.includes("createRentalReservation(context") && !totalToolsRuntime.includes("createRepairRequest(context") && !totalToolsRuntime.includes("createCommercialQuote(context"),
+  "Assistant must return workflow handoff metadata without directly submitting rental, repair, or commercial records",
 );
 assert.ok(
   totalToolsRuntime.includes("Show me cheaper options") && totalToolsRuntime.includes("Can I rent instead?"),
@@ -80,8 +101,20 @@ assert.ok(
   "Assistant must resolve the shopper's saved branch to provider branch data",
 );
 assert.ok(
+  advisorClient.includes("workflowHandoff: result.data.workflowHandoff") && assistantPage.includes("response?.workflowHandoff"),
+  "Assistant UI must expose the server-grounded workflow handoff",
+);
+assert.ok(
+  assistantPage.includes("it will not submit anything without the required customer details"),
+  "Assistant UI must explain that workflow handoff does not auto-submit a transaction",
+);
+assert.ok(
   advisorClient.includes("history.slice(-6)") && assistantPage.includes("const [history, setHistory]"),
   "Assistant UI/client must carry only bounded recent conversation context",
+);
+assert.ok(
+  repairPage.includes('query.get("issue")') && repairPage.includes("initialContext.issue"),
+  "Repair workflow must accept the bounded grounded issue description from assistant handoff",
 );
 
 const matchRequired = [
@@ -129,4 +162,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + matchRequired.length + 13} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + matchRequired.length + 21} invariants).`);
