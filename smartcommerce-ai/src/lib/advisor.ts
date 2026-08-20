@@ -79,7 +79,7 @@ export async function getAdvisorResponse(
       content: turn.content.trim().slice(0, 600),
     })).filter((turn) => turn.content.length > 0),
   };
-  const result = await api.post<AssistantResult>("/platform/assistant", request);
+  const result = await api.post<AssistantResult>("/assistant", request);
 
   if (!result.success) {
     return result;
