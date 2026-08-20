@@ -57,23 +57,32 @@ for (const [description, fragment] of comparisonRequired) {
 
 const handoffRequired = [
   ["assistant contract exposes typed workflow handoff", "export type AssistantWorkflowHandoff"],
+  ["workflow handoff reports known grounded context", "knownFields: string[]"],
   ["workflow handoff reports missing required customer data", "missingFields: string[]"],
-  ["rental handoff goes to real rental detail when grounded asset exists", 'href: `/rental/${encodeURIComponent(input.rentalAssetId)}`'],
+  ["workflow handoff has explicit readiness state", 'readiness: "needs_input" | "ready_to_continue" | "verification_required"'],
+  ["rental handoff goes to real rental detail when grounded asset exists", '`/rental/${encodeURIComponent(String(input.rentalAssetId))}`'],
   ["repair handoff goes to real repair form", 'kind: "repair"'],
   ["commercial handoff goes to real commercial quote form", 'kind: "commercial"'],
-  ["handoff always declares more input is required", "requiresMoreInput: true"],
+  ["rental handoff keeps provider eligibility verification explicit", "provider rental eligibility verification"],
+  ["rental handoff rejects login-equals-approval assumption", "Signing in does not mean the rental is approved"],
+  ["commercial handoff rejects customer-equals-business-verification assumption", "A signed-in customer account is not a verified commercial organisation"],
+  ["repair handoff treats branch preference as optional", "Branch preference is optional"],
 ];
 
-for (const [description, fragment] of handoffRequired.slice(0, 2)) {
+for (const [description, fragment] of handoffRequired.slice(0, 4)) {
   assert.ok(backendTypes.includes(fragment), `Missing workflow handoff invariant: ${description}`);
 }
-for (const [description, fragment] of handoffRequired.slice(2)) {
+for (const [description, fragment] of handoffRequired.slice(4)) {
   assert.ok(totalToolsRuntime.includes(fragment), `Missing workflow handoff invariant: ${description}`);
 }
 
 assert.ok(
   backendTypes.includes("export type AssistantConversationTurn") && backendTypes.includes("history?: AssistantConversationTurn[]"),
   "Assistant request contract must support bounded recent conversation context",
+);
+assert.ok(
+  backendTypes.includes("customerId?: PlatformEntityId"),
+  "Assistant request contract must support optional signed-in customer context without making it mandatory",
 );
 assert.ok(
   totalToolsRuntime.includes("runGroundedAssistantIntelligence") && totalToolsRuntime.includes("history: input.history"),
@@ -101,12 +110,24 @@ assert.ok(
   "Assistant must resolve the shopper's saved branch to provider branch data",
 );
 assert.ok(
+  advisorClient.includes("getCustomerAccount") && advisorClient.includes("customerId,"),
+  "Assistant client must pass signed-in customer identity when available for workflow readiness without requiring login",
+);
+assert.ok(
   advisorClient.includes("workflowHandoff: result.data.workflowHandoff") && assistantPage.includes("response?.workflowHandoff"),
   "Assistant UI must expose the server-grounded workflow handoff",
 );
 assert.ok(
   assistantPage.includes("it will not submit anything without the required customer details"),
   "Assistant UI must explain that workflow handoff does not auto-submit a transaction",
+);
+assert.ok(
+  assistantPage.includes("Already known:") && assistantPage.includes("Still required:") && assistantPage.includes("readinessLabel"),
+  "Assistant UI must distinguish known context, missing input and readiness state",
+);
+assert.ok(
+  assistantPage.includes("verificationNote"),
+  "Assistant UI must surface provider verification boundaries instead of implying approval",
 );
 assert.ok(
   advisorClient.includes("history.slice(-6)") && assistantPage.includes("const [history, setHistory]"),
@@ -162,4 +183,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + matchRequired.length + 21} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + matchRequired.length + 29} invariants).`);
