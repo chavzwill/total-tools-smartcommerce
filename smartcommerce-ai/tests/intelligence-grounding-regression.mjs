@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const assistantEngine = await readFile(new URL("../src/backend/assistantIntelligenceEngine.ts", import.meta.url), "utf8");
 const comparisonEngine = await readFile(new URL("../src/backend/assistantComparisonEngine.ts", import.meta.url), "utf8");
+const repairGuidance = await readFile(new URL("../src/backend/assistantRepairGuidance.ts", import.meta.url), "utf8");
 const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes.ts", import.meta.url), "utf8");
 const platformBackendService = await readFile(new URL("../src/backend/platformBackendService.ts", import.meta.url), "utf8");
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
@@ -56,6 +57,26 @@ const comparisonRequired = [
 for (const [description, fragment] of comparisonRequired) {
   assert.ok(comparisonEngine.includes(fragment), `Missing grounded comparison invariant: ${description}`);
 }
+
+const repairGuidanceRequired = [
+  ["repair guidance is a dedicated deterministic intake layer", "export async function buildRepairIntakeGuidance"],
+  ["repair guidance uses provider repair catalog only when exposed", "if (!adapter.listRepairCatalog) return undefined"],
+  ["repair catalog reads use reliability controls", 'retryPlatformRead(\n    "assistant repair catalog"'],
+  ["provider common issues are surfaced as service-intake symptoms", "connected repair catalogue lists these common service-intake symptoms"],
+  ["provider common issues are explicitly not diagnosis", "These are possibilities to compare with what you observe, not a diagnosis."],
+  ["repair guidance refuses failed-component certainty", "I cannot confirm which component failed from this description alone"],
+  ["repair guidance requests technician-useful observations", "warning code or light, unusual sound/smell/leak"],
+  ["repair intent invokes repair guidance before generic summary", 'grounded.understanding.intent === "repair"'],
+];
+
+for (const [description, fragment] of repairGuidanceRequired.slice(0, 7)) {
+  assert.ok(repairGuidance.includes(fragment), `Missing repair guidance invariant: ${description}`);
+}
+assert.ok(
+  totalToolsRuntime.includes("buildRepairIntakeGuidance") &&
+    totalToolsRuntime.includes("response: comparison || repairGuidance || assistantSummary"),
+  `Missing repair guidance invariant: ${repairGuidanceRequired[7][0]}`,
+);
 
 const handoffRequired = [
   ["assistant contract exposes typed workflow handoff", "export type AssistantWorkflowHandoff"],
@@ -234,4 +255,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + rentalVerificationRequired.length + commercialHandoffRequired.length + matchRequired.length + 33} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + repairGuidanceRequired.length + handoffRequired.length + rentalVerificationRequired.length + commercialHandoffRequired.length + matchRequired.length + 33} invariants).`);
