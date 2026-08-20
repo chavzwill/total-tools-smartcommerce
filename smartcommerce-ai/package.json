@@ -26,7 +26,7 @@
     "test:security-secret-hygiene": "node tests/security-secret-hygiene-regression.mjs",
     "test:security-log-hygiene": "node tests/security-log-hygiene-regression.mjs",
     "test:security-api-error-exposure": "node tests/security-api-error-exposure-regression.mjs",
-    "test:intelligence-grounding": "node tests/intelligence-grounding-regression.mjs && node tests/intelligence-cross-currency-regression.mjs && node tests/intelligence-identity-provenance-regression.mjs",
+    "test:intelligence-grounding": "node tests/intelligence-grounding-regression.mjs && node tests/intelligence-cross-currency-regression.mjs && node tests/intelligence-identity-provenance-regression.mjs && node tests/intelligence-runtime-imports-regression.mjs",
     "test:stability": "node tests/storefront-stability-regression.mjs",
     "test:stability-generated-artifacts": "node tests/stability-generated-artifacts-regression.mjs",
     "test:dependency-audit": "npm audit --audit-level=high --omit=dev",
