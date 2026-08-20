@@ -47,13 +47,21 @@ function continueAccountIntent(state: CustomerAccountState) {
 
   if (intent === "rental") {
     let rentalId = "";
+    let extensionOf = "";
     try {
       const parsed = JSON.parse(window.localStorage.getItem(RENTAL_DRAFT_KEY) || "null");
       rentalId = typeof parsed?.rentalId === "string" ? parsed.rentalId : "";
+      extensionOf = typeof parsed?.extensionOf === "string" ? parsed.extensionOf.slice(0, 200) : "";
     } catch {
       rentalId = "";
+      extensionOf = "";
     }
-    window.location.hash = rentalId ? `/rental/${encodeURIComponent(rentalId)}` : "/rentals";
+    if (!rentalId) {
+      window.location.hash = "/rentals";
+      return;
+    }
+    const extensionQuery = extensionOf ? `?extensionOf=${encodeURIComponent(extensionOf)}` : "";
+    window.location.hash = `/rental/${encodeURIComponent(rentalId)}${extensionQuery}`;
     return;
   }
 
