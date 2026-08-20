@@ -41,6 +41,12 @@ function productPrice(product: CommerceProduct) {
   return "Price confirmed in product details";
 }
 
+function readinessLabel(readiness: "needs_input" | "ready_to_continue" | "verification_required") {
+  if (readiness === "verification_required") return "Ready for provider verification";
+  if (readiness === "ready_to_continue") return "Ready to continue";
+  return "More information needed";
+}
+
 export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
   const [prompt, setPrompt] = useState(initialPrompt || "");
   const [response, setResponse] = useState<AdvisorUiResult | null>(null);
@@ -159,13 +165,19 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
 
           {response?.workflowHandoff ? (
             <section className="sc-assistant-next__followups" aria-label="Continue in the connected workflow">
-              <span>Ready for the real workflow</span>
+              <span>{readinessLabel(response.workflowHandoff.readiness)}</span>
               <p>
                 SmartCommerce will carry forward the grounded context, but it will not submit anything without the required customer details.
-                {response.workflowHandoff.missingFields.length
-                  ? ` Still needed: ${response.workflowHandoff.missingFields.join(", ")}.`
-                  : ""}
               </p>
+              {response.workflowHandoff.knownFields.length ? (
+                <p><strong>Already known:</strong> {response.workflowHandoff.knownFields.join(", ")}.</p>
+              ) : null}
+              {response.workflowHandoff.missingFields.length ? (
+                <p><strong>Still required:</strong> {response.workflowHandoff.missingFields.join(", ")}.</p>
+              ) : null}
+              {response.workflowHandoff.verificationNote ? (
+                <p>{response.workflowHandoff.verificationNote}</p>
+              ) : null}
               <div>
                 <a href={routeHref(response.workflowHandoff.href)}>{response.workflowHandoff.label}</a>
               </div>
