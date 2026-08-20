@@ -31,11 +31,16 @@ type OpenAIResponse = {
   error?: { message?: string };
 };
 
+type ComparablePrice = {
+  value: number;
+  currency: string;
+};
+
 type RankedProduct = {
   product: CommerceProduct;
   relevance: number;
   availabilityRank: number;
-  price?: number;
+  price?: ComparablePrice;
 };
 
 type QueryCoverage = {
@@ -210,13 +215,16 @@ function relevanceScore(product: CommerceProduct, understanding: AssistantUnders
   return score;
 }
 
-function lowestProductPrice(product: CommerceProduct) {
-  const prices = (product.pricing || []).flatMap((pricing) => {
-    const values = [pricing.salePrice, pricing.listPrice, pricing.commercialPrice]
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
-    return values;
+function comparableProductPrice(product: CommerceProduct): ComparablePrice | undefined {
+  const facts = (product.pricing || []).flatMap((pricing) => {
+    const value = pricing.salePrice ?? pricing.listPrice ?? pricing.commercialPrice;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return [];
+    return [{ value, currency: pricing.currency || "JMD" }];
   });
-  return prices.length ? Math.min(...prices) : undefined;
+  if (!facts.length) return undefined;
+  const currencies = new Set(facts.map((fact) => fact.currency));
+  if (currencies.size !== 1) return undefined;
+  return facts.reduce((lowest, fact) => fact.value < lowest.value ? fact : lowest);
 }
 
 function availabilityRank(statuses: string[]) {
@@ -234,7 +242,9 @@ function compareRankedProducts(a: RankedProduct, b: RankedProduct, understanding
   if (understanding.pricePreference === "cheapest") {
     if (a.price === undefined && b.price !== undefined) return 1;
     if (b.price === undefined && a.price !== undefined) return -1;
-    if (a.price !== undefined && b.price !== undefined && a.price !== b.price) return a.price - b.price;
+    if (a.price && b.price && a.price.currency === b.price.currency && a.price.value !== b.price.value) {
+      return a.price.value - b.price.value;
+    }
   }
   return relevanceDelta;
 }
@@ -248,7 +258,7 @@ async function rankProductsByGroundedAvailability(
 ) {
   const shortlist = candidates.sort((a, b) => b.relevance - a.relevance).slice(0, 24);
   const ranked: RankedProduct[] = await Promise.all(shortlist.map(async ({ product, relevance }) => {
-    if (!branchId) return { product, relevance, availabilityRank: 0, price: lowestProductPrice(product) };
+    if (!branchId) return { product, relevance, availabilityRank: 0, price: comparableProductPrice(product) };
     const availability = await retryPlatformRead("assistant inventory availability", () => adapter.getInventoryAvailability(context, {
       productId: product.id,
       branchId,
@@ -258,7 +268,7 @@ async function rankProductsByGroundedAvailability(
       product,
       relevance,
       availabilityRank: availability.success ? availabilityRank(availability.data.map((item) => String(item.status))) : 0,
-      price: lowestProductPrice(product),
+      price: comparableProductPrice(product),
     };
   }));
 
@@ -338,6 +348,7 @@ export async function runGroundedAssistantIntelligence(
     }
     if (productIds.size) queryCoverage.push({ query: uniqueQueries[index], productIds });
   });
+
   if (!successfulSearches && productSearches.length) warnings.push("Connected catalogue search is temporarily unavailable.");
 
   const scoredProducts = Array.from(productMap.values())
