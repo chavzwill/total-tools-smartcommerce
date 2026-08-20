@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const previewAdapter = await readFile(new URL("../src/integrations/previewCommerceAdapter.ts", import.meta.url), "utf8");
 const runtime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
 const assistantGateway = await readFile(new URL("../api/assistant.ts", import.meta.url), "utf8");
+const platformGateway = await readFile(new URL("../api/platform/[...path].ts", import.meta.url), "utf8");
 
 const invariants = [
   ["preview adapter includes the backhoe shown in the storefront rental catalogue", previewAdapter.includes('name: "JCB 3CX Backhoe Loader"')],
@@ -15,6 +16,8 @@ const invariants = [
   ["assistant summary labels preview catalogue rather than connected live catalogue", runtime.includes('"SmartCommerce preview catalogue"') && runtime.includes("live branch stock and availability still require the connected Total Tools provider")],
   ["assistant gateway uses preview provider identity in preview mode", assistantGateway.includes('preview ? "preview-catalogue" : "public-unsupported"')],
   ["assistant gateway uses preview business identity in preview mode", assistantGateway.includes('preview ? "preview-total-tools" : "public-catalog"')],
+  ["public platform gateway resolves branches/products against preview provider context", platformGateway.includes('preview ? "preview-catalogue" : "public-unsupported"')],
+  ["public platform gateway resolves preview business context consistently", platformGateway.includes('preview ? "preview-total-tools" : "public-catalog"')],
 ];
 
 for (const [description, satisfied] of invariants) {
