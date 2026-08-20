@@ -1,8 +1,9 @@
-import type { PlatformApiResult } from "../platform";
+import type { Branch, PlatformApiResult } from "../platform";
 import type { ProductMatchResult } from "../types/productMatch";
 
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 const MAX_DIMENSION = 1600;
+const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
 
 function loadImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -11,6 +12,34 @@ function loadImage(url: string) {
     image.onerror = () => reject(new Error("The selected image could not be read."));
     image.src = url;
   });
+}
+
+function savedShoppingBranch() {
+  try {
+    const value = window.localStorage.getItem(SHOPPING_BRANCH_KEY)?.trim();
+    return value && value !== "Online" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveSelectedBranchId(explicitBranchId?: string) {
+  if (explicitBranchId) return explicitBranchId;
+  const selectedName = savedShoppingBranch();
+  if (!selectedName) return import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
+
+  try {
+    const response = await fetch("/api/platform/branches", {
+      headers: { Accept: "application/json" },
+    });
+    const payload = (await response.json()) as PlatformApiResult<Branch[]>;
+    if (!response.ok || !payload.success) return undefined;
+    return payload.data.find(
+      (branch) => branch.active && branch.name.trim().toLowerCase() === selectedName.toLowerCase(),
+    )?.id;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function prepareProductMatchImage(file: File) {
@@ -38,19 +67,16 @@ export async function prepareProductMatchImage(file: File) {
 
 export async function matchProductPhoto(imageDataUrl: string, branchId?: string): Promise<PlatformApiResult<ProductMatchResult>> {
   try {
+    const resolvedBranchId = await resolveSelectedBranchId(branchId);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "X-Request-Id": typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     };
-    const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
-    const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
-    if (businessAccountId) headers["X-Business-Account-Id"] = businessAccountId;
-    if (providerId) headers["X-Provider-Id"] = providerId;
 
     const response = await fetch("/api/product-match", {
       method: "POST",
       headers,
-      body: JSON.stringify({ imageDataUrl, branchId: branchId || import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined }),
+      body: JSON.stringify({ imageDataUrl, branchId: resolvedBranchId }),
     });
     const payload = (await response.json()) as PlatformApiResult<ProductMatchResult>;
     if (!response.ok && payload.success) return { success: false, error: { code: "PRODUCT_MATCH_HTTP_ERROR", message: `Product Match failed with HTTP ${response.status}.` } };
