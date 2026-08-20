@@ -37,6 +37,14 @@ export type AssistantConversationTurn = {
   content: string;
 };
 
+export type AssistantWorkflowHandoff = {
+  kind: "rental" | "repair" | "commercial";
+  label: string;
+  href: string;
+  requiresMoreInput: boolean;
+  missingFields: string[];
+};
+
 export type AssistantRequest = {
   prompt: string;
   branchId?: PlatformEntityId;
@@ -49,6 +57,7 @@ export type AssistantResult = {
   recommendedProducts: CommerceProduct[];
   recommendedRentals: RentalAsset[];
   nextActions: string[];
+  workflowHandoff?: AssistantWorkflowHandoff;
 };
 
 export type CheckoutRequest = {
