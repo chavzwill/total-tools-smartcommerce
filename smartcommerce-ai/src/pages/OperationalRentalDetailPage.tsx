@@ -27,6 +27,7 @@ type ReservationDraft = {
 type SavedRentalDraft = {
   rentalId: string;
   reservation: ReservationDraft;
+  extensionOf?: string;
 };
 
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
@@ -43,13 +44,17 @@ const preferredPhysicalBranch = () => {
   }
 };
 
-const readSavedRentalDraft = (rentalId: string): ReservationDraft | null => {
+const readSavedRentalDraft = (rentalId: string): SavedRentalDraft | null => {
   try {
     const raw = window.localStorage.getItem(RENTAL_DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SavedRentalDraft;
     if (!parsed || parsed.rentalId !== rentalId || !parsed.reservation) return null;
-    return { ...parsed.reservation, addOns: Array.isArray(parsed.reservation.addOns) ? parsed.reservation.addOns : [] };
+    return {
+      ...parsed,
+      extensionOf: typeof parsed.extensionOf === "string" ? parsed.extensionOf.slice(0, 200) : undefined,
+      reservation: { ...parsed.reservation, addOns: Array.isArray(parsed.reservation.addOns) ? parsed.reservation.addOns : [] },
+    };
   } catch {
     return null;
   }
@@ -94,9 +99,9 @@ function addOnIcon(addOn: RentalAddOn) {
 export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const foundRental = getRentalById(id);
   const query = useMemo(readQuery, []);
-  const extensionOf = query.get("extensionOf") || "";
   const savedDraft = useMemo(() => readSavedRentalDraft(id), [id]);
-  const [reservation, setReservation] = useState<ReservationDraft>(() => savedDraft || {
+  const extensionOf = query.get("extensionOf") || savedDraft?.extensionOf || "";
+  const [reservation, setReservation] = useState<ReservationDraft>(() => savedDraft?.reservation || {
     startDate: query.get("start") || "",
     endDate: query.get("end") || "",
     branch: query.get("branch") || preferredPhysicalBranch(),
@@ -116,7 +121,7 @@ export default function OperationalRentalDetailPage({ id }: { id: string }) {
   const subtotal = rentalDays && rental.dailyRate > 0 ? rental.dailyRate * rentalDays : 0;
 
   function saveDraft() {
-    try { window.localStorage.setItem(RENTAL_DRAFT_KEY, JSON.stringify({ rentalId: rental.id, reservation } satisfies SavedRentalDraft)); } catch { /* non-blocking */ }
+    try { window.localStorage.setItem(RENTAL_DRAFT_KEY, JSON.stringify({ rentalId: rental.id, reservation, extensionOf: extensionOf || undefined } satisfies SavedRentalDraft)); } catch { /* non-blocking */ }
   }
 
   function toggleAddOn(addOn: RentalAddOn) {
