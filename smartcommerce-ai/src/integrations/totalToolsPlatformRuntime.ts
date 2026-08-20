@@ -112,53 +112,110 @@ function followUps(intent: string, hasRecommendations: boolean, needsClarificati
   return ["Show me cheaper options", "Compare these products", "Can I rent instead?"];
 }
 
+function hasTimingHint(value: string) {
+  return /\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|week|month|from\s+\d|until\s+\d|\d{4}-\d{2}-\d{2}|\d{1,2}[\/-]\d{1,2})\b/i.test(value);
+}
+
 function workflowHandoff(input: {
   intent: string;
   job: string;
   productName?: string;
   rentalAssetId?: string;
+  branchId?: string;
+  customerId?: string;
+  quantity?: number;
 }): AssistantWorkflowHandoff | undefined {
+  const signedIn = Boolean(input.customerId);
+  const branchKnown = Boolean(input.branchId);
+
   if (input.intent === "rent") {
-    if (input.rentalAssetId) {
-      return {
-        kind: "rental",
-        label: "Choose rental dates",
-        href: `/rental/${encodeURIComponent(input.rentalAssetId)}`,
-        requiresMoreInput: true,
-        missingFields: ["rental dates", "customer eligibility confirmation"],
-      };
-    }
+    const assetKnown = Boolean(input.rentalAssetId);
+    const timingMentioned = hasTimingHint(input.job);
+    const knownFields = [
+      assetKnown ? "grounded rental item" : "",
+      branchKnown ? "selected shopping branch" : "",
+      signedIn ? "signed-in customer account" : "",
+      timingMentioned ? "requested timing mentioned" : "",
+      input.quantity ? `quantity ${input.quantity}` : "",
+    ].filter(Boolean);
+    const missingFields = [
+      assetKnown ? "" : "rental item",
+      timingMentioned ? "confirm exact start and end dates" : "rental start and end dates",
+      signedIn ? "" : "customer account",
+      "provider rental eligibility verification",
+    ].filter(Boolean);
+
     return {
       kind: "rental",
-      label: "Continue to rentals",
-      href: "/rentals",
+      label: assetKnown ? "Check dates & rental eligibility" : "Continue to rentals",
+      href: assetKnown
+        ? `/rental/${encodeURIComponent(String(input.rentalAssetId))}`
+        : "/rentals",
+      readiness: assetKnown && signedIn && timingMentioned ? "verification_required" : "needs_input",
       requiresMoreInput: true,
-      missingFields: ["rental item", "rental dates", "customer eligibility confirmation"],
+      knownFields,
+      missingFields,
+      verificationNote: "Signing in does not mean the rental is approved. Machine status, exact schedule, account standing and any provider eligibility requirements must still be verified in the rental workflow.",
     };
   }
 
   if (input.intent === "repair") {
+    const equipmentKnown = Boolean(input.productName);
+    const issueKnown = input.job.trim().length >= 8;
     const query = new URLSearchParams();
     if (input.productName) query.set("equipment", input.productName);
-    if (input.job) query.set("issue", input.job.slice(0, 700));
+    if (issueKnown) query.set("issue", input.job.slice(0, 700));
+    const knownFields = [
+      equipmentKnown ? "equipment candidate" : "",
+      issueKnown ? "fault description" : "",
+      signedIn ? "signed-in customer account" : "",
+      branchKnown ? "shopping branch preference" : "",
+    ].filter(Boolean);
+    const missingFields = [
+      equipmentKnown ? "" : "equipment type",
+      issueKnown ? "" : "fault description",
+      "customer contact method",
+    ].filter(Boolean);
+
     return {
       kind: "repair",
-      label: "Continue to repair request",
+      label: equipmentKnown && issueKnown ? "Review repair request" : "Continue to repair request",
       href: `/repairs${query.size ? `?${query.toString()}` : ""}`,
-      requiresMoreInput: true,
-      missingFields: ["customer contact", "service branch or preference"],
+      readiness: equipmentKnown && issueKnown ? "ready_to_continue" : "needs_input",
+      requiresMoreInput: missingFields.length > 0,
+      knownFields,
+      missingFields,
+      verificationNote: "Branch preference is optional. The repair team still confirms intake, diagnosis and the next service step after the customer submits the real request.",
     };
   }
 
   if (input.intent === "commercial") {
+    const itemKnown = Boolean(input.productName);
+    const requestKnown = input.job.trim().length >= 8;
     const query = new URLSearchParams({ mode: "quote" });
     if (input.productName) query.set("item", input.productName);
+    const knownFields = [
+      itemKnown ? "grounded catalogue item" : "",
+      requestKnown ? "commercial request context" : "",
+      input.quantity ? `quantity ${input.quantity}` : "",
+      signedIn ? "signed-in customer account" : "",
+      branchKnown ? "selected shopping branch" : "",
+    ].filter(Boolean);
+    const missingFields = [
+      "verified business or organisation identity",
+      "business contact details",
+      input.quantity ? "" : "final quantity or project scope",
+    ].filter(Boolean);
+
     return {
       kind: "commercial",
       label: "Prepare commercial request",
       href: `/commercial?${query.toString()}`,
+      readiness: itemKnown && requestKnown ? "ready_to_continue" : "needs_input",
       requiresMoreInput: true,
-      missingFields: ["business identity", "contact details", "final quantities or project details"],
+      knownFields,
+      missingFields,
+      verificationNote: "A signed-in customer account is not a verified commercial organisation. Commercial pricing, credit, purchase-order and account-term privileges remain subject to the existing organisation verification workflow.",
     };
   }
 
@@ -189,6 +246,9 @@ export const createConfiguredTotalToolsPlatformService = () => {
       job: grounded.understanding.job,
       productName: grounded.products[0]?.name,
       rentalAssetId: grounded.rentals[0]?.id ? String(grounded.rentals[0].id) : undefined,
+      branchId: input.branchId ? String(input.branchId) : undefined,
+      customerId: input.customerId ? String(input.customerId) : undefined,
+      quantity: grounded.understanding.quantity,
     });
 
     return {
