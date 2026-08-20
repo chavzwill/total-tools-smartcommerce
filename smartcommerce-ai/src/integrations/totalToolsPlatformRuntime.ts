@@ -1,6 +1,7 @@
 import { createPlatformBackendService } from "../backend/platformBackendService.js";
 import { buildGroundedProductComparison } from "../backend/assistantComparisonEngine.js";
 import { runGroundedAssistantIntelligence } from "../backend/assistantIntelligenceEngine.js";
+import type { AssistantWorkflowHandoff } from "../backend/platformBackendTypes.js";
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch.js";
@@ -111,6 +112,59 @@ function followUps(intent: string, hasRecommendations: boolean, needsClarificati
   return ["Show me cheaper options", "Compare these products", "Can I rent instead?"];
 }
 
+function workflowHandoff(input: {
+  intent: string;
+  job: string;
+  productName?: string;
+  rentalAssetId?: string;
+}): AssistantWorkflowHandoff | undefined {
+  if (input.intent === "rent") {
+    if (input.rentalAssetId) {
+      return {
+        kind: "rental",
+        label: "Choose rental dates",
+        href: `/rental/${encodeURIComponent(input.rentalAssetId)}`,
+        requiresMoreInput: true,
+        missingFields: ["rental dates", "customer eligibility confirmation"],
+      };
+    }
+    return {
+      kind: "rental",
+      label: "Continue to rentals",
+      href: "/rentals",
+      requiresMoreInput: true,
+      missingFields: ["rental item", "rental dates", "customer eligibility confirmation"],
+    };
+  }
+
+  if (input.intent === "repair") {
+    const query = new URLSearchParams();
+    if (input.productName) query.set("equipment", input.productName);
+    if (input.job) query.set("issue", input.job.slice(0, 700));
+    return {
+      kind: "repair",
+      label: "Continue to repair request",
+      href: `/repairs${query.size ? `?${query.toString()}` : ""}`,
+      requiresMoreInput: true,
+      missingFields: ["customer contact", "service branch or preference"],
+    };
+  }
+
+  if (input.intent === "commercial") {
+    const query = new URLSearchParams({ mode: "quote" });
+    if (input.productName) query.set("item", input.productName);
+    return {
+      kind: "commercial",
+      label: "Prepare commercial request",
+      href: `/commercial?${query.toString()}`,
+      requiresMoreInput: true,
+      missingFields: ["business identity", "contact details", "final quantities or project details"],
+    };
+  }
+
+  return undefined;
+}
+
 export const createConfiguredTotalToolsPlatformService = () => {
   const adapter = createConfiguredTotalToolsAdapter();
   const service = createPlatformBackendService({
@@ -130,6 +184,12 @@ export const createConfiguredTotalToolsPlatformService = () => {
     const comparison = grounded.understanding.intent === "compare"
       ? await buildGroundedProductComparison(adapter, context, grounded.products, input.branchId)
       : undefined;
+    const handoff = workflowHandoff({
+      intent: grounded.understanding.intent,
+      job: grounded.understanding.job,
+      productName: grounded.products[0]?.name,
+      rentalAssetId: grounded.rentals[0]?.id ? String(grounded.rentals[0].id) : undefined,
+    });
 
     return {
       success: true,
@@ -145,6 +205,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
         nextActions: followUps(grounded.understanding.intent, hasRecommendations, grounded.understanding.needsClarification),
+        workflowHandoff: handoff,
       },
     };
   };
