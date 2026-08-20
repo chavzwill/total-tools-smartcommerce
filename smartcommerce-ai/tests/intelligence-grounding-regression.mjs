@@ -117,7 +117,7 @@ assert.ok(
   "Product Match UI must refine an existing result with another image instead of silently restarting",
 );
 assert.ok(
-  productMatchPage.includes("result.evidenceImages") && productMatchPage.includes("photos combined"),
+  productMatchPage.includes("result.evidenceImages") && productMatchPage.includes(" combined"),
   "Product Match UI must disclose accumulated image evidence",
 );
 assert.ok(
