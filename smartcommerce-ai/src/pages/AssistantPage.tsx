@@ -157,6 +157,21 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
             ) : null}
           </article>
 
+          {response?.workflowHandoff ? (
+            <section className="sc-assistant-next__followups" aria-label="Continue in the connected workflow">
+              <span>Ready for the real workflow</span>
+              <p>
+                SmartCommerce will carry forward the grounded context, but it will not submit anything without the required customer details.
+                {response.workflowHandoff.missingFields.length
+                  ? ` Still needed: ${response.workflowHandoff.missingFields.join(", ")}.`
+                  : ""}
+              </p>
+              <div>
+                <a href={routeHref(response.workflowHandoff.href)}>{response.workflowHandoff.label}</a>
+              </div>
+            </section>
+          ) : null}
+
           {response?.products.length ? (
             <section className="sc-assistant-next__results" aria-labelledby="assistant-products-title">
               <div className="sc-assistant-next__section-heading"><div><span>Products</span><h2 id="assistant-products-title">Options you can act on now</h2></div><a href={routeHref("/products")}>Browse all products</a></div>
