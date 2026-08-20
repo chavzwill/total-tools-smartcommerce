@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const assistantEngine = await readFile(new URL("../src/backend/assistantIntelligenceEngine.ts", import.meta.url), "utf8");
+const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes.ts", import.meta.url), "utf8");
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
 const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
+const assistantPage = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
 const productMatchEngine = await readFile(new URL("../src/backend/productMatchEngine.ts", import.meta.url), "utf8");
 const productMatchClient = await readFile(new URL("../src/lib/productMatch.ts", import.meta.url), "utf8");
 
@@ -20,6 +22,12 @@ const assistantRequired = [
   ["assistant performs multiple grounded product searches", 'retryPlatformRead("assistant product search"'],
   ["rental lookup is tied to grounded product IDs", "productId: product.id"],
   ["rental lookup asks for available assets", 'status: "available"'],
+  ["assistant bounds conversational history", ".slice(-6)"],
+  ["assistant bounds each context turn", ".slice(0, 600)"],
+  ["assistant resolves short refinement context", "REFINEMENT_PATTERN"],
+  ["assistant verifies branch inventory", 'retryPlatformRead("assistant inventory availability"'],
+  ["assistant ranks explicit in-stock state highest", 'status === "in_stock"'],
+  ["assistant uses actual pricing for cheapest refinements", 'understanding.pricePreference === "cheapest"'],
 ];
 
 for (const [description, fragment] of assistantRequired) {
@@ -27,8 +35,16 @@ for (const [description, fragment] of assistantRequired) {
 }
 
 assert.ok(
-  totalToolsRuntime.includes("runGroundedAssistantIntelligence"),
-  "Configured Total Tools runtime must use the grounded assistant intelligence engine",
+  backendTypes.includes("export type AssistantConversationTurn") && backendTypes.includes("history?: AssistantConversationTurn[]"),
+  "Assistant request contract must support bounded recent conversation context",
+);
+assert.ok(
+  totalToolsRuntime.includes("runGroundedAssistantIntelligence") && totalToolsRuntime.includes("history: input.history"),
+  "Configured Total Tools runtime must use the grounded assistant intelligence engine with recent task context",
+);
+assert.ok(
+  totalToolsRuntime.includes("Show me cheaper options") && totalToolsRuntime.includes("Can I rent instead?"),
+  "Assistant follow-ups must be natural customer language rather than internal machine action names",
 );
 assert.ok(
   !advisorClient.includes("VITE_SMARTCOMMERCE_BUSINESS_ID") && !advisorClient.includes("VITE_SMARTCOMMERCE_PROVIDER_ID"),
@@ -38,6 +54,10 @@ assert.ok(
   advisorClient.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"') &&
     advisorClient.includes('api.get<Branch[]>("/platform/branches")'),
   "Assistant must resolve the shopper's saved branch to provider branch data",
+);
+assert.ok(
+  advisorClient.includes("history.slice(-6)") && assistantPage.includes("const [history, setHistory]"),
+  "Assistant UI/client must carry only bounded recent conversation context",
 );
 
 const matchRequired = [
@@ -64,4 +84,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + matchRequired.length + 5} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + matchRequired.length + 8} invariants).`);
