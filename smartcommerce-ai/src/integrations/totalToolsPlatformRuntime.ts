@@ -252,13 +252,16 @@ export const createConfiguredTotalToolsPlatformService = () => {
           productName: grounded.products[0]?.name,
         })
       : undefined;
+    const trustedCustomerId = context.actorId && input.customerId
+      ? String(input.customerId)
+      : undefined;
     const handoff = workflowHandoff({
       intent: grounded.understanding.intent,
       job: grounded.understanding.job,
       productName: grounded.products[0]?.name,
       rentalAssetId: grounded.rentals[0]?.id ? String(grounded.rentals[0].id) : undefined,
       branchId: input.branchId ? String(input.branchId) : undefined,
-      customerId: input.customerId ? String(input.customerId) : undefined,
+      customerId: trustedCustomerId,
       quantity: grounded.understanding.quantity,
     });
 
