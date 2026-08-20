@@ -193,7 +193,11 @@ function workflowHandoff(input: {
     const itemKnown = Boolean(input.productName);
     const requestKnown = input.job.trim().length >= 8;
     const query = new URLSearchParams({ mode: "quote" });
-    if (input.productName) query.set("item", input.productName);
+    if (input.productName) query.set("item", input.productName.slice(0, 180));
+    if (requestKnown) query.set("details", input.job.trim().slice(0, 700));
+    if (input.quantity && Number.isInteger(input.quantity) && input.quantity > 0 && input.quantity <= 9999) {
+      query.set("qty", String(input.quantity));
+    }
     const knownFields = [
       itemKnown ? "grounded catalogue item" : "",
       requestKnown ? "commercial request context" : "",
