@@ -77,21 +77,25 @@ export default function ProductMatchPage({ onAdd }: Props) {
   const [state, setState] = useState<MatchState>("idle");
   const [result, setResult] = useState<ProductMatchResult | null>(null);
   const [error, setError] = useState("");
+  const [refining, setRefining] = useState(false);
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
 
+    const priorAnalysis = result?.analysis;
+    const isRefinement = Boolean(priorAnalysis);
+    setRefining(isRefinement);
     setState("preparing");
     setError("");
-    setResult(null);
+    if (!isRefinement) setResult(null);
 
     try {
       const imageDataUrl = await prepareProductMatchImage(file);
       setPreview(imageDataUrl);
       setState("scanning");
-      const response = await matchProductPhoto(imageDataUrl);
+      const response = await matchProductPhoto(imageDataUrl, undefined, priorAnalysis);
       if (!response.success) {
         setError(response.error.message);
         setState("error");
@@ -102,6 +106,8 @@ export default function ProductMatchPage({ onAdd }: Props) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Product Match failed.");
       setState("error");
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -145,12 +151,16 @@ export default function ProductMatchPage({ onAdd }: Props) {
                 <strong>
                   {state === "preparing"
                     ? "Preparing your photo…"
-                    : "Reading visible clues…"}
+                    : refining
+                      ? "Combining the new clues…"
+                      : "Reading visible clues…"}
                 </strong>
                 <span>
                   {state === "preparing"
                     ? "Optimizing the image for secure matching"
-                    : "Checking those clues against the connected catalogue"}
+                    : refining
+                      ? "Refining the existing candidates without discarding the earlier evidence"
+                      : "Checking those clues against the connected catalogue"}
                 </span>
               </div>
             )}
@@ -158,10 +168,11 @@ export default function ProductMatchPage({ onAdd }: Props) {
 
           <div className="sc-match-next__capture-copy">
             <span>Best results</span>
-            <h2>Include the label if you can.</h2>
+            <h2>{result ? "Add a different angle or label." : "Include the label if you can."}</h2>
             <p>
-              Brand names, model numbers, packaging text, fittings, ports, and
-              full-product shape can all improve the match.
+              {result
+                ? "A second photo can refine the same match. Conflicting brand or model clues reduce confidence instead of being ignored."
+                : "Brand names, model numbers, packaging text, fittings, ports, and full-product shape can all improve the match."}
             </p>
           </div>
 
@@ -171,14 +182,14 @@ export default function ProductMatchPage({ onAdd }: Props) {
               onClick={() => cameraRef.current?.click()}
               disabled={state === "preparing" || state === "scanning"}
             >
-              <Camera size={18} /> Use camera
+              <Camera size={18} /> {result ? "Add another photo" : "Use camera"}
             </button>
             <button
               type="button"
               onClick={() => uploadRef.current?.click()}
               disabled={state === "preparing" || state === "scanning"}
             >
-              <ImageUp size={18} /> Upload photo
+              <ImageUp size={18} /> {result ? "Upload another angle" : "Upload photo"}
             </button>
           </div>
 
@@ -241,7 +252,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   <div>
                     <ScanSearch size={19} />
                     <div>
-                      <span>What SmartCommerce could see</span>
+                      <span>What SmartCommerce could see · {result.evidenceImages} photo{result.evidenceImages === 1 ? "" : "s"} combined</span>
                       <strong>{analysisSummary || "Visual product clues"}</strong>
                     </div>
                   </div>
@@ -261,7 +272,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                     <strong>One more clue would help.</strong>
                     <p>{result.clarification}</p>
                     <button type="button" onClick={() => cameraRef.current?.click()}>
-                      <Camera size={16} /> Take another photo
+                      <Camera size={16} /> Add another photo
                     </button>
                   </div>
                 </section>
@@ -320,7 +331,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   <h2>No connected catalogue candidate was strong enough.</h2>
                   <p>{result.clarification || "Try another angle or a closer label photo."}</p>
                   <button type="button" onClick={() => cameraRef.current?.click()}>
-                    <RefreshCw size={17} /> Try another photo
+                    <RefreshCw size={17} /> Add another photo
                   </button>
                 </div>
               )}
