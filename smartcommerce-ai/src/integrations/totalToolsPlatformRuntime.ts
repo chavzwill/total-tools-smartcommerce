@@ -6,6 +6,7 @@ import type { AssistantWorkflowHandoff } from "../backend/platformBackendTypes.j
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch.js";
+import { createPreviewCommerceAdapter, PREVIEW_BUSINESS_ID, PREVIEW_PROVIDER_ID, previewCatalogueEnabled } from "./previewCommerceAdapter.js";
 import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter.js";
 
 const unsupported = <T>(operation: string): PlatformApiResult<T> => ({
@@ -42,7 +43,9 @@ export const unsupportedPlatformAdapter: PosAdapter = {
 
 export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
   const configuredBaseUrl = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
-  if (!configuredBaseUrl) return unsupportedPlatformAdapter;
+  if (!configuredBaseUrl) {
+    return previewCatalogueEnabled() ? createPreviewCommerceAdapter() : unsupportedPlatformAdapter;
+  }
 
   let baseUrl: string;
   try {
@@ -64,21 +67,24 @@ export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
   });
 };
 
-export const resolveTotalToolsPlatformContext = (request: Request): PosAdapterContext => ({
-  businessAccountId:
-    request.headers.get("x-business-account-id") ||
-    process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID ||
-    "",
-  providerId:
-    request.headers.get("x-provider-id") ||
-    process.env.SMARTCOMMERCE_PROVIDER_ID ||
-    (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "unsupported"),
-  connectionId: request.headers.get("x-connection-id") || undefined,
-  actorId: request.headers.get("x-actor-id") || undefined,
-  requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
-  locale: request.headers.get("accept-language") || undefined,
-  timezone: request.headers.get("x-timezone") || undefined,
-});
+export const resolveTotalToolsPlatformContext = (request: Request): PosAdapterContext => {
+  const preview = !process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL && previewCatalogueEnabled();
+  return {
+    businessAccountId:
+      request.headers.get("x-business-account-id") ||
+      process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID ||
+      (preview ? PREVIEW_BUSINESS_ID : ""),
+    providerId:
+      request.headers.get("x-provider-id") ||
+      process.env.SMARTCOMMERCE_PROVIDER_ID ||
+      (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : preview ? PREVIEW_PROVIDER_ID : "unsupported"),
+    connectionId: request.headers.get("x-connection-id") || undefined,
+    actorId: request.headers.get("x-actor-id") || undefined,
+    requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
+    locale: request.headers.get("accept-language") || undefined,
+    timezone: request.headers.get("x-timezone") || undefined,
+  };
+};
 
 function assistantSummary(input: {
   job: string;
@@ -87,6 +93,7 @@ function assistantSummary(input: {
   productCount: number;
   rentalCount: number;
   warnings: string[];
+  previewMode?: boolean;
 }) {
   if (input.needsClarification && input.productCount === 0 && input.rentalCount === 0) {
     return input.clarificationQuestion || "Tell me a little more about the job so I can narrow this down accurately.";
@@ -98,9 +105,14 @@ function assistantSummary(input: {
       input.rentalCount ? `${input.rentalCount} rental option${input.rentalCount === 1 ? "" : "s"}` : "",
     ].filter(Boolean);
     const warning = input.warnings[0] ? ` ${input.warnings[0]}` : "";
-    return `I matched ${input.job || "your request"} against the connected Total Tools catalogue and found ${parts.join(" and ")}.${warning}`;
+    const source = input.previewMode ? "SmartCommerce preview catalogue" : "connected Total Tools catalogue";
+    const verification = input.previewMode ? " Preview catalogue prices and items are for evaluation; live branch stock and availability still require the connected Total Tools provider." : "";
+    return `I matched ${input.job || "your request"} against the ${source} and found ${parts.join(" and ")}.${warning}${verification}`;
   }
 
+  if (input.previewMode) {
+    return "I understood the request, but the SmartCommerce preview catalogue does not contain a grounded match. Try another description or Product Match if you have a photo. Live Total Tools inventory is not connected in this preview.";
+  }
   return input.warnings[0] || "I understood the request, but the connected catalogue does not currently contain a grounded match. Try another description or Product Match if you have a photo.";
 }
 
@@ -236,11 +248,19 @@ export const createConfiguredTotalToolsPlatformService = () => {
 
   service.runAssistant = async (request, input) => {
     const context = resolveTotalToolsPlatformContext(request);
+    const previewMode = context.providerId === PREVIEW_PROVIDER_ID;
     const grounded = await runGroundedAssistantIntelligence(adapter, context, {
       prompt: input.prompt,
       branchId: input.branchId,
       history: input.history,
     });
+
+    if (grounded.warnings.length) {
+      console.warn("assistant_provider_read_warning", {
+        providerId: context.providerId,
+        warningCount: grounded.warnings.length,
+      });
+    }
 
     const hasRecommendations = grounded.products.length > 0 || grounded.rentals.length > 0;
     const comparison = grounded.understanding.intent === "compare"
@@ -275,6 +295,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
           productCount: grounded.products.length,
           rentalCount: grounded.rentals.length,
           warnings: grounded.warnings,
+          previewMode,
         }),
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
