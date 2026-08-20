@@ -1,6 +1,7 @@
 import { createPlatformBackendService } from "../backend/platformBackendService.js";
 import { buildGroundedProductComparison } from "../backend/assistantComparisonEngine.js";
 import { runGroundedAssistantIntelligence } from "../backend/assistantIntelligenceEngine.js";
+import { buildRepairIntakeGuidance } from "../backend/assistantRepairGuidance.js";
 import type { AssistantWorkflowHandoff } from "../backend/platformBackendTypes.js";
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
@@ -245,6 +246,12 @@ export const createConfiguredTotalToolsPlatformService = () => {
     const comparison = grounded.understanding.intent === "compare"
       ? await buildGroundedProductComparison(adapter, context, grounded.products, input.branchId)
       : undefined;
+    const repairGuidance = grounded.understanding.intent === "repair"
+      ? await buildRepairIntakeGuidance(adapter, context, {
+          job: grounded.understanding.job,
+          productName: grounded.products[0]?.name,
+        })
+      : undefined;
     const handoff = workflowHandoff({
       intent: grounded.understanding.intent,
       job: grounded.understanding.job,
@@ -258,7 +265,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
     return {
       success: true,
       data: {
-        response: comparison || assistantSummary({
+        response: comparison || repairGuidance || assistantSummary({
           job: grounded.understanding.job,
           needsClarification: grounded.understanding.needsClarification,
           clarificationQuestion: grounded.understanding.clarificationQuestion,
