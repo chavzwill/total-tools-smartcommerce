@@ -1,8 +1,8 @@
 import { createApiClient } from "../apiClient";
 import type {
+  Branch,
   CommerceProduct,
   PlatformApiResult,
-  PosAdapterContext,
   RentalAsset,
 } from "../platform";
 import type { AssistantRequest, AssistantResult } from "../backend";
@@ -23,44 +23,38 @@ export type AdvisorUiResult = {
 };
 
 const api = createApiClient();
+const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
 
-function buildConfiguredContext(): PosAdapterContext | undefined {
-  const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
-  const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
+function savedShoppingBranch() {
+  try {
+    const value = window.localStorage.getItem(SHOPPING_BRANCH_KEY)?.trim();
+    return value && value !== "Online" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
-  if (!businessAccountId || !providerId) return undefined;
+async function resolveSelectedBranchId() {
+  const selectedBranch = savedShoppingBranch();
+  if (!selectedBranch) return import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
 
-  return {
-    businessAccountId,
-    providerId,
-    requestId:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  };
+  const branches = await api.get<Branch[]>("/platform/branches");
+  if (!branches.success) return undefined;
+  const selected = branches.data.find(
+    (branch) => branch.active && branch.name.trim().toLowerCase() === selectedBranch.toLowerCase(),
+  );
+  return selected?.id;
 }
 
 export async function getAdvisorResponse(
   prompt: string
 ): Promise<PlatformApiResult<AdvisorUiResult>> {
-  const context = buildConfiguredContext();
-
-  if (!context) {
-    return {
-      success: false,
-      error: {
-        code: "PLATFORM_CONTEXT_REQUIRED",
-        message:
-          "AI assistant requires configured business and provider context before serving recommendations.",
-      },
-    };
-  }
-
+  const branchId = await resolveSelectedBranchId();
   const request: AssistantRequest = {
     prompt,
-    branchId: import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID,
+    branchId,
   };
-  const result = await api.post<AssistantResult>("/platform/assistant", request, context);
+  const result = await api.post<AssistantResult>("/platform/assistant", request);
 
   if (!result.success) {
     return result;
@@ -74,9 +68,9 @@ export async function getAdvisorResponse(
     success: true,
     requestId: result.requestId,
     data: {
-      summary: hasRecommendations
-        ? result.data.response
-        : "The connected provider returned insufficient catalog or rental data for this request.",
+      summary: result.data.response || (hasRecommendations
+        ? "SmartCommerce matched your request against the connected catalogue."
+        : "The connected provider returned insufficient catalogue or rental data for this request."),
       products,
       rentals,
       nextActions: result.data.nextActions || [],
