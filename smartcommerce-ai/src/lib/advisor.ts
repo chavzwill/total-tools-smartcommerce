@@ -5,7 +5,7 @@ import type {
   PlatformApiResult,
   RentalAsset,
 } from "../platform";
-import type { AssistantRequest, AssistantResult } from "../backend";
+import type { AssistantConversationTurn, AssistantRequest, AssistantResult } from "../backend";
 
 export const advisorPrompts = [
   "I need a generator for my farm with no electricity",
@@ -47,12 +47,17 @@ async function resolveSelectedBranchId() {
 }
 
 export async function getAdvisorResponse(
-  prompt: string
+  prompt: string,
+  history: AssistantConversationTurn[] = [],
 ): Promise<PlatformApiResult<AdvisorUiResult>> {
   const branchId = await resolveSelectedBranchId();
   const request: AssistantRequest = {
     prompt,
     branchId,
+    history: history.slice(-6).map((turn) => ({
+      role: turn.role,
+      content: turn.content.trim().slice(0, 600),
+    })).filter((turn) => turn.content.length > 0),
   };
   const result = await api.post<AssistantResult>("/platform/assistant", request);
 
