@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const assistantEngine = await readFile(new URL("../src/backend/assistantIntelligenceEngine.ts", import.meta.url), "utf8");
 const comparisonEngine = await readFile(new URL("../src/backend/assistantComparisonEngine.ts", import.meta.url), "utf8");
 const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes.ts", import.meta.url), "utf8");
+const platformBackendService = await readFile(new URL("../src/backend/platformBackendService.ts", import.meta.url), "utf8");
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
 const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
 const assistantPage = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
@@ -75,6 +76,28 @@ for (const [description, fragment] of handoffRequired.slice(0, 4)) {
 for (const [description, fragment] of handoffRequired.slice(4)) {
   assert.ok(totalToolsRuntime.includes(fragment), `Missing workflow handoff invariant: ${description}`);
 }
+
+const rentalVerificationRequired = [
+  ["server discards client-supplied rental verification", "verification: _untrustedClientVerification"],
+  ["server invokes provider-native rental verification when available", "runtime.adapter.verifyRental"],
+  ["provider verification checks identity and account standing", "requireIdentityVerification: true"],
+  ["provider verification checks certification and insurance requirements", "requireCertificationCheck: true"],
+  ["explicit provider rejection blocks reservation creation", 'code: "RENTAL_VERIFICATION_REJECTED"'],
+  ["only provider-native verification is marked trusted", 'rentalVerificationSource: providerVerification ? "provider_native" : "not_available"'],
+];
+
+for (const [description, fragment] of rentalVerificationRequired) {
+  assert.ok(platformBackendService.includes(fragment), `Missing rental verification invariant: ${description}`);
+}
+assert.ok(
+  platformBackendService.indexOf("runtime.adapter.verifyRental") < platformBackendService.indexOf("runtime.adapter.createRentalReservation(context"),
+  "Provider-native rental verification must run before reservation creation",
+);
+assert.ok(
+  platformBackendService.includes("...(providerVerification ? { verification: providerVerification } : {})") &&
+    !platformBackendService.includes("verification: input.verification"),
+  "Reservation creation must only forward server-produced provider verification",
+);
 
 assert.ok(
   backendTypes.includes("export type AssistantConversationTurn") && backendTypes.includes("history?: AssistantConversationTurn[]"),
@@ -183,4 +206,4 @@ assert.ok(
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + matchRequired.length + 29} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + handoffRequired.length + rentalVerificationRequired.length + matchRequired.length + 31} invariants).`);
