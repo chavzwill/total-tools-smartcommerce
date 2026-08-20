@@ -26,6 +26,11 @@ type CommercialDraft = {
   email: string;
   need: string;
   details: string;
+  handoffItem?: string;
+  handoffDetails?: string;
+  handoffQuantity?: number;
+  handoffMode?: string;
+  handoffBranch?: string;
 };
 
 const getProviderContext = () => {
@@ -34,10 +39,11 @@ const getProviderContext = () => {
   return businessAccountId && providerId ? { businessAccountId, providerId } : undefined;
 };
 
-const boundedHandoffText = (value: string | null, limit: number) =>
+const boundedHandoffText = (value: string | null | undefined, limit: number) =>
   String(value || "").trim().slice(0, limit);
 
-const boundedHandoffQuantity = (value: string | null) => {
+const boundedHandoffQuantity = (value: string | number | null | undefined) => {
+  if (typeof value === "number") return Number.isInteger(value) && value >= 1 && value <= 9999 ? value : undefined;
   if (!value || !/^\d{1,4}$/.test(value)) return undefined;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 9999 ? parsed : undefined;
@@ -82,8 +88,17 @@ function verificationLabel(status?: string) {
 }
 
 export default function CommercialPage({ quote = false }: { quote?: boolean }) {
-  const requestContext = useMemo(getRequestContext, []);
   const savedDraft = useMemo(getSavedCommercialDraft, []);
+  const requestContext = useMemo(() => {
+    const routeContext = getRequestContext();
+    return {
+      item: routeContext.item || boundedHandoffText(savedDraft.handoffItem, MAX_HANDOFF_ITEM_LENGTH),
+      details: routeContext.details || boundedHandoffText(savedDraft.handoffDetails, MAX_HANDOFF_DETAILS_LENGTH),
+      quantity: routeContext.quantity ?? boundedHandoffQuantity(savedDraft.handoffQuantity),
+      mode: routeContext.mode || boundedHandoffText(savedDraft.handoffMode, 32),
+      branch: routeContext.branch || boundedHandoffText(savedDraft.handoffBranch, 120),
+    };
+  }, [savedDraft]);
   const [businessName, setBusinessName] = useState(() => savedDraft.businessName || "");
   const [contactName, setContactName] = useState(() => savedDraft.contactName || "");
   const [email, setEmail] = useState(() => savedDraft.email || "");
@@ -136,7 +151,18 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   }, [selectedAccountId]);
 
   function saveCommercialDraft() {
-    const draft: CommercialDraft = { businessName, contactName, email, need, details };
+    const draft: CommercialDraft = {
+      businessName,
+      contactName,
+      email,
+      need,
+      details,
+      handoffItem: requestContext.item || undefined,
+      handoffDetails: requestContext.details || undefined,
+      handoffQuantity: requestContext.quantity,
+      handoffMode: requestContext.mode || undefined,
+      handoffBranch: requestContext.branch || undefined,
+    };
     try {
       window.localStorage.setItem(COMMERCIAL_DRAFT_KEY, JSON.stringify(draft));
     } catch {
