@@ -17,6 +17,8 @@ import { company } from "../styles/theme";
 
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
 const COMMERCIAL_DRAFT_KEY = "smartcommerce_commercial_request_draft_v1";
+const MAX_HANDOFF_ITEM_LENGTH = 180;
+const MAX_HANDOFF_DETAILS_LENGTH = 700;
 
 type CommercialDraft = {
   businessName: string;
@@ -32,6 +34,15 @@ const getProviderContext = () => {
   return businessAccountId && providerId ? { businessAccountId, providerId } : undefined;
 };
 
+const boundedHandoffText = (value: string | null, limit: number) =>
+  String(value || "").trim().slice(0, limit);
+
+const boundedHandoffQuantity = (value: string | null) => {
+  if (!value || !/^\d{1,4}$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 9999 ? parsed : undefined;
+};
+
 const getRequestContext = () => {
   const raw = window.location.hash.split("?")[1] || "";
   const query = new URLSearchParams(raw);
@@ -43,8 +54,10 @@ const getRequestContext = () => {
     branch = "";
   }
   return {
-    item: query.get("item") || "",
-    mode: query.get("mode") || "",
+    item: boundedHandoffText(query.get("item"), MAX_HANDOFF_ITEM_LENGTH),
+    details: boundedHandoffText(query.get("details"), MAX_HANDOFF_DETAILS_LENGTH),
+    quantity: boundedHandoffQuantity(query.get("qty")),
+    mode: boundedHandoffText(query.get("mode"), 32),
     branch,
   };
 };
@@ -75,7 +88,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   const [contactName, setContactName] = useState(() => savedDraft.contactName || "");
   const [email, setEmail] = useState(() => savedDraft.email || "");
   const [need, setNeed] = useState(() => savedDraft.need || (quote || requestContext.mode === "quote" ? "Bulk product pricing" : requestContext.mode === "maintenance" ? "Project support" : "Project support"));
-  const [details, setDetails] = useState(() => savedDraft.details || (requestContext.item ? `I need commercial support for: ${requestContext.item}` : ""));
+  const [details, setDetails] = useState(() => savedDraft.details || requestContext.details || (requestContext.item ? `I need commercial support for: ${requestContext.quantity ? `${requestContext.quantity} × ` : ""}${requestContext.item}` : ""));
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [accounts, setAccounts] = useState<CommercialAccountSummary[]>([]);
@@ -239,11 +252,20 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       businessAccountId: providerContext.businessAccountId,
       customerAccountId,
       companyName: businessName,
+      requestedItems: requestContext.item
+        ? [{
+            name: requestContext.item,
+            ...(requestContext.quantity ? { quantity: requestContext.quantity } : {}),
+            notes: "Grounded assistant handoff; customer reviewed the editable commercial request before submission.",
+          }]
+        : undefined,
       requestDetails: `${need}: ${details}`,
       customerNotes: [
         `Contact: ${contactName} · ${email}`,
         requestContext.branch ? `Shopping branch: ${requestContext.branch}` : "",
         requestContext.item ? `Source item: ${requestContext.item}` : "",
+        requestContext.quantity ? `Requested quantity: ${requestContext.quantity}` : "",
+        requestContext.details ? "Request context was prefilled from a bounded SmartCommerce AI handoff and remained customer-editable before submission." : "",
       ].filter(Boolean).join("\n"),
     });
     if (!result.success) {
@@ -285,7 +307,8 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
           <BriefcaseBusiness size={30} />
           <span className="sc-flow-kicker">Commercial request</span>
           <h2>{quote || requestContext.mode === "quote" ? "Request commercial pricing" : "What does the business need?"}</h2>
-          {requestContext.item ? <p className="sc-commercial-request__context"><strong>From your product:</strong> {requestContext.item}</p> : null}
+          {requestContext.item ? <p className="sc-commercial-request__context"><strong>Grounded item:</strong> {requestContext.quantity ? `${requestContext.quantity} × ` : ""}{requestContext.item}</p> : null}
+          {requestContext.details ? <p className="sc-commercial-request__context"><strong>SmartCommerce prefill:</strong> Review and edit the requirement below before sending. Nothing has been quoted or submitted yet.</p> : null}
           {requestContext.branch ? <p className="sc-commercial-request__context"><MapPin size={15} /> Shopping from {requestContext.branch}</p> : null}
           <label>Business or organisation<input required value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
           <label>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
