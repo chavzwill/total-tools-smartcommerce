@@ -101,6 +101,15 @@ function assistantSummary(input: {
   return input.warnings[0] || "I understood the request, but the connected catalogue does not currently contain a grounded match. Try another description or Product Match if you have a photo.";
 }
 
+function followUps(intent: string, hasRecommendations: boolean, needsClarification: boolean) {
+  if (needsClarification && !hasRecommendations) return [];
+  if (intent === "rent") return ["Show me cheaper rental options", "Compare these rentals", "What can I buy instead?"];
+  if (intent === "repair") return ["Show me replacement options", "Can I rent one while mine is repaired?", "What information does the repair team need?"];
+  if (intent === "identify") return ["I can describe what is visible", "Help me narrow down the product type"];
+  if (intent === "commercial") return ["Show me bulk-friendly options", "Compare these products", "Help me prepare a commercial quote"];
+  return ["Show me cheaper options", "Compare these products", "Can I rent instead?"];
+}
+
 export const createConfiguredTotalToolsPlatformService = () => {
   const adapter = createConfiguredTotalToolsAdapter();
   const service = createPlatformBackendService({
@@ -113,19 +122,10 @@ export const createConfiguredTotalToolsPlatformService = () => {
     const grounded = await runGroundedAssistantIntelligence(adapter, context, {
       prompt: input.prompt,
       branchId: input.branchId,
+      history: input.history,
     });
 
     const hasRecommendations = grounded.products.length > 0 || grounded.rentals.length > 0;
-    const nextActions = grounded.understanding.needsClarification && !hasRecommendations
-      ? ["refine_prompt"]
-      : grounded.understanding.intent === "rent"
-        ? ["review_recommendations", "check_rental_availability", "compare_rentals"]
-        : grounded.understanding.intent === "repair"
-          ? ["start_repair", "review_recommendations"]
-          : grounded.understanding.intent === "identify"
-            ? ["open_product_match", "refine_prompt"]
-            : ["review_recommendations", "check_availability", "compare_products"];
-
     return {
       success: true,
       data: {
@@ -139,7 +139,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
         }),
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
-        nextActions,
+        nextActions: followUps(grounded.understanding.intent, hasRecommendations, grounded.understanding.needsClarification),
       },
     };
   };
