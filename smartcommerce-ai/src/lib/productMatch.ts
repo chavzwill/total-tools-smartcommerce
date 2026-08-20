@@ -1,5 +1,5 @@
 import type { Branch, PlatformApiResult } from "../platform";
-import type { ProductMatchResult } from "../types/productMatch";
+import type { ProductMatchResult, ProductVisualAnalysis } from "../types/productMatch";
 
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 const MAX_DIMENSION = 1600;
@@ -65,7 +65,11 @@ export async function prepareProductMatchImage(file: File) {
   }
 }
 
-export async function matchProductPhoto(imageDataUrl: string, branchId?: string): Promise<PlatformApiResult<ProductMatchResult>> {
+export async function matchProductPhoto(
+  imageDataUrl: string,
+  branchId?: string,
+  priorAnalysis?: ProductVisualAnalysis,
+): Promise<PlatformApiResult<ProductMatchResult>> {
   try {
     const resolvedBranchId = await resolveSelectedBranchId(branchId);
     const headers: Record<string, string> = {
@@ -76,7 +80,7 @@ export async function matchProductPhoto(imageDataUrl: string, branchId?: string)
     const response = await fetch("/api/product-match", {
       method: "POST",
       headers,
-      body: JSON.stringify({ imageDataUrl, branchId: resolvedBranchId }),
+      body: JSON.stringify({ imageDataUrl, branchId: resolvedBranchId, priorAnalysis }),
     });
     const payload = (await response.json()) as PlatformApiResult<ProductMatchResult>;
     if (!response.ok && payload.success) return { success: false, error: { code: "PRODUCT_MATCH_HTTP_ERROR", message: `Product Match failed with HTTP ${response.status}.` } };
