@@ -5,7 +5,12 @@ import type {
   PlatformApiResult,
   RentalAsset,
 } from "../platform";
-import type { AssistantConversationTurn, AssistantRequest, AssistantResult } from "../backend";
+import type {
+  AssistantConversationTurn,
+  AssistantRequest,
+  AssistantResult,
+  AssistantWorkflowHandoff,
+} from "../backend";
 
 export const advisorPrompts = [
   "I need a generator for my farm with no electricity",
@@ -20,6 +25,7 @@ export type AdvisorUiResult = {
   products: CommerceProduct[];
   rentals: RentalAsset[];
   nextActions: string[];
+  workflowHandoff?: AssistantWorkflowHandoff;
 };
 
 const api = createApiClient();
@@ -79,6 +85,7 @@ export async function getAdvisorResponse(
       products,
       rentals,
       nextActions: result.data.nextActions || [],
+      workflowHandoff: result.data.workflowHandoff,
     },
   };
 }
