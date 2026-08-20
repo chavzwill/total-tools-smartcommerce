@@ -9,6 +9,8 @@ const advisorClient = await readFile(new URL("../src/lib/advisor.ts", import.met
 const assistantPage = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
 const productMatchEngine = await readFile(new URL("../src/backend/productMatchEngine.ts", import.meta.url), "utf8");
 const productMatchClient = await readFile(new URL("../src/lib/productMatch.ts", import.meta.url), "utf8");
+const productMatchPage = await readFile(new URL("../src/pages/ProductMatchPage.tsx", import.meta.url), "utf8");
+const productMatchApi = await readFile(new URL("../api/product-match.ts", import.meta.url), "utf8");
 
 const assistantRequired = [
   ["structured assistant understanding type exists", "export type AssistantUnderstanding"],
@@ -90,6 +92,11 @@ const matchRequired = [
   ["Product Match tracks strong evidence separately", "strongSignals"],
   ["Product Match parallelizes availability verification", "const candidates = await Promise.all"],
   ["Product Match clarifies weak exact-identification evidence", "model/SKU/barcode label"],
+  ["Product Match combines bounded prior visual evidence", "combineVisualAnalyses"],
+  ["Product Match detects brand conflicts across photos", "brandConflict"],
+  ["Product Match detects model conflicts across photos", "modelConflict"],
+  ["Product Match penalizes conflicting multi-photo evidence", "conflictPenalty"],
+  ["Product Match reports evidence image count", "evidenceImages"],
 ];
 
 for (const [description, fragment] of matchRequired) {
@@ -102,8 +109,24 @@ assert.ok(
   "Product Match must resolve the shopper's saved branch through server branch data",
 );
 assert.ok(
+  productMatchClient.includes("priorAnalysis?: ProductVisualAnalysis") && productMatchClient.includes("priorAnalysis }),"),
+  "Product Match client must send only structured prior analysis for photo refinement",
+);
+assert.ok(
+  productMatchPage.includes("const priorAnalysis = result?.analysis") && productMatchPage.includes("Add another photo"),
+  "Product Match UI must refine an existing result with another image instead of silently restarting",
+);
+assert.ok(
+  productMatchPage.includes("result.evidenceImages") && productMatchPage.includes("photos combined"),
+  "Product Match UI must disclose accumulated image evidence",
+);
+assert.ok(
+  productMatchApi.includes("validatePriorAnalysis") && productMatchApi.includes("JSON.stringify(input).length > 8_000"),
+  "Product Match API must bound and validate prior structured evidence",
+);
+assert.ok(
   !productMatchClient.includes("VITE_SMARTCOMMERCE_BUSINESS_ID") && !productMatchClient.includes("VITE_SMARTCOMMERCE_PROVIDER_ID"),
   "Product Match client must not supply provider/business identity from browser environment variables",
 );
 
-console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + matchRequired.length + 9} invariants).`);
+console.log(`Grounded intelligence regression gate passed (${assistantRequired.length + comparisonRequired.length + matchRequired.length + 13} invariants).`);
