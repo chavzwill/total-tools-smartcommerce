@@ -104,10 +104,6 @@ const readBody = async (request: AsyncIterable<unknown>, maxBodyBytes = MAX_BODY
   return Buffer.concat(chunks);
 };
 
-const previewCatalogueContextEnabled = () =>
-  !process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL &&
-  (process.env.VERCEL_ENV === "preview" || process.env.SMARTCOMMERCE_ENABLE_PREVIEW_CATALOGUE === "1");
-
 const toRequest = async (request: any, privileged: boolean, maxBodyBytes = MAX_BODY_BYTES) => {
   const headers = new Headers();
   Object.entries(request.headers || {}).forEach(([key, value]) => {
@@ -126,7 +122,8 @@ const toRequest = async (request: any, privileged: boolean, maxBodyBytes = MAX_B
     if (headerValue !== undefined) headers.set(key, headerValue);
   });
 
-  const preview = previewCatalogueContextEnabled();
+  const preview = !process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL &&
+    (process.env.VERCEL_ENV === "preview" || process.env.SMARTCOMMERCE_ENABLE_PREVIEW_CATALOGUE === "1");
   const configuredBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
   const configuredProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
   const trustedBusinessAccountId = configuredBusinessAccountId || (!privileged ? (preview ? "preview-total-tools" : "public-catalog") : undefined);
@@ -153,61 +150,139 @@ const sendJson = (response: any, status: number, payload: unknown) => {
   response.setHeader("Content-Type", "application/json");
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "same-origin");
   response.end(JSON.stringify(payload));
+};
+
+const sendResponse = async (response: any, platformResponse: Response) => {
+  response.statusCode = platformResponse.status;
+  platformResponse.headers.forEach((value, key) => response.setHeader(key, value));
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.end(Buffer.from(await platformResponse.arrayBuffer()));
 };
 
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const path = requestPath(request);
-  const auth = internalAuthorization(request);
-  const privileged = auth.configured && auth.authorized;
   const publicPath = isPublicPlatformPath(method, path);
+  const assistantPublicPost = method === "POST" && path === "/api/platform/assistant";
+  const authorization = internalAuthorization(request);
 
-  if (!privileged && !publicPath) {
-    await recordSecurityEvent({ request, eventType: "platform_gateway_unauthorized", eventStatus: "blocked", riskLevel: "high", metadata: { method, path } }).catch(() => undefined);
-    return sendJson(response, 401, { success: false, error: { code: "PLATFORM_GATEWAY_UNAUTHORIZED", message: "Platform access requires authorization.", retryable: false } });
-  }
-
-  if (!privileged && method !== "GET" && !sameOrigin(request)) {
-    await recordSecurityEvent({ request, eventType: "platform_gateway_origin_rejected", eventStatus: "blocked", riskLevel: "medium", metadata: { method, path } }).catch(() => undefined);
-    return sendJson(response, 403, { success: false, error: { code: "ORIGIN_REJECTED", message: "This platform request was rejected.", retryable: false } });
+  if (!publicPath) {
+    if (!authorization.configured) {
+      return sendJson(response, 503, {
+        success: false,
+        error: {
+          code: "PLATFORM_GATEWAY_NOT_CONFIGURED",
+          message: "Protected platform operations are unavailable until the internal gateway credential is configured.",
+          retryable: false,
+        },
+      });
+    }
+    if (!authorization.authorized) {
+      return sendJson(response, 401, {
+        success: false,
+        error: {
+          code: "PLATFORM_AUTH_REQUIRED",
+          message: "This platform operation requires trusted server authorization.",
+          retryable: false,
+        },
+      });
+    }
   }
 
   try {
-    if (!privileged && path === "/api/platform/assistant") {
-      await enforceDurableRateLimit({ request, action: "assistant_ip", subject: requestIp(request), limit: ASSISTANT_RATE_LIMIT, windowSeconds: ASSISTANT_RATE_WINDOW_SECONDS });
+    if (assistantPublicPost) {
+      if (!sameOrigin(request)) {
+        await recordSecurityEvent({
+          request,
+          eventType: "platform_assistant_origin_rejected",
+          eventStatus: "blocked",
+          riskLevel: "medium",
+        }).catch(() => undefined);
+        return sendJson(response, 403, {
+          success: false,
+          error: {
+            code: "ORIGIN_REJECTED",
+            message: "This assistant request was rejected.",
+            retryable: false,
+          },
+        });
+      }
+
+      try {
+        await enforceDurableRateLimit({
+          request,
+          action: "platform_assistant_ip",
+          subject: requestIp(request),
+          limit: ASSISTANT_RATE_LIMIT,
+          windowSeconds: ASSISTANT_RATE_WINDOW_SECONDS,
+        });
+      } catch (error) {
+        if (Number((error as any)?.status) !== 429 && (error as Error)?.message !== "RATE_LIMITED") throw error;
+        const retryAfter = Math.max(1, Number((error as any)?.retryAfterSeconds || ASSISTANT_RATE_WINDOW_SECONDS));
+        response.setHeader("Retry-After", String(retryAfter));
+        await recordSecurityEvent({
+          request,
+          eventType: "platform_assistant_rate_limited",
+          eventStatus: "blocked",
+          riskLevel: "medium",
+          metadata: { retryAfterSeconds: retryAfter },
+        }).catch(() => undefined);
+        return sendJson(response, 429, {
+          success: false,
+          error: {
+            code: "RATE_LIMITED",
+            message: "Too many assistant requests. Please wait and try again.",
+            retryable: true,
+            retryAfterSeconds: retryAfter,
+          },
+        });
+      }
     }
 
     const platformRequest = await toRequest(
       request,
-      privileged,
-      !privileged && path === "/api/platform/assistant" ? ASSISTANT_MAX_BODY_BYTES : MAX_BODY_BYTES,
+      authorization.authorized,
+      assistantPublicPost ? ASSISTANT_MAX_BODY_BYTES : MAX_BODY_BYTES,
     );
-    const idempotency = privileged ? idempotentOperation(method, path) : undefined;
-    const platformResponse = idempotency
+    const protectedWrite = idempotentOperation(method, path);
+    const platformResponse = protectedWrite
       ? await executeIdempotentPlatformWrite({
-          operation: idempotency.operation,
-          key: platformRequest.headers.get(idempotency.keyHeader) || "",
           request: platformRequest,
-          execute: () => handlePlatformRestRequest(platformRequest, service),
+          operation: protectedWrite.operation,
+          keyHeader: protectedWrite.keyHeader,
+          ttlHours: path === "/api/platform/integrations/webhooks" ? 72 : 24,
+          execute: () => handlePlatformRestRequest(platformRequest.clone(), service),
         })
       : await handlePlatformRestRequest(platformRequest, service);
-
-    response.statusCode = platformResponse.status;
-    platformResponse.headers.forEach((value, key) => response.setHeader(key, value));
-    response.setHeader("Cache-Control", "no-store");
-    response.setHeader("X-Content-Type-Options", "nosniff");
-    response.end(Buffer.from(await platformResponse.arrayBuffer()));
+    await sendResponse(response, platformResponse);
   } catch (error) {
-    if (Number((error as { status?: number })?.status) === 413) {
-      return sendJson(response, 413, { success: false, error: { code: "PLATFORM_REQUEST_TOO_LARGE", message: "Platform request body exceeds the allowed size.", retryable: false } });
+    if (Number((error as any)?.status) === 413) {
+      return sendJson(response, 413, {
+        success: false,
+        error: {
+          code: "PLATFORM_REQUEST_TOO_LARGE",
+          message: assistantPublicPost
+            ? "The assistant request body exceeds the allowed size."
+            : "The platform request body exceeds the allowed size.",
+          retryable: false,
+        },
+      });
     }
-    if (Number((error as { status?: number })?.status) === 429 || (error as Error)?.message === "RATE_LIMITED") {
-      const retryAfter = Math.max(1, Number((error as { retryAfterSeconds?: number })?.retryAfterSeconds || ASSISTANT_RATE_WINDOW_SECONDS));
-      response.setHeader("Retry-After", String(retryAfter));
-      return sendJson(response, 429, { success: false, error: { code: "RATE_LIMITED", message: "Too many requests. Please wait and try again.", retryable: true, retryAfterSeconds: retryAfter } });
-    }
-    console.error("platform_gateway_error", { code: "PLATFORM_GATEWAY_ERROR", method, path });
-    return sendJson(response, 500, { success: false, error: { code: "PLATFORM_GATEWAY_ERROR", message: "SmartCommerce could not process the platform request.", retryable: false } });
+    console.error("platform_gateway_error", {
+      code: "PLATFORM_SERVERLESS_ERROR",
+      path,
+      method,
+    });
+    return sendJson(response, 500, {
+      success: false,
+      error: {
+        code: "PLATFORM_SERVERLESS_ERROR",
+        message: "The SmartCommerce platform API failed to process the request.",
+        retryable: false,
+      },
+    });
   }
 }
