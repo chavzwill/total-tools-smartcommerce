@@ -341,6 +341,11 @@ export default function ProductMatchPage({ onAdd }: Props) {
                         </button>
                       ) : null}
                       <a href={routeHref(`/product/${top.product.id}`)}>View product</a>
+                      {top.product.rentable ? (
+                        <a href={routeHref(`/rentals?q=${encodeURIComponent(top.product.name)}`)}>
+                          Find rental options
+                        </a>
+                      ) : null}
                       <button
                         type="button"
                         className="is-secondary"
