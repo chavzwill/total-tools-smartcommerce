@@ -361,8 +361,9 @@ export async function runGroundedAssistantIntelligence(
     input.branchId,
   );
   const products = selectProductsWithQueryCoverage(rankedProducts, queryCoverage, 8);
+  const rentalOnlyProducts = products.filter((product) => product.rentable === true && product.purchasable === false);
 
-  const shouldFindRentals = understanding.intent === "rent" || understanding.rentalQueries.length > 0;
+  const shouldFindRentals = understanding.intent === "rent" || understanding.rentalQueries.length > 0 || rentalOnlyProducts.length > 0;
   const rentalMap = new Map<string, RentalAsset>();
   if (shouldFindRentals) {
     const rentableProducts = products.filter((product) => product.rentable !== false).slice(0, 6);
