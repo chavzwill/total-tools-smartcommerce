@@ -1,5 +1,6 @@
 import { createPlatformBackendService } from "../backend/platformBackendService.js";
 import { buildGroundedProductComparison } from "../backend/assistantComparisonEngine.js";
+import { buildProductRecommendationEvidence, buildRentalRecommendationEvidence } from "../backend/assistantDecisionSupport.js";
 import { runGroundedAssistantIntelligence } from "../backend/assistantIntelligenceEngine.js";
 import { buildRepairIntakeGuidance } from "../backend/assistantRepairGuidance.js";
 import type { AssistantWorkflowHandoff } from "../backend/platformBackendTypes.js";
@@ -284,6 +285,10 @@ export const createConfiguredTotalToolsPlatformService = () => {
       customerId: trustedCustomerId,
       quantity: grounded.understanding.quantity,
     });
+    const recommendationEvidence = [
+      ...grounded.products.map((product) => buildProductRecommendationEvidence(product, grounded.understanding)),
+      ...grounded.rentals.map((rental) => buildRentalRecommendationEvidence(rental, grounded.understanding)),
+    ];
 
     return {
       success: true,
@@ -299,6 +304,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
         }),
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
+        recommendationEvidence,
         nextActions: followUps(grounded.understanding.intent, hasRecommendations, grounded.understanding.needsClarification),
         workflowHandoff: handoff,
       },
