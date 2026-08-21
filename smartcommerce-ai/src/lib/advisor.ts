@@ -23,11 +23,20 @@ export const advisorPrompts = [
   "I need garbage bags for a retail store",
 ];
 
+export type AdvisorBranchAlternative = {
+  branchId: string;
+  branchName: string;
+  status: string;
+  quantityAvailable?: number;
+  nextAvailableAt?: string;
+};
+
 export type AdvisorProductAvailability = {
   branchId: string;
   branchName?: string;
   records: InventoryAvailability[];
   lookupStatus: "confirmed" | "unavailable";
+  alternatives: AdvisorBranchAlternative[];
 };
 
 export type AdvisorUiResult = {
@@ -57,17 +66,22 @@ async function resolveSelectedBranchContext() {
   const selectedBranch = savedShoppingBranch();
   if (!selectedBranch) {
     const fallbackId = import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
-    return { id: fallbackId ? String(fallbackId) : undefined, name: undefined as string | undefined };
+    return {
+      id: fallbackId ? String(fallbackId) : undefined,
+      name: undefined as string | undefined,
+      branches: [] as Branch[],
+    };
   }
 
   const branches = await api.get<Branch[]>("/platform/branches");
-  if (!branches.success) return { id: undefined, name: selectedBranch };
+  if (!branches.success) return { id: undefined, name: selectedBranch, branches: [] as Branch[] };
   const selected = branches.data.find(
     (branch) => branch.active && branch.name.trim().toLowerCase() === selectedBranch.toLowerCase(),
   );
   return {
     id: selected?.id !== undefined ? String(selected.id) : undefined,
     name: selected?.name || selectedBranch,
+    branches: branches.data.filter((branch) => branch.active),
   };
 }
 
@@ -80,21 +94,69 @@ async function resolveCustomerId() {
   }
 }
 
+async function getAvailability(productId: string, branchId: string) {
+  const path = `/platform/inventory/availability?productId=${encodeURIComponent(productId)}&branchId=${encodeURIComponent(branchId)}&quantity=1`;
+  return api.get<InventoryAvailability[]>(path);
+}
+
+function inventoryRecordForBranch(records: InventoryAvailability[], branchId: string) {
+  return records.find((item) => String(item.branchId || "") === branchId) || records[0];
+}
+
+async function loadAlternativeBranches(
+  productId: string,
+  selectedBranchId: string,
+  selectedRecords: InventoryAvailability[],
+  branches: Branch[],
+) {
+  const selectedRecord = inventoryRecordForBranch(selectedRecords, selectedBranchId);
+  if (!selectedRecord || selectedRecord.status !== "out_of_stock") return [] as AdvisorBranchAlternative[];
+  if (selectedRecord.metadata?.liveVerified === false || selectedRecord.metadata?.source === "preview_catalogue") {
+    return [] as AdvisorBranchAlternative[];
+  }
+
+  const candidates = branches
+    .filter((branch) => branch.active && String(branch.id) !== selectedBranchId)
+    .slice(0, 4);
+
+  const alternatives = await Promise.all(candidates.map(async (branch) => {
+    const branchId = String(branch.id);
+    const result = await getAvailability(productId, branchId);
+    if (!result.success) return undefined;
+    const record = inventoryRecordForBranch(result.data, branchId);
+    if (!record || (record.status !== "in_stock" && record.status !== "low_stock")) return undefined;
+    if (record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue") return undefined;
+    return {
+      branchId,
+      branchName: branch.name,
+      status: record.status,
+      quantityAvailable: typeof record.quantityAvailable === "number" ? record.quantityAvailable : undefined,
+      nextAvailableAt: record.nextAvailableAt,
+    } satisfies AdvisorBranchAlternative;
+  }));
+
+  return alternatives.filter(Boolean).slice(0, 3) as AdvisorBranchAlternative[];
+}
+
 async function loadProductAvailability(
   products: CommerceProduct[],
-  branch: { id?: string; name?: string },
+  branch: { id?: string; name?: string; branches: Branch[] },
 ) {
   if (!branch.id || !products.length) return {} as Record<string, AdvisorProductAvailability>;
 
   const entries = await Promise.all(products.slice(0, 8).map(async (product) => {
     const productId = String(product.id);
-    const path = `/platform/inventory/availability?productId=${encodeURIComponent(productId)}&branchId=${encodeURIComponent(branch.id!)}&quantity=1`;
-    const result = await api.get<InventoryAvailability[]>(path);
+    const result = await getAvailability(productId, branch.id!);
+    const records = result.success ? result.data : [];
+    const alternatives = result.success
+      ? await loadAlternativeBranches(productId, branch.id!, records, branch.branches)
+      : [];
     const snapshot: AdvisorProductAvailability = {
       branchId: branch.id!,
       branchName: branch.name,
-      records: result.success ? result.data : [],
+      records,
       lookupStatus: result.success ? "confirmed" : "unavailable",
+      alternatives,
     };
     return [productId, snapshot] as const;
   }));
