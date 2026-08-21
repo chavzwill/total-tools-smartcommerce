@@ -51,9 +51,9 @@ export default function RepairPage() {
   const savedDraft = useMemo(getSavedDraft, []);
   const initialContext = useMemo(getInitialRepairContext, []);
   const [repairs, setRepairs] = useState(() => getRepairTypes());
-  const [equipment, setEquipment] = useState(() => savedDraft.equipment || initialContext.equipment);
+  const [equipment, setEquipment] = useState(() => initialContext.equipment || savedDraft.equipment || "");
   const [model, setModel] = useState(() => savedDraft.model || "");
-  const [issue, setIssue] = useState(() => savedDraft.issue || initialContext.issue);
+  const [issue, setIssue] = useState(() => initialContext.issue || savedDraft.issue || "");
   const [branch, setBranch] = useState(() => savedDraft.branch || getInitialBranch());
   const [date, setDate] = useState(() => savedDraft.date || "");
   const [contact, setContact] = useState(() => savedDraft.contact || "");
