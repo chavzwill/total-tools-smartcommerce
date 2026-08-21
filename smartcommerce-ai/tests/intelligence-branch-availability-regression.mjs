@@ -26,6 +26,11 @@ const invariants = [
   [page.includes("onClick={() => onSwitchBranch(item.branchName)}"), "alternate branch action switches through the validated branch callback"],
   [page.includes("ProductAvailability snapshot={availability}"), "product cards render the independent availability snapshot"],
   [page.includes("sc-assistant-evidence sc-assistant-availability"), "availability reuses the canonical evidence surface rather than adding a new CSS layer"],
+  [page.includes("function providerConfirmedOutOfStock") && page.includes('snapshot.lookupStatus !== "confirmed"'), "cart blocking requires a completed provider inventory lookup"],
+  [page.includes('record.metadata?.liveVerified === false') && page.includes('record.metadata?.source === "preview_catalogue"') && page.includes('return record.status === "out_of_stock"'), "preview/unverified inventory cannot block the cart as confirmed out of stock"],
+  [page.includes("const outOfStockAtSelectedBranch = providerConfirmedOutOfStock(availability)"), "product actions derive cart availability from the independent selected-branch snapshot"],
+  [page.includes("Out of stock at {availability?.branchName || \"selected branch\"}") && page.includes("<button type=\"button\" disabled>"), "confirmed selected-branch out-of-stock disables the immediate cart action"],
+  [page.includes("onClick={() => onAdd(String(product.id), 1)}>Add to cart</button>"), "purchasable products remain addable when no confirmed out-of-stock fact exists"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
