@@ -177,9 +177,9 @@ assert.ok(
   "Public assistant client must not depend on browser-supplied provider/business identity",
 );
 assert.ok(
-  advisorClient.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"') &&
+  advisorClient.includes("getPhysicalShoppingBranch()") &&
     advisorClient.includes('api.get<Branch[]>("/platform/branches")'),
-  "Assistant must resolve the shopper's saved branch to provider branch data",
+  "Assistant must resolve the shopper's shared saved branch to provider branch data",
 );
 assert.ok(
   advisorClient.includes("getCustomerAccount") && advisorClient.includes("customerId,"),
@@ -230,9 +230,9 @@ for (const [description, fragment] of matchRequired) {
 }
 
 assert.ok(
-  productMatchClient.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"') &&
+  productMatchClient.includes("getPhysicalShoppingBranch()") &&
     productMatchClient.includes('fetch("/api/platform/branches"'),
-  "Product Match must resolve the shopper's saved branch through server branch data",
+  "Product Match must resolve the shopper's shared saved branch through server branch data",
 );
 assert.ok(
   productMatchClient.includes("priorAnalysis?: ProductVisualAnalysis") && productMatchClient.includes("priorAnalysis }),"),
