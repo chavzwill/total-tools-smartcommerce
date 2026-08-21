@@ -18,9 +18,11 @@ const invariants = [
   [page.includes("Ask AI about this match"), "customer CTA accurately describes the AI handoff"],
   [!page.includes("Ask AI to verify"), "customer CTA no longer overstates independent image verification"],
   [page.includes("slice(0, 2200)"), "Product Match AI handoff is length bounded"],
+  [page.includes("top.product.rentable") && page.includes("Find rental options"), "rental shortcut only appears for catalogue products marked rentable"],
+  [page.includes("/rentals?q=") && page.includes("encodeURIComponent(top.product.name)"), "rentable Product Match handoff uses rental search instead of inventing an asset id"],
   [engine.includes("confidence") && engine.includes("sort((a, b) => b.confidence - a.confidence"), "internal confidence score remains available for candidate ranking"],
   [engine.includes("needsClarification") && engine.includes("top.confidence < 0.64"), "clarification still depends on conservative evidence thresholds"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
-console.log(`Product Match confidence and AI-handoff regression gate passed (${invariants.length} invariants).`);
+console.log(`Product Match confidence, AI-handoff, and rental-action regression gate passed (${invariants.length} invariants).`);
