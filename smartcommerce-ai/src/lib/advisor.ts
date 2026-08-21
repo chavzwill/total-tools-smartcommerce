@@ -14,6 +14,7 @@ import type {
   AssistantWorkflowHandoff,
 } from "../backend";
 import { getCustomerAccount } from "./customerAccount";
+import { getPhysicalShoppingBranch } from "./shoppingBranch";
 
 export const advisorPrompts = [
   "I need a generator for my farm with no electricity",
@@ -51,19 +52,9 @@ export type AdvisorUiResult = {
 };
 
 const api = createApiClient();
-const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
-
-function savedShoppingBranch() {
-  try {
-    const value = window.localStorage.getItem(SHOPPING_BRANCH_KEY)?.trim();
-    return value && value !== "Online" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 async function resolveSelectedBranchContext() {
-  const selectedBranch = savedShoppingBranch();
+  const selectedBranch = getPhysicalShoppingBranch();
   if (!selectedBranch) {
     const fallbackId = import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
     return {
