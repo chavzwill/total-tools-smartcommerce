@@ -130,6 +130,26 @@ function hasTimingHint(value: string) {
   return /\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|week|month|from\s+\d|until\s+\d|\d{4}-\d{2}-\d{2}|\d{1,2}[\/-]\d{1,2})\b/i.test(value);
 }
 
+function explicitPurchaseIntent(value: string) {
+  return /\b(buy|purchase|own|buying|purchasing)\b/i.test(value);
+}
+
+function resolvedAssistantIntent(input: {
+  originalIntent: string;
+  prompt: string;
+  products: Array<{ id: string | number; rentable?: boolean; purchasable?: boolean }>;
+  rentals: Array<{ productId?: string | number }>;
+}) {
+  if (input.originalIntent !== "buy" && input.originalIntent !== "general") return input.originalIntent;
+  if (explicitPurchaseIntent(input.prompt)) return input.originalIntent;
+  const rentalOnlyMatch = input.products.find((product) =>
+    product.rentable === true &&
+    product.purchasable === false &&
+    input.rentals.some((rental) => String(rental.productId || "") === String(product.id)),
+  );
+  return rentalOnlyMatch ? "rent" : input.originalIntent;
+}
+
 function workflowHandoff(input: {
   intent: string;
   job: string;
@@ -263,6 +283,12 @@ export const createConfiguredTotalToolsPlatformService = () => {
       });
     }
 
+    const resolvedIntent = resolvedAssistantIntent({
+      originalIntent: grounded.understanding.intent,
+      prompt: input.prompt,
+      products: grounded.products,
+      rentals: grounded.rentals,
+    });
     const hasRecommendations = grounded.products.length > 0 || grounded.rentals.length > 0;
     const comparison = grounded.understanding.intent === "compare"
       ? await buildGroundedProductComparison(adapter, context, grounded.products, input.branchId)
@@ -277,7 +303,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
       ? String(input.customerId)
       : undefined;
     const handoff = workflowHandoff({
-      intent: grounded.understanding.intent,
+      intent: resolvedIntent,
       job: grounded.understanding.job,
       productName: grounded.products[0]?.name,
       rentalAssetId: grounded.rentals[0]?.id ? String(grounded.rentals[0].id) : undefined,
@@ -305,7 +331,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
         recommendationEvidence,
-        nextActions: followUps(grounded.understanding.intent, hasRecommendations, grounded.understanding.needsClarification),
+        nextActions: followUps(resolvedIntent, hasRecommendations, grounded.understanding.needsClarification),
         workflowHandoff: handoff,
       },
     };
