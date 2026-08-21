@@ -36,8 +36,13 @@ export function branchDescription(branch: ShoppingBranch) {
 }
 
 export function branchAwareHref(href: string, branch: ShoppingBranch) {
-  if (branch === "Online") return href;
-  const isBranchScoped = href === "/products" || href === "/rentals" || href.startsWith("/category/");
+  const [path, rawQuery = ""] = href.split("?", 2);
+  const isBranchScoped = path === "/products" || path === "/search" || path === "/rentals" || path.startsWith("/category/");
   if (!isBranchScoped) return href;
-  return `${href}${href.includes("?") ? "&" : "?"}branch=${encodeURIComponent(branch)}`;
+
+  const query = new URLSearchParams(rawQuery);
+  if (branch === "Online") query.delete("branch");
+  else query.set("branch", branch);
+  const nextQuery = query.toString();
+  return `${path}${nextQuery ? `?${nextQuery}` : ""}`;
 }
