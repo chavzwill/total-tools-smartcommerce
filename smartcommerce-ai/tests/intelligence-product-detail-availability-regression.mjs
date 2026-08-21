@@ -16,6 +16,13 @@ const invariants = [
   [page.includes("if (branch === \"Online\" || availability.lookupStatus !== \"confirmed\") return undefined"), "Online and unconfirmed inventory do not create a false purchase block"],
   [page.includes("disabled={Boolean(blockReason)}") && page.includes("if (!blockReason) onAdd(product.id, quantity)"), "cart submission is guarded by the grounded detail availability decision"],
   [page.includes("Choose a branch to confirm live pickup stock"), "Online context clearly asks for branch selection instead of fabricating branch stock"],
+  [page.includes("api.get<CommerceProduct>(`/platform/products/${encodeURIComponent(product.id)}`)"), "Product Detail fetches the grounded provider product instead of trusting mapped snapshot pricing"],
+  [page.includes("const value = price.metadata?.branchId") && page.includes("pricingBranchId(price) === branchId"), "branch-specific provider price selection uses the provider pricing metadata contract"],
+  [page.includes("const unboundPrice = pricing.find((price) => pricingBranchId(price) === undefined)") && page.includes("const selected = branchPrice || unboundPrice"), "provider pricing may fall back only to an explicitly unbound provider price"],
+  [!page.includes("branchPrice || unboundPrice || pricing[0]") && !page.includes("branchPrice || fallbackPrice || pricing[0]"), "Product Detail never falls back to an arbitrary potentially different-branch price"],
+  [page.includes("const amount = selected.salePrice ?? selected.listPrice") && !page.includes("selected.commercialPrice"), "retail Product Detail price uses provider sale/list pricing and does not expose commercial pricing as retail fallback"],
+  [page.includes("providerPriceText(providerProduct, priceLookupStatus, availability.branchId)"), "connected Product Detail display price is derived from provider product and resolved branch context"],
+  [page.includes('status !== "confirmed"') && page.includes('return "Price unavailable"'), "failed provider price lookup fails closed as price unavailable"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
