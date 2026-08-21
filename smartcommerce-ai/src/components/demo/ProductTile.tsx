@@ -13,9 +13,20 @@ type Props = {
   onAdd: (id: string) => void;
 };
 
+function formatConnectedPrice(product: Product) {
+  if (!(product.price > 0)) return "Price unavailable";
+  const currency = product.currency || "JMD";
+  try {
+    return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(product.price);
+  } catch {
+    return `${currency} ${product.price.toLocaleString("en-JM")}`;
+  }
+}
+
 export default function ProductTile({ product, wished, compared, onWishlist, onCompare, onAdd }: Props) {
   const connected = getCommerceDataMode() === "connected";
   const keySpec = Object.entries(product.specs || {}).find(([, value]) => value?.trim());
+  const purchaseBlockedReason = connected ? product.purchaseBlockedReason : undefined;
 
   const handleCompare = () => {
     if (compared) {
@@ -38,9 +49,9 @@ export default function ProductTile({ product, wished, compared, onWishlist, onC
         {keySpec ? <p className="sc-product-card__spec"><strong>{keySpec[0]}:</strong> {keySpec[1]}</p> : null}
         {connected && product.rating > 0 && product.reviews > 0 ? <div className="demo-rating"><Star size={14} fill="currentColor" /> {product.rating} <span>({product.reviews})</span></div> : null}
         <div className="sc-product-card__commerce">
-          {connected ? <><strong className="demo-price">{product.price > 0 ? money(product.price) : "Price unavailable"}</strong><p className="demo-stock">{product.stockStatus || "Availability unavailable"}</p></> : <><strong className="demo-price">{product.price > 0 ? money(product.price) : "Price verified at checkout"}</strong><p className="sc-product-card__preview-note">Demo catalogue · live price and stock are verified before checkout.</p></>}
+          {connected ? <><strong className="demo-price">{formatConnectedPrice(product)}</strong><p className="demo-stock">{product.stockStatus || "Availability unavailable"}</p></> : <><strong className="demo-price">{product.price > 0 ? money(product.price) : "Price verified at checkout"}</strong><p className="sc-product-card__preview-note">Demo catalogue · live price and stock are verified before checkout.</p></>}
         </div>
-        <button className="demo-add-button" onClick={() => onAdd(product.id)} type="button"><ShoppingCart size={17} /> Add to Cart</button>
+        <button className="demo-add-button" disabled={Boolean(purchaseBlockedReason)} onClick={() => { if (!purchaseBlockedReason) onAdd(product.id); }} type="button"><ShoppingCart size={17} /> {purchaseBlockedReason || "Add to Cart"}</button>
         <div className="demo-card-tools" aria-label={`More actions for ${product.name}`}>
           <button className={compared ? "active" : ""} onClick={handleCompare} type="button" aria-pressed={compared}><Scale size={15} /> {compared ? "View Compare" : "Add to Compare"}</button>
           <button className={wished ? "active" : ""} onClick={() => onWishlist(product.id)} type="button" aria-pressed={wished}><Heart size={15} fill={wished ? "currentColor" : "none"} /> {wished ? "Saved" : "Save"}</button>
