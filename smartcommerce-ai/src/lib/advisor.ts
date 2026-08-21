@@ -90,8 +90,12 @@ async function getAvailability(productId: string, branchId: string) {
   return api.get<InventoryAvailability[]>(path);
 }
 
+function inventoryRecordsForBranch(records: InventoryAvailability[], branchId: string) {
+  return records.filter((item) => String(item.branchId || "") === branchId);
+}
+
 function inventoryRecordForBranch(records: InventoryAvailability[], branchId: string) {
-  return records.find((item) => String(item.branchId || "") === branchId) || records[0];
+  return inventoryRecordsForBranch(records, branchId)[0];
 }
 
 async function loadAlternativeBranches(
@@ -138,7 +142,7 @@ async function loadProductAvailability(
   const entries = await Promise.all(products.slice(0, 8).map(async (product) => {
     const productId = String(product.id);
     const result = await getAvailability(productId, branch.id!);
-    const records = result.success ? result.data : [];
+    const records = result.success ? inventoryRecordsForBranch(result.data, branch.id!) : [];
     const alternatives = result.success
       ? await loadAlternativeBranches(productId, branch.id!, records, branch.branches)
       : [];
