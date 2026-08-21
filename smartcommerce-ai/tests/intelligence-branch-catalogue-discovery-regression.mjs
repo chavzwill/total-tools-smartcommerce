@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const loader = await readFile(new URL("../src/lib/branchCatalogue.ts", import.meta.url), "utf8");
+const advisor = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
 const pages = await readFile(new URL("../src/pages/CatalogPages.tsx", import.meta.url), "utf8");
 const tile = await readFile(new URL("../src/components/demo/ProductTile.tsx", import.meta.url), "utf8");
 const types = await readFile(new URL("../src/types.ts", import.meta.url), "utf8");
@@ -14,6 +15,11 @@ const invariants = [
   [loader.includes("/platform/inventory/availability?productId=") && loader.includes("quantity=1"), "catalogue cards attach provider inventory for the grounded product and branch"],
   [loader.includes("pricingBranchId(price) === branchId") && loader.includes("const selected = branchPrice || unboundPrice"), "catalogue price selects only branch-bound or explicitly unbound provider pricing"],
   [!loader.includes("branchPrice || unboundPrice || pricing[0]") && !loader.includes("branchPrice || fallbackPrice || pricing[0]"), "catalogue never falls back to an arbitrary other-branch price"],
+  [loader.includes('return records.find((item) => String(item.branchId || "") === branchId);'), "physical-branch catalogue inventory requires an exact returned branch ID match"],
+  [!loader.includes('records.find((item) => String(item.branchId || "") === branchId) || records[0]'), "catalogue never borrows another branch inventory record when the requested branch is missing"],
+  [loader.includes('result.data.filter((item) => String(item.branchId || "") === branchId)'), "catalogue filters provider inventory responses to the requested physical branch before mapping UI state"],
+  [advisor.includes("inventoryRecordsForBranch") && advisor.includes('records.filter((item) => String(item.branchId || "") === branchId)'), "Ask AI availability snapshots retain only exact requested-branch inventory records"],
+  [!advisor.includes('records.find((item) => String(item.branchId || "") === branchId) || records[0]'), "Ask AI never substitutes the first unrelated inventory record for the selected branch"],
   [loader.includes('record?.metadata?.liveVerified !== false') && loader.includes('record?.metadata?.source !== "preview_catalogue"'), "preview/unverified inventory cannot masquerade as live catalogue stock"],
   [loader.includes("availability not confirmed") && loader.includes("live stock not verified"), "failed and unverified inventory remain distinct from explicit out-of-stock"],
   [loader.includes('product.purchasable === false') && loader.includes('"Rental only"') && loader.includes('"Not available for purchase"'), "provider non-purchasable products cannot expose a normal purchase action"],
