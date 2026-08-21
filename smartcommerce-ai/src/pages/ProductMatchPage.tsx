@@ -65,9 +65,15 @@ function availabilityLabel(
 
 function confidenceLabel(value: number, needsClarification: boolean) {
   if (needsClarification) return "Needs another clue";
-  if (value >= 0.85) return "Strong catalogue match";
-  if (value >= 0.65) return "Good catalogue match";
-  return "Possible catalogue match";
+  if (value >= 0.85) return "Strong catalogue evidence";
+  if (value >= 0.65) return "Good catalogue evidence";
+  return "Possible catalogue evidence";
+}
+
+function evidenceStrength(value: number) {
+  if (value >= 0.85) return "High evidence";
+  if (value >= 0.65) return "Moderate evidence";
+  return "Limited evidence";
 }
 
 export default function ProductMatchPage({ onAdd }: Props) {
@@ -243,7 +249,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   </span>
                 </div>
                 {top ? (
-                  <strong>{Math.round(top.confidence * 100)}% match score</strong>
+                  <strong>{evidenceStrength(top.confidence)}</strong>
                 ) : null}
               </header>
 
@@ -369,7 +375,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                           )}
                         </div>
                         <span>{candidate.product.name}</span>
-                        <strong>{Math.round(candidate.confidence * 100)}% match</strong>
+                        <strong>{confidenceLabel(candidate.confidence, result.needsClarification)}</strong>
                       </a>
                     ))}
                   </div>
