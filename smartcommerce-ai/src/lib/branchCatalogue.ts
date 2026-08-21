@@ -47,7 +47,8 @@ function verifiedInventory(record: InventoryAvailability | undefined) {
 
 function inventoryRecord(records: InventoryAvailability[] | undefined, branchId?: string) {
   if (!records?.length) return undefined;
-  return branchId ? records.find((item) => String(item.branchId || "") === branchId) || records[0] : records[0];
+  if (!branchId) return records[0];
+  return records.find((item) => String(item.branchId || "") === branchId);
 }
 
 function stockText(records: InventoryAvailability[] | undefined, branchId?: string, branchName?: string) {
@@ -170,7 +171,8 @@ export async function loadBranchCatalogue(branch: ShoppingBranch): Promise<Branc
         const result = await api.get<InventoryAvailability[]>(
           `/platform/inventory/availability?productId=${encodeURIComponent(String(product.id))}&branchId=${encodeURIComponent(branchId)}&quantity=1`,
         );
-        return result.success ? result.data : undefined;
+        if (!result.success) return undefined;
+        return result.data.filter((item) => String(item.branchId || "") === branchId);
       })
     : productResult.data.items.map(() => undefined);
 
