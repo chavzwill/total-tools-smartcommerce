@@ -1,9 +1,9 @@
 import type { Branch, PlatformApiResult } from "../platform";
 import type { ProductMatchResult, ProductVisualAnalysis } from "../types/productMatch";
+import { getPhysicalShoppingBranch } from "./shoppingBranch";
 
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 const MAX_DIMENSION = 1600;
-const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
 
 function loadImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -14,18 +14,9 @@ function loadImage(url: string) {
   });
 }
 
-function savedShoppingBranch() {
-  try {
-    const value = window.localStorage.getItem(SHOPPING_BRANCH_KEY)?.trim();
-    return value && value !== "Online" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 async function resolveSelectedBranchId(explicitBranchId?: string) {
   if (explicitBranchId) return explicitBranchId;
-  const selectedName = savedShoppingBranch();
+  const selectedName = getPhysicalShoppingBranch();
   if (!selectedName) return import.meta.env.VITE_SMARTCOMMERCE_BRANCH_ID || undefined;
 
   try {
