@@ -4,7 +4,6 @@ import { createApiClient } from "../apiClient";
 import Container from "../components/shared/Container";
 import { getProductById } from "../data/products";
 import { getCommerceDataMode } from "../data/providerMode";
-import { money } from "../lib/format";
 import { routeHref } from "../lib/router";
 import {
   SHOPPING_BRANCH_CHANGED_EVENT,
@@ -12,7 +11,7 @@ import {
   isShoppingBranch,
   type ShoppingBranch,
 } from "../lib/shoppingBranch";
-import type { Branch, InventoryAvailability } from "../platform";
+import type { Branch, CommerceProduct, InventoryAvailability, ProductPricing } from "../platform";
 import { company } from "../styles/theme";
 
 const api = createApiClient();
@@ -21,9 +20,12 @@ type Props = { id: string; wished: boolean; onWishlist: (id: string) => void; on
 
 type DetailAvailability = {
   lookupStatus: "idle" | "loading" | "confirmed" | "unavailable";
+  branchId?: string;
   branchName?: string;
   record?: InventoryAvailability;
 };
+
+type PriceLookupStatus = "idle" | "loading" | "confirmed" | "unavailable";
 
 function providerRecordIsVerified(record: InventoryAvailability | undefined) {
   return Boolean(record) && record?.metadata?.liveVerified !== false && record?.metadata?.source !== "preview_catalogue";
@@ -67,12 +69,45 @@ function purchaseBlockReason(availability: DetailAvailability, branch: ShoppingB
   return undefined;
 }
 
+function pricingBranchId(price: ProductPricing) {
+  const value = price.metadata?.branchId;
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function selectedProviderPrice(product: CommerceProduct | undefined, branchId?: string) {
+  const pricing = product?.pricing || [];
+  const branchPrice = branchId ? pricing.find((price) => pricingBranchId(price) === branchId) : undefined;
+  const unboundPrice = pricing.find((price) => pricingBranchId(price) === undefined);
+  const selected = branchPrice || unboundPrice;
+  if (!selected) return undefined;
+  const amount = selected.salePrice ?? selected.listPrice;
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) return undefined;
+  return { amount, currency: selected.currency || "JMD" };
+}
+
+function formatProviderPrice(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${currency} ${amount.toLocaleString("en-JM")}`;
+  }
+}
+
+function providerPriceText(product: CommerceProduct | undefined, status: PriceLookupStatus, branchId?: string) {
+  if (status === "loading") return "Checking price…";
+  if (status !== "confirmed") return "Price unavailable";
+  const selected = selectedProviderPrice(product, branchId);
+  return selected ? formatProviderPrice(selected.amount, selected.currency) : "Price unavailable";
+}
+
 export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Props) {
   const product = getProductById(id);
   const connected = getCommerceDataMode() === "connected";
   const [quantity, setQuantity] = useState(1);
   const [branch, setBranch] = useState<ShoppingBranch>(() => getShoppingBranch());
   const [availability, setAvailability] = useState<DetailAvailability>({ lookupStatus: "idle" });
+  const [providerProduct, setProviderProduct] = useState<CommerceProduct | undefined>();
+  const [priceLookupStatus, setPriceLookupStatus] = useState<PriceLookupStatus>("idle");
 
   useEffect(() => {
     const syncBranch = (event: Event) => {
@@ -85,14 +120,44 @@ export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Pro
 
   useEffect(() => {
     let active = true;
-    if (!connected || !product || branch === "Online") {
-      setAvailability({ lookupStatus: "idle", branchName: branch === "Online" ? undefined : branch });
+    if (!connected || !product) {
+      setAvailability({ lookupStatus: "idle" });
+      setProviderProduct(undefined);
+      setPriceLookupStatus("idle");
+      return () => { active = false; };
+    }
+
+    setProviderProduct(undefined);
+    setPriceLookupStatus("loading");
+
+    if (branch === "Online") {
+      setAvailability({ lookupStatus: "idle" });
+      void api.get<CommerceProduct>(`/platform/products/${encodeURIComponent(product.id)}`).then((result) => {
+        if (!active) return;
+        if (!result.success) {
+          setPriceLookupStatus("unavailable");
+          return;
+        }
+        setProviderProduct(result.data);
+        setPriceLookupStatus("confirmed");
+      }).catch(() => {
+        if (active) setPriceLookupStatus("unavailable");
+      });
       return () => { active = false; };
     }
 
     setAvailability({ lookupStatus: "loading", branchName: branch });
-    void api.get<Branch[]>("/platform/branches").then(async (branches) => {
+    void Promise.all([
+      api.get<Branch[]>("/platform/branches"),
+      api.get<CommerceProduct>(`/platform/products/${encodeURIComponent(product.id)}`),
+    ]).then(async ([branches, productResult]) => {
       if (!active) return;
+      if (productResult.success) {
+        setProviderProduct(productResult.data);
+        setPriceLookupStatus("confirmed");
+      } else {
+        setPriceLookupStatus("unavailable");
+      }
       if (!branches.success) {
         setAvailability({ lookupStatus: "unavailable", branchName: branch });
         return;
@@ -108,13 +173,16 @@ export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Pro
       );
       if (!active) return;
       if (!result.success) {
-        setAvailability({ lookupStatus: "unavailable", branchName: selected.name });
+        setAvailability({ lookupStatus: "unavailable", branchId, branchName: selected.name });
         return;
       }
       const record = result.data.find((item) => String(item.branchId || "") === branchId) || result.data[0];
-      setAvailability({ lookupStatus: "confirmed", branchName: selected.name, record });
+      setAvailability({ lookupStatus: "confirmed", branchId, branchName: selected.name, record });
     }).catch(() => {
-      if (active) setAvailability({ lookupStatus: "unavailable", branchName: branch });
+      if (active) {
+        setAvailability({ lookupStatus: "unavailable", branchName: branch });
+        setPriceLookupStatus("unavailable");
+      }
     });
 
     return () => { active = false; };
@@ -123,6 +191,11 @@ export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Pro
   if (!product) return <div className="demo-empty"><h1>Product not found</h1><a href={routeHref("/products")}>Return to products</a></div>;
 
   const blockReason = connected ? purchaseBlockReason(availability, branch, quantity) : undefined;
+  const displayPrice = connected
+    ? providerPriceText(providerProduct, priceLookupStatus, availability.branchId)
+    : product.price > 0
+      ? formatProviderPrice(product.price, "JMD")
+      : "Price unavailable";
 
   return (
     <div className="demo-page sc-product-detail">
@@ -135,7 +208,7 @@ export default function ProductDetailPage({ id, wished, onWishlist, onAdd }: Pro
           {connected && product.rating > 0 && product.reviews > 0 ? <div className="demo-rating"><Star size={16} fill="currentColor" /> {product.rating} <span>{product.reviews} reviews</span></div> : null}
           <p>{product.description}</p>
           <div className="sc-detail-branch-context"><MapPin size={16} aria-hidden="true" /><span><small>Shopping from</small><strong>{branch}</strong></span><a href="#" onClick={(event) => { event.preventDefault(); document.querySelector<HTMLButtonElement>(".v2-branch-selector__trigger")?.click(); }}>Change</a></div>
-          {connected ? <><strong className="demo-detail__price">{product.price > 0 ? money(product.price) : "Price unavailable"}</strong><p className="demo-available"><CheckCircle2 size={17} /> {availabilityText(availability, branch)}</p></> : <div className="sc-detail-preview"><strong>Demo catalogue</strong><p>Live price, stock, and branch availability are verified before checkout.</p></div>}
+          {connected ? <><strong className="demo-detail__price">{displayPrice}</strong><p className="demo-available"><CheckCircle2 size={17} /> {availabilityText(availability, branch)}</p></> : <div className="sc-detail-preview"><strong>Demo catalogue</strong><p>Live price, stock, and branch availability are verified before checkout.</p></div>}
           <div className="sc-detail-purchase-row">
             <div className="sc-detail-quantity" aria-label="Quantity">
               <button type="button" aria-label="Decrease quantity" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16} /></button>
