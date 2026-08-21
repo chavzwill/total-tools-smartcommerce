@@ -276,7 +276,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
       branchId: input.branchId,
       history: input.history,
     });
-    const fitClarification = criticalFitClarification(input.prompt, grounded.understanding);
+    const fitClarification = criticalFitClarification(input.prompt, grounded.understanding, input.history);
 
     if (fitClarification) {
       return {
