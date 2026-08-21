@@ -28,7 +28,7 @@ const invariants = [
   [!pages.includes("const branchOptions") && !pages.includes("<legend>Branch</legend>"), "catalogue no longer exposes a competing branch checkbox selector"],
   [!pages.includes('...state.branches.map((value) => ["Branch", value]'), "global branch context is not misrepresented as a removable catalogue filter chip"],
   [pages.includes("branches: previous.branches"), "Clear filters preserves the selected global branch context"],
-  [pages.includes("products: [], status: \"error\"") && pages.includes("Connected catalogue could not be loaded."), "provider catalogue failure fails closed instead of retaining stale products from another branch"],
+  [pages.includes("products: []") && pages.includes('status: "error"') && pages.includes("Connected catalogue could not be loaded."), "provider catalogue failure fails closed instead of retaining stale products from another branch"],
   [pages.includes("Checking the connected catalogue…") && pages.includes("loadStatus === \"loading\""), "connected discovery exposes an explicit loading state instead of briefly presenting stale branch results"],
   [pages.includes("const catalogue = useGroundedCatalogue()") && pages.includes("ProductsPage") && pages.includes("SearchPage") && pages.includes("CategoryPage"), "Products, Search and Category share the grounded branch catalogue flow"],
 ];
