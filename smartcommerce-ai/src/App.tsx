@@ -3,6 +3,10 @@ import PageShell from "./components/layout/PageShell";
 import { CART_FEEDBACK_EVENT, GUEST_CART_CHANGED_EVENT } from "./lib/commerceEvents";
 import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
 import { getRoute } from "./lib/router";
+import {
+  SHOPPING_BRANCH_CHANGED_EVENT,
+  isShoppingBranch,
+} from "./lib/shoppingBranch";
 import HomePageV3 from "./pages/HomePageV3";
 
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
@@ -64,6 +68,10 @@ function RouteFallback() {
   );
 }
 
+function branchScopedPath(path: string) {
+  return path === "/products" || path === "/search" || path === "/rentals" || path.startsWith("/category/");
+}
+
 export default function App() {
   const [route, setRoute] = useState(getRoute());
   const [cart, setCart] = useState<GuestCheckoutItem[]>(loadGuestCart);
@@ -82,6 +90,26 @@ export default function App() {
 
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
+  }, []);
+
+  useEffect(() => {
+    const syncActiveCommerceBranch = (event: Event) => {
+      const branch = (event as CustomEvent<{ branch?: unknown }>).detail?.branch;
+      if (!isShoppingBranch(branch)) return;
+      const current = getRoute();
+      if (!branchScopedPath(current.path)) return;
+
+      const query = new URLSearchParams(current.query);
+      if (branch === "Online") query.delete("branch");
+      else query.set("branch", branch);
+      const queryString = query.toString();
+      const nextHash = `#${current.path}${queryString ? `?${queryString}` : ""}`;
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+      setRoute(getRoute());
+    };
+
+    window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncActiveCommerceBranch);
+    return () => window.removeEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncActiveCommerceBranch);
   }, []);
 
   useEffect(() => {
@@ -123,13 +151,14 @@ export default function App() {
   }), [wishlist, compared]);
 
   const path = route.path;
+  const branchRouteKey = route.query.get("branch") || "Online";
   let page = <HomePageV3 {...actions} />;
-  if (path === "/products") page = <ProductsPage actions={actions} />;
+  if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;
   else if (path === "/categories") page = <CategoriesPage />;
-  else if (path.startsWith("/category/")) page = <CategoryPage slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
+  else if (path.startsWith("/category/")) page = <CategoryPage key={`category:${path}:${branchRouteKey}`} slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
   else if (path.startsWith("/product/")) { const id = path.split("/")[2]; page = <ProductDetailPage id={id} wished={wishlist.includes(id)} onWishlist={actions.onWishlist} onAdd={actions.onAdd} />; }
   else if (path === "/compare") page = <ComparePage compared={compared} onCompare={actions.onCompare} onAdd={actions.onAdd} />;
-  else if (path === "/rentals") page = <RentalsPage />;
+  else if (path === "/rentals") page = <RentalsPage key={`rentals:${branchRouteKey}`} />;
   else if (path.startsWith("/rental/")) page = <OperationalRentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
@@ -137,7 +166,7 @@ export default function App() {
   else if (path === "/deals") page = <DealsPage />;
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} onAdd={actions.onAdd} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
-  else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
+  else if (path === "/search") page = <SearchPage key={`search:${branchRouteKey}`} query={route.query.get("q") || ""} actions={actions} />;
   else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
