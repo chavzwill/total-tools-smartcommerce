@@ -12,15 +12,25 @@ import skidSteerImage from "../assets/rentals/skid-steer.jpg";
 import lightingTowerImage from "../assets/rentals/lighting-tower.jpg";
 import waterPumpImage from "../assets/rentals/water-pump.jpg";
 import {
+  createApiClient,
   createProductionSyncClient,
   createSmartCommercePlatformApi,
   type ApiClientOptions,
 } from "../apiClient";
+import { getCommerceDataMode } from "./providerMode";
+import {
+  getPhysicalShoppingBranch,
+  SHOPPING_BRANCH_CHANGED_EVENT,
+} from "../lib/shoppingBranch";
 import type {
+  Branch,
+  CommerceProduct,
   PlatformApiResult,
+  PlatformPage,
   PlatformSyncResult,
   PosAdapterContext,
   RentalAsset,
+  RentalRatePlan,
   RentalReservationRequest,
 } from "../platform";
 import type { RentalItem } from "../types";
@@ -77,6 +87,7 @@ const emitRentalDataChanged = (snapshot: RentalItem[]) => {
 
 const temporaryRentalFallback: RentalItem[] = temporaryRentalEquipmentFallback.map(([id, name, category, dailyRate, availability, capacity, reach]) => ({
   id, name, category, dailyRate, weeklyRate: dailyRate * 5, monthlyRate: dailyRate * 16,
+  currency: "JMD",
   availability, branchAvailability: "Branch availability: Ocho Rios, Kingston, Drax Hall",
   image: rentalImages[id] || rentalImage,
   description: `Commercial-grade ${name.toLowerCase()} maintained by Total Tools Jamaica and ready for islandwide delivery.`,
@@ -95,33 +106,102 @@ const getConfiguredContext = (): PosAdapterContext | undefined => {
   };
 };
 
-const mapPlatformRentalAsset = (asset: RentalAsset): RentalItem => ({
-  id: asset.id,
-  name: asset.name || asset.assetTag || asset.productId || asset.id,
-  category: String(asset.attributes?.category || "Rental Equipment"),
-  dailyRate: asset.ratePlans?.[0]?.dailyRate || 0,
-  weeklyRate: asset.ratePlans?.[0]?.weeklyRate || 0,
-  monthlyRate: asset.ratePlans?.[0]?.monthlyRate || 0,
-  availability: asset.status,
-  branchAvailability: asset.branchId
-    ? `Branch availability: ${asset.branchId}`
-    : "Availability provided by connected system",
-  image: rentalImage,
-  description: String(
-    asset.attributes?.description ||
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, items.length)) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+};
+
+const ratePlanScore = (plan: RentalRatePlan) =>
+  [plan.dailyRate, plan.weeklyRate, plan.monthlyRate]
+    .filter((value) => typeof value === "number" && Number.isFinite(value) && value >= 0)
+    .length;
+
+const selectComparableRatePlan = (asset: RentalAsset) => {
+  const validPlans = (asset.ratePlans || []).filter((plan) => ratePlanScore(plan) > 0);
+  const currencies = new Set(validPlans.map((plan) => String(plan.currency || "").trim().toUpperCase()).filter(Boolean));
+  if (currencies.size !== 1) return undefined;
+  return [...validPlans].sort((a, b) => ratePlanScore(b) - ratePlanScore(a))[0];
+};
+
+const providerAvailabilityLabel = (asset: RentalAsset) => {
+  if (asset.metadata?.liveVerified === false || asset.metadata?.source === "preview_catalogue") {
+    return "Live availability not verified";
+  }
+  switch (asset.status) {
+    case "available": return "Available now";
+    case "reserved": return "Currently reserved";
+    case "rented": return "Currently rented";
+    case "maintenance": return "Maintenance";
+    case "retired": return "Retired";
+    case "unavailable": return "Unavailable";
+    case "unknown": return "Check availability";
+    default: return `Provider status: ${String(asset.status).replace(/_/g, " ")}`;
+  }
+};
+
+const mapPlatformRentalAsset = (
+  asset: RentalAsset,
+  product?: CommerceProduct,
+  branchName?: string,
+): RentalItem => {
+  const ratePlan = selectComparableRatePlan(asset);
+  const assetAttributes = Object.fromEntries(
+    Object.entries(asset.attributes || {}).map(([key, value]) => [key, String(value ?? "")]),
+  );
+  const productAttributes = Object.fromEntries(
+    Object.entries(product?.attributes || {}).map(([key, value]) => [key, String(value ?? "")]),
+  );
+  const productImage = [...(product?.images || [])]
+    .sort((a, b) => (a.position || 0) - (b.position || 0))[0]?.url;
+  const category = String(
+    asset.attributes?.category ||
+    product?.attributes?.Category ||
+    product?.categoryIds?.[0] ||
+    "Rental Equipment"
+  );
+
+  return {
+    id: String(asset.id),
+    name: asset.name || product?.name || asset.assetTag || asset.productId || String(asset.id),
+    category,
+    dailyRate: typeof ratePlan?.dailyRate === "number" ? ratePlan.dailyRate : 0,
+    weeklyRate: typeof ratePlan?.weeklyRate === "number" ? ratePlan.weeklyRate : 0,
+    monthlyRate: typeof ratePlan?.monthlyRate === "number" ? ratePlan.monthlyRate : 0,
+    currency: ratePlan?.currency ? String(ratePlan.currency).toUpperCase() : undefined,
+    availability: providerAvailabilityLabel(asset),
+    branchAvailability: branchName
+      ? `Branch availability: ${branchName}`
+      : asset.branchId
+        ? `Provider branch: ${asset.branchId}`
+        : "Branch availability requires provider confirmation",
+    image: productImage || rentalImages[String(asset.id)] || rentalImage,
+    description: String(
+      product?.description ||
+      asset.attributes?.description ||
       "Rental asset provided by the connected equipment system."
-  ),
-  specs: Object.fromEntries(
-    Object.entries(asset.attributes || {}).map(([key, value]) => [
-      key,
-      String(value ?? ""),
-    ])
-  ),
-});
+    ),
+    specs: {
+      ...productAttributes,
+      ...assetAttributes,
+    },
+  };
+};
 
 const createRentalDataProvider = (options: RentalDataProviderOptions = {}) => {
-  const configuredContext = options.context || getConfiguredContext();
-  let snapshot = configuredContext ? [] : temporaryRentalFallback;
+  const connected = getCommerceDataMode() === "connected";
+  let snapshot = connected ? [] : temporaryRentalFallback;
   let lastSyncResult: PlatformApiResult<PlatformSyncResult> | undefined;
   let refreshPromise: Promise<RentalItem[]> | undefined;
   const listeners = new Set<(snapshot: RentalItem[]) => void>();
@@ -171,29 +251,66 @@ const createRentalDataProvider = (options: RentalDataProviderOptions = {}) => {
       if (refreshPromise) return refreshPromise;
 
       refreshPromise = (async () => {
+        if (!connected) return snapshot;
+
         const context = options.context || getConfiguredContext();
+        if (refreshOptions.synchronize && context) {
+          lastSyncResult = await createProductionSyncClient(options).syncRentals(context);
+        }
 
-        if (!context) return snapshot;
+        const client = createApiClient(options);
+        const selectedBranch = getPhysicalShoppingBranch();
+        let branchId: string | undefined;
+        let branchName: string | undefined;
+        let branches: Branch[] = [];
 
-        if (refreshOptions.synchronize) {
-          lastSyncResult = await createProductionSyncClient(options).syncRentals(
-            context
+        const branchResult = await client.get<Branch[]>("/platform/branches");
+        if (branchResult.success) branches = branchResult.data.filter((branch) => branch.active);
+
+        if (selectedBranch) {
+          if (!branchResult.success) {
+            snapshot = [];
+            notify();
+            return snapshot;
+          }
+          const resolved = branches.find(
+            (branch) => branch.name.trim().toLowerCase() === selectedBranch.toLowerCase(),
           );
+          if (!resolved) {
+            snapshot = [];
+            notify();
+            return snapshot;
+          }
+          branchId = String(resolved.id);
+          branchName = resolved.name;
         }
 
-        const api = createSmartCommercePlatformApi({
-          ...options,
-          context,
-        });
-
-        const result = await api.listRentalAssets();
-
-        if (result.success) {
-          snapshot = result.data.items.map(mapPlatformRentalAsset);
-        } else {
+        const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : "";
+        const result = await client.get<PlatformPage<RentalAsset>>(`/platform/rentals${query}`);
+        if (!result.success) {
           snapshot = [];
+          notify();
+          return snapshot;
         }
 
+        const assets = branchId
+          ? result.data.items.filter((asset) => String(asset.branchId || "") === branchId)
+          : result.data.items;
+        const productIds = Array.from(new Set(
+          assets.map((asset) => asset.productId ? String(asset.productId) : "").filter(Boolean),
+        ));
+        const productEntries = await mapWithConcurrency(productIds, 8, async (productId) => {
+          const productResult = await client.get<CommerceProduct>(`/platform/products/${encodeURIComponent(productId)}`);
+          return [productId, productResult.success ? productResult.data : undefined] as const;
+        });
+        const products = new Map(productEntries);
+        const branchNames = new Map(branches.map((branch) => [String(branch.id), branch.name]));
+
+        snapshot = assets.map((asset) => mapPlatformRentalAsset(
+          asset,
+          asset.productId ? products.get(String(asset.productId)) : undefined,
+          branchName || (asset.branchId ? branchNames.get(String(asset.branchId)) : undefined),
+        ));
         notify();
         return snapshot;
       })().finally(() => {
@@ -333,8 +450,11 @@ export const getRentals = () => rentalDataProvider.getSnapshot();
 export const getRentalById = (id: string) =>
   rentalDataProvider.getSnapshot().find((rental) => rental.id === id);
 
-if (typeof window !== "undefined" && getConfiguredContext()) {
+if (typeof window !== "undefined" && getCommerceDataMode() === "connected") {
   window.setTimeout(() => {
-    void rentalDataProvider.refresh({ synchronize: true });
+    void rentalDataProvider.refresh();
   }, 0);
+  window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, () => {
+    void rentalDataProvider.refresh();
+  });
 }
