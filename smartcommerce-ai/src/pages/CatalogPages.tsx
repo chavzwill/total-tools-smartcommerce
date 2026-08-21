@@ -5,10 +5,11 @@ import ProductTile from "../components/demo/ProductTile";
 import Container from "../components/shared/Container";
 import { getCategories, getProducts } from "../data/products";
 import { getCommerceDataMode } from "../data/providerMode";
+import { loadBranchCatalogue } from "../lib/branchCatalogue";
 import { slugify } from "../lib/format";
 import { routeHref } from "../lib/router";
-import { company } from "../styles/theme";
-import type { Product } from "../types";
+import { getShoppingBranch } from "../lib/shoppingBranch";
+import type { Category, Product } from "../types";
 
 const subcategories: Record<string, string[]> = {
   generators: ["Portable Generators", "Diesel Generators", "Inverter Generators", "Commercial Generators", "Generator Accessories"],
@@ -24,6 +25,7 @@ type Actions = {
 };
 
 type SortMode = "best" | "price-asc" | "price-desc" | "name" | "availability";
+type CatalogueLoadStatus = "ready" | "loading" | "error";
 
 type DiscoveryState = {
   query: string;
@@ -36,6 +38,13 @@ type DiscoveryState = {
   maxPrice: string;
   sort: SortMode;
   attributes: Record<string, string[]>;
+};
+
+type GroundedCatalogueState = {
+  products: Product[];
+  categories: Category[];
+  status: CatalogueLoadStatus;
+  error: string;
 };
 
 const getHashParams = () => {
@@ -90,13 +99,53 @@ const getBrand = (product: Product) => product.specs?.Brand?.trim() || "";
 
 const getAvailabilityGroup = (product: Product) => {
   const value = product.stockStatus.toLowerCase();
-  if (/out of stock|unavailable/.test(value)) return "out";
+  if (/out of stock|no provider-listed stock/.test(value)) return "out";
   if (/low stock|limited/.test(value)) return "limited";
-  if (/in stock|available/.test(value)) return "available";
+  if (/in stock/.test(value)) return "available";
   return "unknown";
 };
 
 const toggled = (items: string[], value: string) => items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
+
+function useGroundedCatalogue(): GroundedCatalogueState {
+  const connected = getCommerceDataMode() === "connected";
+  const branch = getShoppingBranch();
+  const [catalogue, setCatalogue] = useState<GroundedCatalogueState>(() => ({
+    products: connected ? [] : getProducts(),
+    categories: getCategories(),
+    status: connected ? "loading" : "ready",
+    error: "",
+  }));
+
+  useEffect(() => {
+    let active = true;
+    if (!connected) {
+      setCatalogue({ products: getProducts(), categories: getCategories(), status: "ready", error: "" });
+      return () => { active = false; };
+    }
+
+    setCatalogue((current) => ({ ...current, products: [], status: "loading", error: "" }));
+    void loadBranchCatalogue(branch).then((result) => {
+      if (!active) return;
+      if (!result.success) {
+        setCatalogue({ products: [], categories: getCategories(), status: "error", error: result.message });
+        return;
+      }
+      setCatalogue({
+        products: result.data.products,
+        categories: result.data.categories.length ? result.data.categories : getCategories(),
+        status: "ready",
+        error: "",
+      });
+    }).catch(() => {
+      if (active) setCatalogue({ products: [], categories: getCategories(), status: "error", error: "The connected provider catalogue could not be loaded." });
+    });
+
+    return () => { active = false; };
+  }, [branch, connected]);
+
+  return catalogue;
+}
 
 function ProductResults({
   items,
@@ -104,12 +153,16 @@ function ProductResults({
   description,
   actions,
   initialQuery = "",
+  loadStatus = "ready",
+  loadError = "",
 }: {
   items: Product[];
   title: string;
   description: string;
   actions: Actions;
   initialQuery?: string;
+  loadStatus?: CatalogueLoadStatus;
+  loadError?: string;
 }) {
   const [state, setState] = useState<DiscoveryState>(() => readDiscoveryState(initialQuery));
   const [draftQuery, setDraftQuery] = useState(state.query);
@@ -139,7 +192,6 @@ function ProductResults({
 
   const categoryOptions = useMemo(() => Array.from(new Set(items.map((product) => product.category).filter(Boolean))).sort(), [items]);
   const brandOptions = useMemo(() => Array.from(new Set(items.map(getBrand).filter(Boolean))).sort(), [items]);
-  const branchOptions = useMemo(() => company.branches.map((branch) => branch.name).filter((branch) => items.some((product) => product.stockStatus.toLowerCase().includes(branch.toLowerCase()))), [items]);
 
   const attributeOptions = useMemo(() => {
     const counts = new Map<string, Set<string>>();
@@ -168,7 +220,6 @@ function ProductResults({
       }
       if (state.categories.length && !state.categories.includes(product.category)) return false;
       if (state.brands.length && !state.brands.includes(getBrand(product))) return false;
-      if (state.branches.length && !state.branches.some((branch) => product.stockStatus.toLowerCase().includes(branch.toLowerCase()))) return false;
       if (state.availability && getAvailabilityGroup(product) !== state.availability) return false;
       if (state.rentable && !product.rentable) return false;
       if (connected && min !== undefined && Number.isFinite(min) && (product.price <= 0 || product.price < min)) return false;
@@ -189,7 +240,6 @@ function ProductResults({
   const activeFilters = [
     ...state.categories.map((value) => ["Category", value] as const),
     ...state.brands.map((value) => ["Brand", value] as const),
-    ...state.branches.map((value) => ["Branch", value] as const),
     ...(state.availability ? [["Availability", state.availability] as const] : []),
     ...(state.rentable ? [["Type", "Rentable"] as const] : []),
     ...(state.minPrice ? [["Min price", state.minPrice] as const] : []),
@@ -199,14 +249,13 @@ function ProductResults({
 
   const clearAll = () => {
     setDraftQuery("");
-    setState({ query: "", categories: [], brands: [], branches: [], availability: "", rentable: false, minPrice: "", maxPrice: "", sort: "best", attributes: {} });
+    setState((previous) => ({ query: "", categories: [], brands: [], branches: previous.branches, availability: "", rentable: false, minPrice: "", maxPrice: "", sort: "best", attributes: {} }));
   };
 
   const removeFilter = (label: string, value: string) => {
     setState((previous) => {
       if (label === "Category") return { ...previous, categories: previous.categories.filter((item) => item !== value) };
       if (label === "Brand") return { ...previous, brands: previous.brands.filter((item) => item !== value) };
-      if (label === "Branch") return { ...previous, branches: previous.branches.filter((item) => item !== value) };
       if (label === "Availability") return { ...previous, availability: "" };
       if (label === "Type") return { ...previous, rentable: false };
       if (label === "Min price") return { ...previous, minPrice: "" };
@@ -222,12 +271,19 @@ function ProductResults({
       ) : null}
       {categoryOptions.length > 1 ? <fieldset><legend>Category</legend>{categoryOptions.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={state.categories.includes(value)} onChange={() => setState((previous) => ({ ...previous, categories: toggled(previous.categories, value) }))} /><span>{value}</span></label>)}</fieldset> : null}
       {brandOptions.length ? <fieldset><legend>Brand</legend>{brandOptions.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={state.brands.includes(value)} onChange={() => setState((previous) => ({ ...previous, brands: toggled(previous.brands, value) }))} /><span>{value}</span></label>)}</fieldset> : null}
-      {connected && branchOptions.length ? <fieldset><legend>Branch</legend>{branchOptions.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={state.branches.includes(value)} onChange={() => setState((previous) => ({ ...previous, branches: toggled(previous.branches, value) }))} /><span>{value}</span></label>)}</fieldset> : null}
       {connected ? <fieldset><legend>Availability</legend>{[["available", "Available"], ["limited", "Limited"], ["out", "Out of stock"]].map(([value, label]) => <label className="sc-filter-radio" key={value}><input type="radio" name="availability" checked={state.availability === value} onChange={() => setState((previous) => ({ ...previous, availability: previous.availability === value ? "" : value }))} /><span>{label}</span></label>)}</fieldset> : null}
       <fieldset><legend>Commerce mode</legend><label className="sc-filter-check"><input type="checkbox" checked={state.rentable} onChange={(event) => setState((previous) => ({ ...previous, rentable: event.target.checked }))} /><span>Rental path available</span></label></fieldset>
       {attributeOptions.map(({ key, values }) => <fieldset key={key}><legend>{key}</legend>{values.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={(state.attributes[key] || []).includes(value)} onChange={() => setState((previous) => ({ ...previous, attributes: { ...previous.attributes, [key]: toggled(previous.attributes[key] || [], value) } }))} /><span>{value}</span></label>)}</fieldset>)}
     </div>
   );
+
+  const resultBody = loadStatus === "loading"
+    ? <div className="demo-empty sc-results-empty"><h2>Checking the connected catalogue…</h2><p>Loading provider products, pricing, and branch availability for your current shopping context.</p></div>
+    : loadStatus === "error"
+      ? <div className="demo-empty sc-results-empty"><h2>Connected catalogue could not be loaded.</h2><p>{loadError || "The provider did not return catalogue data for this shopping context."}</p><div><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Help me find ${state.query || title}`)}`)}>Ask AI for help</a></div></div>
+      : visible.length
+        ? <div className="demo-product-grid">{visible.map((product) => <ProductTile product={product} wished={actions.wishlist.includes(product.id)} compared={actions.compared.includes(product.id)} onWishlist={actions.onWishlist} onCompare={actions.onCompare} onAdd={actions.onAdd} key={product.id} />)}</div>
+        : <div className="demo-empty sc-results-empty"><h2>No products match this combination</h2><p>Remove one filter, broaden the search, or ask SmartCommerce for a different route to the job.</p><div><button onClick={clearAll}>Clear filters</button><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Help me find an alternative for ${state.query || title}`)}`)}>Ask AI for alternatives</a></div></div>;
 
   return (
     <div className="demo-page sc-product-discovery">
@@ -241,34 +297,34 @@ function ProductResults({
         </div>
         <div className="sc-product-discovery__toolbar">
           <button ref={filterTriggerRef} type="button" onClick={() => setFiltersOpen(true)}><Filter size={17} /> Filters {activeFilters.length ? `(${activeFilters.length})` : ""}</button>
-          <strong aria-live="polite">{visible.length} results</strong>
+          <strong aria-live="polite">{loadStatus === "loading" ? "Checking connected catalogue…" : `${visible.length} results`}</strong>
           <label>Sort<select value={state.sort} onChange={(event) => setState((previous) => ({ ...previous, sort: event.target.value as SortMode }))}><option value="best">Best match</option>{connected ? <><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="availability">Availability</option></> : null}<option value="name">Name A–Z</option></select></label>
         </div>
         {activeFilters.length ? <div className="sc-active-filters" aria-label="Active filters">{activeFilters.map(([label, value]) => <button key={`${label}-${value}`} onClick={() => removeFilter(label, value)} type="button"><span>{label}: {value}</span><X size={13} /></button>)}<button className="is-clear" onClick={clearAll} type="button">Clear all</button></div> : null}
         <div className="sc-product-discovery__layout">
           <aside className="sc-filter-panel" aria-label="Product filters"><div className="sc-filter-panel__title"><SlidersHorizontal size={18} /><strong>Refine results</strong></div>{filterPanel}</aside>
-          <div className="sc-product-discovery__results">
-            {visible.length ? <div className="demo-product-grid">{visible.map((product) => <ProductTile product={product} wished={actions.wishlist.includes(product.id)} compared={actions.compared.includes(product.id)} onWishlist={actions.onWishlist} onCompare={actions.onCompare} onAdd={actions.onAdd} key={product.id} />)}</div> : <div className="demo-empty sc-results-empty"><h2>No products match this combination</h2><p>Remove one filter, broaden the search, or ask SmartCommerce for a different route to the job.</p><div><button onClick={clearAll}>Clear filters</button><a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Help me find an alternative for ${state.query || title}`)}`)}>Ask AI for alternatives</a></div></div>}
-          </div>
+          <div className="sc-product-discovery__results">{resultBody}</div>
         </div>
       </Container>
-      {filtersOpen ? <div className="sc-filter-overlay" role="presentation" onClick={() => setFiltersOpen(false)}><section className="sc-mobile-filter-sheet" role="dialog" aria-modal="true" aria-label="Product filters" onClick={(event) => event.stopPropagation()}><header><div><Filter size={18} /><h2>Filters</h2></div><button type="button" onClick={() => { setFiltersOpen(false); filterTriggerRef.current?.focus(); }} aria-label="Close filters"><X size={20} /></button></header>{filterPanel}<footer><button type="button" onClick={clearAll}>Clear all</button><button type="button" onClick={() => { setFiltersOpen(false); filterTriggerRef.current?.focus(); }}>Show {visible.length} results</button></footer></section></div> : null}
+      {filtersOpen ? <div className="sc-filter-overlay" role="presentation" onClick={() => setFiltersOpen(false)}><section className="sc-mobile-filter-sheet" role="dialog" aria-modal="true" aria-label="Product filters" onClick={(event) => event.stopPropagation()}><header><div><Filter size={18} /><h2>Filters</h2></div><button type="button" onClick={() => { setFiltersOpen(false); filterTriggerRef.current?.focus(); }} aria-label="Close filters"><X size={20} /></button></header>{filterPanel}<footer><button type="button" onClick={clearAll}>Clear all</button><button type="button" onClick={() => { setFiltersOpen(false); filterTriggerRef.current?.focus(); }}>Show {loadStatus === "ready" ? visible.length : 0} results</button></footer></section></div> : null}
     </div>
   );
 }
 
 export function ProductsPage({ actions }: { actions: Actions }) {
-  return <ProductResults items={getProducts()} title="Products" description="Search, filter, compare, and move between buying, rental, repair, and guided assistance where the data supports it." actions={actions} />;
+  const catalogue = useGroundedCatalogue();
+  return <ProductResults items={catalogue.products} title="Products" description="Search, filter, compare, and move between buying, rental, repair, and guided assistance where the data supports it." actions={actions} loadStatus={catalogue.status} loadError={catalogue.error} />;
 }
 
 export function CategoryPage({ slug, subcategory, actions }: { slug: string; subcategory?: string; actions: Actions }) {
-  const categories = getCategories();
-  const products = getProducts();
+  const catalogue = useGroundedCatalogue();
+  const categories = catalogue.categories.length ? catalogue.categories : getCategories();
+  const products = catalogue.products;
   const category = categories.find((item) => slugify(item.name) === slug);
   const categoryProducts = products.filter((product) => category && (product.category === category.name || product.department === category.name || product.tags.includes(slug.split("-")[0])));
   const fallback = categoryProducts.length ? categoryProducts : products.filter((product) => product.tags.some((tag) => category?.name.toLowerCase().includes(tag)));
   const selected = subcategory ? fallback.filter((product) => slugify(product.subcategory || "") === subcategory || product.tags.includes(subcategory.split("-")[0])) : fallback;
-  return <div className="category-page">{(subcategories[slug] || []).length ? <nav className="subcategory-nav" aria-label="Subcategories">{(subcategories[slug] || []).map((item) => <a className={subcategory === slugify(item) ? "active" : ""} href={routeHref(`/category/${slug}?sub=${slugify(item)}`)} key={item}>{item}</a>)}</nav> : null}<ProductResults items={selected.length ? selected : fallback} title={category?.name || "Category"} description={category?.description || "Explore this Total Tools department."} actions={actions} /></div>;
+  return <div className="category-page">{(subcategories[slug] || []).length ? <nav className="subcategory-nav" aria-label="Subcategories">{(subcategories[slug] || []).map((item) => <a className={subcategory === slugify(item) ? "active" : ""} href={routeHref(`/category/${slug}?sub=${slugify(item)}`)} key={item}>{item}</a>)}</nav> : null}<ProductResults items={selected.length ? selected : fallback} title={category?.name || "Category"} description={category?.description || "Explore this Total Tools department."} actions={actions} loadStatus={catalogue.status} loadError={catalogue.error} /></div>;
 }
 
 export function CategoriesPage() {
@@ -277,5 +333,6 @@ export function CategoriesPage() {
 }
 
 export function SearchPage({ query, actions }: { query: string; actions: Actions }) {
-  return <ProductResults items={getProducts()} title={query ? `Search results for “${query}”` : "Search products"} description="Search the current catalogue and refine the result with compatible filters." actions={actions} initialQuery={query} />;
+  const catalogue = useGroundedCatalogue();
+  return <ProductResults items={catalogue.products} title={query ? `Search results for “${query}”` : "Search products"} description="Search the current catalogue and refine the result with compatible filters." actions={actions} initialQuery={query} loadStatus={catalogue.status} loadError={catalogue.error} />;
 }
