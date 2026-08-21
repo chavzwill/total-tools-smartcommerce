@@ -50,6 +50,7 @@ export type RentalItem = {
   dailyRate: number;
   weeklyRate: number;
   monthlyRate: number;
+  currency?: string;
   availability: string;
   branchAvailability: string;
   image: string;
