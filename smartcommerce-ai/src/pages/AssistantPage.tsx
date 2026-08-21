@@ -162,6 +162,14 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
   };
 }
 
+function providerConfirmedOutOfStock(snapshot?: AdvisorProductAvailability) {
+  if (!snapshot || snapshot.lookupStatus !== "confirmed") return false;
+  const record = snapshot.records.find((item) => String(item.branchId || "") === snapshot.branchId) || snapshot.records[0];
+  if (!record) return false;
+  if (record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue") return false;
+  return record.status === "out_of_stock";
+}
+
 function ProductAvailability({
   snapshot,
   onSwitchBranch,
@@ -348,6 +356,7 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                 {response.products.map((product) => {
                   const evidence = evidenceFor(response.recommendationEvidence, "product", String(product.id));
                   const availability = response.productAvailability[String(product.id)];
+                  const outOfStockAtSelectedBranch = providerConfirmedOutOfStock(availability);
                   return (
                     <article key={product.id} className="sc-assistant-product">
                       <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
@@ -358,7 +367,11 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                         <ProductAvailability snapshot={availability} onSwitchBranch={switchBranchAndRefresh} />
                         <RecommendationEvidence evidence={evidence} />
                         <div className="sc-assistant-product__actions">
-                          {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
+                          {product.purchasable ? (
+                            outOfStockAtSelectedBranch
+                              ? <button type="button" disabled>Out of stock at {availability?.branchName || "selected branch"}</button>
+                              : <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button>
+                          ) : null}
                           <a href={routeHref(`/product/${product.id}`)}>View details</a>
                           {product.rentable ? <a href={routeHref(`/rentals?q=${encodeURIComponent(product.name)}`)}>Find rental option</a> : null}
                         </div>
