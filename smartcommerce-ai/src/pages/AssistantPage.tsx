@@ -181,16 +181,14 @@ function ProductAvailability({
       </div>
       <p>{summary.detail}</p>
       {alternatives.length ? (
-        <div className="sc-assistant-availability__alternatives">
-          <span>Other provider-listed branch option{alternatives.length === 1 ? "" : "s"}</span>
+        <div className="sc-assistant-availability__alternatives sc-assistant-product__actions">
           {alternatives.map((item) => {
             const quantity = typeof item.quantityAvailable === "number" && Number.isFinite(item.quantityAvailable)
               ? ` · ${item.quantityAvailable} provider-listed available`
               : "";
             return (
               <button type="button" key={item.branchId} onClick={() => onSwitchBranch(item.branchName)}>
-                <strong>Switch to {item.branchName}</strong>
-                <small>{item.status.replace(/_/g, " ")}{quantity}</small>
+                Switch to {item.branchName} · {item.status.replace(/_/g, " ")}{quantity}
               </button>
             );
           })}
@@ -362,6 +360,7 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                         <div className="sc-assistant-product__actions">
                           {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
                           <a href={routeHref(`/product/${product.id}`)}>View details</a>
+                          {product.rentable ? <a href={routeHref(`/rentals?q=${encodeURIComponent(product.name)}`)}>Find rental option</a> : null}
                         </div>
                       </div>
                     </article>
