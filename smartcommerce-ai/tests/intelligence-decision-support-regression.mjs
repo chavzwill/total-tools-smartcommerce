@@ -17,9 +17,9 @@ const invariants = [
   [decisionSupport.includes("fitReasons.slice(0, 3)"), "fit reasons are bounded"],
   [decisionSupport.includes("cautions") && decisionSupport.includes("slice(0, 2)"), "verification cautions are bounded"],
   [!decisionSupport.includes("api.openai.com") && !decisionSupport.includes("fetch("), "decision support adds no secondary AI/network call"],
-  [backendTypes.includes("AssistantRecommendationEvidence") && backendTypes.includes("recommendationEvidence: AssistantRecommendationEvidence[]"), "assistant result contract carries evidence"],
-  [runtime.includes("buildProductRecommendationEvidence") && runtime.includes("buildRentalRecommendationEvidence") && runtime.includes("recommendationEvidence"), "runtime attaches evidence to grounded results"],
-  [advisor.includes("recommendationEvidence: result.data.recommendationEvidence || []"), "advisor preserves evidence from server"],
+  [backendTypes.includes("AssistantRecommendationEvidence") && backendTypes.includes("recommendationEvidence?: AssistantRecommendationEvidence[]"), "shared assistant result contract can carry evidence without breaking fallback adapters"],
+  [runtime.includes("buildProductRecommendationEvidence") && runtime.includes("buildRentalRecommendationEvidence") && runtime.includes("recommendationEvidence"), "Total Tools runtime attaches evidence to grounded results"],
+  [advisor.includes("recommendationEvidence: result.data.recommendationEvidence || []"), "advisor preserves evidence from server and safely handles older adapters"],
   [page.includes("Why it fits") && page.includes("<strong>Verify:</strong>"), "assistant UI distinguishes rationale from verification"],
   [page.includes("evidence.fitReasons.slice(0, 2)"), "mobile result cards render concise rationale"],
 ];
