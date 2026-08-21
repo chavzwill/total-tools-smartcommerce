@@ -7,6 +7,7 @@ import type {
 } from "../platform";
 import type {
   AssistantConversationTurn,
+  AssistantRecommendationEvidence,
   AssistantRequest,
   AssistantResult,
   AssistantWorkflowHandoff,
@@ -25,6 +26,7 @@ export type AdvisorUiResult = {
   summary: string;
   products: CommerceProduct[];
   rentals: RentalAsset[];
+  recommendationEvidence: AssistantRecommendationEvidence[];
   nextActions: string[];
   workflowHandoff?: AssistantWorkflowHandoff;
 };
@@ -98,6 +100,7 @@ export async function getAdvisorResponse(
         : "The connected provider returned insufficient catalogue or rental data for this request."),
       products,
       rentals,
+      recommendationEvidence: result.data.recommendationEvidence || [],
       nextActions: result.data.nextActions || [],
       workflowHandoff: result.data.workflowHandoff,
     },
