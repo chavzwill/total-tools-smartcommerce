@@ -27,18 +27,38 @@ function productImage(product: CommerceProduct) {
   return [...(product.images || [])].sort((a, b) => (a.position || 0) - (b.position || 0))[0]?.url;
 }
 
+function formatMoney(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${currency} ${value.toLocaleString("en-JM")}`;
+  }
+}
+
 function productPrice(product: CommerceProduct) {
   for (const pricing of product.pricing || []) {
     const value = pricing.salePrice ?? pricing.listPrice ?? pricing.commercialPrice;
     if (value === undefined) continue;
-    const currency = pricing.currency || "JMD";
-    try {
-      return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
-    } catch {
-      return `${currency} ${value.toLocaleString("en-JM")}`;
-    }
+    return formatMoney(value, pricing.currency || "JMD");
   }
   return "Price confirmed in product details";
+}
+
+function rentalRateFacts(rental: AdvisorUiResult["rentals"][number]) {
+  const ratePlan = (rental.ratePlans || []).find((plan) =>
+    [plan.dailyRate, plan.weeklyRate, plan.monthlyRate].some((value) => typeof value === "number" && Number.isFinite(value)),
+  );
+  if (!ratePlan) return [];
+  const currency = ratePlan.currency || "JMD";
+  return [
+    ["Daily", ratePlan.dailyRate],
+    ["Weekly", ratePlan.weeklyRate],
+    ["Monthly", ratePlan.monthlyRate],
+  ].flatMap(([label, value]) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? [{ label: String(label), value: formatMoney(value, currency) }]
+      : [],
+  );
 }
 
 function readinessLabel(readiness: "needs_input" | "ready_to_continue" | "verification_required") {
@@ -239,10 +259,20 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
               <div className="sc-assistant-next__rental-grid">
                 {response.rentals.map((rental) => {
                   const evidence = evidenceFor(response.recommendationEvidence, "rental", String(rental.id));
+                  const rates = rentalRateFacts(rental);
                   return (
                     <article key={rental.id} className="sc-assistant-rental">
                       <Wrench size={20} aria-hidden="true" />
-                      <div><span>Rental option</span><h3>{rental.name || rental.id}</h3><RecommendationEvidence evidence={evidence} /></div>
+                      <div>
+                        <span>Rental option</span>
+                        <h3>{rental.name || rental.id}</h3>
+                        {rates.length ? (
+                          <div className="sc-assistant-rental__rates" aria-label="Provider rental rates">
+                            {rates.map((rate) => <div key={rate.label}><span>{rate.label}</span><strong>{rate.value}</strong></div>)}
+                          </div>
+                        ) : null}
+                        <RecommendationEvidence evidence={evidence} />
+                      </div>
                       <a href={routeHref(`/rental/${rental.id}`)}>Check dates & availability</a>
                     </article>
                   );
