@@ -104,7 +104,6 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
 
   if (snapshot.lookupStatus === "unavailable") {
     return {
-      state: "unknown",
       title: `${branch}: availability not confirmed`,
       detail: "The provider inventory lookup did not complete. This is not an out-of-stock result.",
     };
@@ -113,7 +112,6 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
   const record = snapshot.records.find((item) => String(item.branchId || "") === snapshot.branchId) || snapshot.records[0];
   if (!record) {
     return {
-      state: "unknown",
       title: `${branch}: no inventory status returned`,
       detail: "The provider returned no branch inventory record for this item.",
     };
@@ -122,7 +120,6 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
   const preview = record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue";
   if (preview || record.status === "unknown") {
     return {
-      state: "unknown",
       title: `${branch}: live stock not verified`,
       detail: "The catalogue match is available for evaluation, but live branch inventory still needs provider confirmation.",
     };
@@ -135,35 +132,30 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
 
   if (record.status === "in_stock") {
     return {
-      state: "positive",
       title: `${branch}: provider status in stock`,
       detail: [available, "Final fulfillment is still confirmed at checkout or reservation."].filter(Boolean).join(" · "),
     };
   }
   if (record.status === "low_stock") {
     return {
-      state: "caution",
       title: `${branch}: provider status low stock`,
       detail: [available, "Recheck before relying on pickup or delivery."].filter(Boolean).join(" · "),
     };
   }
   if (record.status === "out_of_stock") {
     return {
-      state: "negative",
       title: `${branch}: provider status out of stock`,
       detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Try another branch or ask SmartCommerce for an alternative.",
     };
   }
   if (record.status === "backordered" || record.status === "reserved") {
     return {
-      state: "caution",
       title: `${branch}: ${record.status === "backordered" ? "backordered" : "currently reserved"}`,
       detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Exact availability needs provider confirmation.",
     };
   }
 
   return {
-    state: "unknown",
     title: `${branch}: provider status ${String(record.status).replace(/_/g, " ")}`,
     detail: "Final availability still needs provider confirmation.",
   };
@@ -173,9 +165,12 @@ function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailabili
   const summary = availabilitySummary(snapshot);
   if (!summary) return null;
   return (
-    <div className={`sc-assistant-availability is-${summary.state}`}>
-      <strong>{summary.title}</strong>
-      <span>{summary.detail}</span>
+    <div className="sc-assistant-evidence sc-assistant-availability">
+      <div>
+        <span>Branch availability</span>
+        <strong>{summary.title}</strong>
+      </div>
+      <p>{summary.detail}</p>
     </div>
   );
 }
