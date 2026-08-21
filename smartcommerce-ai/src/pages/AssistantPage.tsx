@@ -5,6 +5,7 @@ import mascot from "../assets/brand/mascot-illustrated.jpeg";
 import {
   advisorPrompts,
   getAdvisorResponse,
+  type AdvisorProductAvailability,
   type AdvisorUiResult,
 } from "../lib/advisor";
 import { routeHref } from "../lib/router";
@@ -86,6 +87,95 @@ function RecommendationEvidence({ evidence }: { evidence?: AssistantRecommendati
         </div>
       ) : null}
       {evidence.cautions[0] ? <p><strong>Verify:</strong> {evidence.cautions[0]}</p> : null}
+    </div>
+  );
+}
+
+function formatAvailabilityDate(value: string | undefined) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return undefined;
+  return new Intl.DateTimeFormat("en-JM", { dateStyle: "medium" }).format(date);
+}
+
+function availabilitySummary(snapshot?: AdvisorProductAvailability) {
+  if (!snapshot) return undefined;
+  const branch = snapshot.branchName || "Selected branch";
+
+  if (snapshot.lookupStatus === "unavailable") {
+    return {
+      state: "unknown",
+      title: `${branch}: availability not confirmed`,
+      detail: "The provider inventory lookup did not complete. This is not an out-of-stock result.",
+    };
+  }
+
+  const record = snapshot.records.find((item) => String(item.branchId || "") === snapshot.branchId) || snapshot.records[0];
+  if (!record) {
+    return {
+      state: "unknown",
+      title: `${branch}: no inventory status returned`,
+      detail: "The provider returned no branch inventory record for this item.",
+    };
+  }
+
+  const preview = record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue";
+  if (preview || record.status === "unknown") {
+    return {
+      state: "unknown",
+      title: `${branch}: live stock not verified`,
+      detail: "The catalogue match is available for evaluation, but live branch inventory still needs provider confirmation.",
+    };
+  }
+
+  const available = typeof record.quantityAvailable === "number" && Number.isFinite(record.quantityAvailable)
+    ? `${record.quantityAvailable} provider-listed available`
+    : undefined;
+  const nextAvailable = formatAvailabilityDate(record.nextAvailableAt);
+
+  if (record.status === "in_stock") {
+    return {
+      state: "positive",
+      title: `${branch}: provider status in stock`,
+      detail: [available, "Final fulfillment is still confirmed at checkout or reservation."].filter(Boolean).join(" · "),
+    };
+  }
+  if (record.status === "low_stock") {
+    return {
+      state: "caution",
+      title: `${branch}: provider status low stock`,
+      detail: [available, "Recheck before relying on pickup or delivery."].filter(Boolean).join(" · "),
+    };
+  }
+  if (record.status === "out_of_stock") {
+    return {
+      state: "negative",
+      title: `${branch}: provider status out of stock`,
+      detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Try another branch or ask SmartCommerce for an alternative.",
+    };
+  }
+  if (record.status === "backordered" || record.status === "reserved") {
+    return {
+      state: "caution",
+      title: `${branch}: ${record.status === "backordered" ? "backordered" : "currently reserved"}`,
+      detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Exact availability needs provider confirmation.",
+    };
+  }
+
+  return {
+    state: "unknown",
+    title: `${branch}: provider status ${String(record.status).replace(/_/g, " ")}`,
+    detail: "Final availability still needs provider confirmation.",
+  };
+}
+
+function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailability }) {
+  const summary = availabilitySummary(snapshot);
+  if (!summary) return null;
+  return (
+    <div className={`sc-assistant-availability is-${summary.state}`}>
+      <strong>{summary.title}</strong>
+      <span>{summary.detail}</span>
     </div>
   );
 }
@@ -233,6 +323,7 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
               <div className="sc-assistant-next__product-grid">
                 {response.products.map((product) => {
                   const evidence = evidenceFor(response.recommendationEvidence, "product", String(product.id));
+                  const availability = response.productAvailability[String(product.id)];
                   return (
                     <article key={product.id} className="sc-assistant-product">
                       <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
@@ -240,6 +331,7 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                         <span>{product.brand || product.sku || "Connected catalogue"}</span>
                         <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
                         <strong>{productPrice(product)}</strong>
+                        <ProductAvailability snapshot={availability} />
                         <RecommendationEvidence evidence={evidence} />
                         <div className="sc-assistant-product__actions">
                           {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
