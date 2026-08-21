@@ -48,6 +48,15 @@ export type AssistantWorkflowHandoff = {
   verificationNote?: string;
 };
 
+export type AssistantRecommendationEvidence = {
+  entityType: "product" | "rental";
+  entityId: PlatformEntityId;
+  fitReasons: string[];
+  matchingAttributes: string[];
+  cautions: string[];
+  sourceMode: "connected" | "preview";
+};
+
 export type AssistantRequest = {
   prompt: string;
   branchId?: PlatformEntityId;
@@ -59,6 +68,7 @@ export type AssistantResult = {
   response: string;
   recommendedProducts: CommerceProduct[];
   recommendedRentals: RentalAsset[];
+  recommendationEvidence: AssistantRecommendationEvidence[];
   nextActions: string[];
   workflowHandoff?: AssistantWorkflowHandoff;
 };
