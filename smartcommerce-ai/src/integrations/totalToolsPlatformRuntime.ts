@@ -1,5 +1,6 @@
 import { createPlatformBackendService } from "../backend/platformBackendService.js";
 import { buildGroundedProductComparison } from "../backend/assistantComparisonEngine.js";
+import { criticalFitClarification } from "../backend/assistantCriticalFitGuard.js";
 import { buildProductRecommendationEvidence, buildRentalRecommendationEvidence } from "../backend/assistantDecisionSupport.js";
 import { runGroundedAssistantIntelligence } from "../backend/assistantIntelligenceEngine.js";
 import { buildRepairIntakeGuidance } from "../backend/assistantRepairGuidance.js";
@@ -275,6 +276,20 @@ export const createConfiguredTotalToolsPlatformService = () => {
       branchId: input.branchId,
       history: input.history,
     });
+    const fitClarification = criticalFitClarification(input.prompt, grounded.understanding);
+
+    if (fitClarification) {
+      return {
+        success: true,
+        data: {
+          response: fitClarification.question,
+          recommendedProducts: [],
+          recommendedRentals: [],
+          recommendationEvidence: [],
+          nextActions: [],
+        },
+      };
+    }
 
     if (grounded.warnings.length) {
       console.warn("assistant_provider_read_warning", {
