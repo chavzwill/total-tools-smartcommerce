@@ -22,7 +22,8 @@ const invariants = [
   [advisor.includes("record.status !== \"in_stock\" && record.status !== \"low_stock\""), "alternate branches must return explicit provider in-stock or low-stock status"],
   [advisor.includes("record.metadata?.liveVerified === false") && advisor.includes("record.metadata?.source === \"preview_catalogue\""), "preview/unverified alternate branch records are discarded"],
   [advisor.includes("filter(Boolean).slice(0, 3)"), "alternate branch suggestions are bounded"],
-  [page.includes("Other provider-listed branch option"), "out-of-stock cards can surface provider-listed branch alternatives"],
+  [page.includes("const alternatives = (snapshot?.alternatives || []).slice(0, 2)") && page.includes("Switch to {item.branchName}"), "out-of-stock cards surface bounded actionable provider-listed branch alternatives"],
+  [page.includes("onClick={() => onSwitchBranch(item.branchName)}"), "alternate branch action switches through the validated branch callback"],
   [page.includes("ProductAvailability snapshot={availability}"), "product cards render the independent availability snapshot"],
   [page.includes("sc-assistant-evidence sc-assistant-availability"), "availability reuses the canonical evidence surface rather than adding a new CSS layer"],
 ];
