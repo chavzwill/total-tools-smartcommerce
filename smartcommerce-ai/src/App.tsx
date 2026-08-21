@@ -5,7 +5,9 @@ import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCom
 import { getRoute } from "./lib/router";
 import {
   SHOPPING_BRANCH_CHANGED_EVENT,
+  getShoppingBranch,
   isShoppingBranch,
+  type ShoppingBranch,
 } from "./lib/shoppingBranch";
 import HomePageV3 from "./pages/HomePageV3";
 
@@ -72,6 +74,22 @@ function branchScopedPath(path: string) {
   return path === "/products" || path === "/search" || path === "/rentals" || path.startsWith("/category/");
 }
 
+function normalizeBranchScopedRoute(current: ReturnType<typeof getRoute>, branch: ShoppingBranch = getShoppingBranch()) {
+  if (!branchScopedPath(current.path)) return current;
+
+  const query = new URLSearchParams(current.query);
+  const currentBranch = query.get("branch");
+  const nextBranch = branch === "Online" ? null : branch;
+  if (currentBranch === nextBranch) return current;
+
+  if (nextBranch) query.set("branch", nextBranch);
+  else query.delete("branch");
+  const queryString = query.toString();
+  const nextHash = `#${current.path}${queryString ? `?${queryString}` : ""}`;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+  return getRoute();
+}
+
 export default function App() {
   const [route, setRoute] = useState(getRoute());
   const [cart, setCart] = useState<GuestCheckoutItem[]>(loadGuestCart);
@@ -82,12 +100,13 @@ export default function App() {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
 
     const update = () => {
-      setRoute(getRoute());
+      setRoute(normalizeBranchScopedRoute(getRoute()));
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       });
     };
 
+    update();
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);
@@ -96,16 +115,7 @@ export default function App() {
     const syncActiveCommerceBranch = (event: Event) => {
       const branch = (event as CustomEvent<{ branch?: unknown }>).detail?.branch;
       if (!isShoppingBranch(branch)) return;
-      const current = getRoute();
-      if (!branchScopedPath(current.path)) return;
-
-      const query = new URLSearchParams(current.query);
-      if (branch === "Online") query.delete("branch");
-      else query.set("branch", branch);
-      const queryString = query.toString();
-      const nextHash = `#${current.path}${queryString ? `?${queryString}` : ""}`;
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
-      setRoute(getRoute());
+      setRoute(normalizeBranchScopedRoute(getRoute(), branch));
     };
 
     window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncActiveCommerceBranch);
