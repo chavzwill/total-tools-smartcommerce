@@ -429,6 +429,42 @@
 
 .sc-assistant-rental h3 { margin-bottom: 8px; }
 
+.sc-assistant-rental__rates {
+  background: #f7f8f6;
+  border: 1px solid #e5e9e5;
+  border-radius: 10px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 9px;
+  max-width: 520px;
+  overflow: hidden;
+}
+
+.sc-assistant-rental__rates > div {
+  border-right: 1px solid #e0e5e0;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.sc-assistant-rental__rates > div:last-child { border-right: 0; }
+
+.sc-assistant-rental__rates span {
+  color: #6a756d;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.sc-assistant-rental__rates strong {
+  color: #18211c;
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .sc-assistant-rental .sc-assistant-evidence {
   margin-bottom: 0;
   max-width: 620px;
@@ -518,6 +554,9 @@
   .sc-assistant-rental > a {
     grid-column: 1 / -1;
   }
+
+  .sc-assistant-rental__rates span { font-size: 11px; }
+  .sc-assistant-rental__rates strong { font-size: 13px; }
 
   .sc-assistant-next__section-heading {
     align-items: start;
