@@ -1,9 +1,12 @@
 import { Bot, Home, HardHat, ShoppingBag, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getRoute, go, routeHref } from "../../lib/router";
-
-const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
-const SHOPPING_BRANCH_CHANGED_EVENT = "smartcommerce:shopping-branch-changed";
+import {
+  SHOPPING_BRANCH_CHANGED_EVENT,
+  branchAwareHref,
+  getShoppingBranch,
+  type ShoppingBranch,
+} from "../../lib/shoppingBranch";
 
 const items = [
   ["Home", "/", Home],
@@ -21,23 +24,14 @@ function isActive(path: string, href: string) {
   return path.startsWith(href);
 }
 
-function readShoppingBranch() {
-  try {
-    const value = window.localStorage.getItem(SHOPPING_BRANCH_KEY) || "Online";
-    return ["Ocho Rios", "Drax Hall", "Kingston", "Online"].includes(value) ? value : "Online";
-  } catch {
-    return "Online";
-  }
-}
-
-function contextualHref(href: string, branch: string) {
-  if (branch === "Online" || (href !== "/products" && href !== "/rentals")) return href;
-  return `${href}?branch=${encodeURIComponent(branch)}`;
+function contextualHref(href: string, branch: ShoppingBranch) {
+  if (href !== "/products" && href !== "/rentals") return href;
+  return branchAwareHref(href, branch);
 }
 
 export default function MobileCommerceNav() {
   const [path, setPath] = useState(() => getRoute().path);
-  const [branch, setBranch] = useState(readShoppingBranch);
+  const [branch, setBranch] = useState<ShoppingBranch>(() => getShoppingBranch());
 
   useEffect(() => {
     const sync = () => setPath(getRoute().path);
@@ -46,7 +40,7 @@ export default function MobileCommerceNav() {
   }, []);
 
   useEffect(() => {
-    const syncBranch = () => setBranch(readShoppingBranch());
+    const syncBranch = () => setBranch(getShoppingBranch());
     window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch);
     return () => window.removeEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch);
   }, []);
