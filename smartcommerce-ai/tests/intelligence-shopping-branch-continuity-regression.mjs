@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const branch = await readFile(new URL("../src/lib/shoppingBranch.ts", import.meta.url), "utf8");
 const header = await readFile(new URL("../src/components/layout/Header.tsx", import.meta.url), "utf8");
+const mobileNav = await readFile(new URL("../src/components/layout/MobileCommerceNav.tsx", import.meta.url), "utf8");
 const advisor = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
 const productMatch = await readFile(new URL("../src/lib/productMatch.ts", import.meta.url), "utf8");
 const assistant = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
@@ -15,6 +16,8 @@ const invariants = [
   [header.includes('from "../../lib/shoppingBranch"'), "header consumes shared branch state"],
   [header.includes("window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch)"), "header reacts to branch changes initiated elsewhere"],
   [header.includes("setShoppingBranch(next)"), "header branch selection uses the shared setter"],
+  [mobileNav.includes('from "../../lib/shoppingBranch"'), "mobile navigation consumes shared branch state"],
+  [mobileNav.includes("window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch)"), "mobile navigation reacts to branch changes initiated elsewhere"],
   [advisor.includes('from "./shoppingBranch"') && advisor.includes("getPhysicalShoppingBranch()"), "Ask AI resolves branch context from the shared utility"],
   [productMatch.includes('from "./shoppingBranch"') && productMatch.includes("getPhysicalShoppingBranch()"), "Product Match resolves branch context from the shared utility"],
   [assistant.includes('from "../lib/shoppingBranch"') && assistant.includes("setShoppingBranch(branchName)"), "AI alternate-branch actions use the shared setter"],
@@ -22,6 +25,7 @@ const invariants = [
   [assistant.includes("void submitPrompt(prompt)"), "switching branch refreshes the current AI request against the new branch"],
   [!advisor.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"'), "advisor no longer duplicates the branch storage key"],
   [!productMatch.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"'), "Product Match no longer duplicates the branch storage key"],
+  [!mobileNav.includes('const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1"'), "mobile navigation no longer duplicates the branch storage key"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
