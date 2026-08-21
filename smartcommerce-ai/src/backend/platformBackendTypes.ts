@@ -68,7 +68,7 @@ export type AssistantResult = {
   response: string;
   recommendedProducts: CommerceProduct[];
   recommendedRentals: RentalAsset[];
-  recommendationEvidence: AssistantRecommendationEvidence[];
+  recommendationEvidence?: AssistantRecommendationEvidence[];
   nextActions: string[];
   workflowHandoff?: AssistantWorkflowHandoff;
 };
