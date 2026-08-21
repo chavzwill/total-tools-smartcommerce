@@ -9,7 +9,7 @@ import {
 } from "../lib/advisor";
 import { routeHref } from "../lib/router";
 import type { CommerceProduct } from "../platform";
-import type { AssistantConversationTurn } from "../backend";
+import type { AssistantConversationTurn, AssistantRecommendationEvidence } from "../backend";
 
 const prompts = [
   "I need a generator for my farm.",
@@ -45,6 +45,29 @@ function readinessLabel(readiness: "needs_input" | "ready_to_continue" | "verifi
   if (readiness === "verification_required") return "Ready for provider verification";
   if (readiness === "ready_to_continue") return "Ready to continue";
   return "More information needed";
+}
+
+function evidenceFor(
+  evidence: AssistantRecommendationEvidence[] | undefined,
+  entityType: "product" | "rental",
+  entityId: string,
+) {
+  return evidence?.find((item) => item.entityType === entityType && String(item.entityId) === entityId);
+}
+
+function RecommendationEvidence({ evidence }: { evidence?: AssistantRecommendationEvidence }) {
+  if (!evidence || (!evidence.fitReasons.length && !evidence.cautions.length)) return null;
+  return (
+    <div className="sc-assistant-evidence">
+      {evidence.fitReasons.length ? (
+        <div>
+          <span>Why it fits</span>
+          <ul>{evidence.fitReasons.slice(0, 2).map((reason) => <li key={reason}>{reason}</li>)}</ul>
+        </div>
+      ) : null}
+      {evidence.cautions[0] ? <p><strong>Verify:</strong> {evidence.cautions[0]}</p> : null}
+    </div>
+  );
 }
 
 export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
@@ -188,20 +211,24 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
             <section className="sc-assistant-next__results" aria-labelledby="assistant-products-title">
               <div className="sc-assistant-next__section-heading"><div><span>Products</span><h2 id="assistant-products-title">Options you can act on now</h2></div><a href={routeHref("/products")}>Browse all products</a></div>
               <div className="sc-assistant-next__product-grid">
-                {response.products.map((product) => (
-                  <article key={product.id} className="sc-assistant-product">
-                    <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
-                    <div>
-                      <span>{product.brand || product.sku || "Connected catalogue"}</span>
-                      <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
-                      <strong>{productPrice(product)}</strong>
-                      <div className="sc-assistant-product__actions">
-                        {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
-                        <a href={routeHref(`/product/${product.id}`)}>View details</a>
+                {response.products.map((product) => {
+                  const evidence = evidenceFor(response.recommendationEvidence, "product", String(product.id));
+                  return (
+                    <article key={product.id} className="sc-assistant-product">
+                      <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
+                      <div>
+                        <span>{product.brand || product.sku || "Connected catalogue"}</span>
+                        <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
+                        <strong>{productPrice(product)}</strong>
+                        <RecommendationEvidence evidence={evidence} />
+                        <div className="sc-assistant-product__actions">
+                          {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
+                          <a href={routeHref(`/product/${product.id}`)}>View details</a>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -210,13 +237,16 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
             <section className="sc-assistant-next__results" aria-labelledby="assistant-rentals-title">
               <div className="sc-assistant-next__section-heading"><div><span>Rentals</span><h2 id="assistant-rentals-title">Equipment that matches the request</h2></div><a href={routeHref("/rentals")}>Browse rental fleet</a></div>
               <div className="sc-assistant-next__rental-grid">
-                {response.rentals.map((rental) => (
-                  <article key={rental.id} className="sc-assistant-rental">
-                    <Wrench size={20} aria-hidden="true" />
-                    <div><span>Rental option</span><h3>{rental.name || rental.id}</h3></div>
-                    <a href={routeHref(`/rental/${rental.id}`)}>Check dates & availability</a>
-                  </article>
-                ))}
+                {response.rentals.map((rental) => {
+                  const evidence = evidenceFor(response.recommendationEvidence, "rental", String(rental.id));
+                  return (
+                    <article key={rental.id} className="sc-assistant-rental">
+                      <Wrench size={20} aria-hidden="true" />
+                      <div><span>Rental option</span><h3>{rental.name || rental.id}</h3><RecommendationEvidence evidence={evidence} /></div>
+                      <a href={routeHref(`/rental/${rental.id}`)}>Check dates & availability</a>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : null}
