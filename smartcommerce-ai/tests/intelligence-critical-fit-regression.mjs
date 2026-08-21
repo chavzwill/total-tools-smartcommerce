@@ -16,7 +16,7 @@ const invariants = [
   [guard.includes("I have the lift/head requirement") && guard.includes("What flow rate"), "pump follow-up asks only for missing flow when head is already known"],
   [guard.includes("I have the load weight") && guard.includes("What lift height or reach"), "lifting follow-up asks only for missing height when load is already known"],
   [guard.includes("I have the lift height/reach") && guard.includes("heaviest load"), "lifting follow-up asks only for missing load when height is already known"],
-  [runtime.includes("criticalFitClarification(input.prompt, grounded.understanding)"), "runtime applies the deterministic fit guard"],
+  [runtime.includes("criticalFitClarification(input.prompt, grounded.understanding, input.history)"), "runtime passes bounded assistant history into the deterministic fit guard"],
   [runtime.includes("response: fitClarification.question"), "fit guard returns the targeted question"],
   [runtime.includes("recommendedProducts: []") && runtime.includes("recommendedRentals: []"), "critical fit clarification suppresses product and rental recommendations"],
   [runtime.includes("recommendationEvidence: []") && runtime.includes("nextActions: []"), "critical fit clarification suppresses evidence/action claims until sizing is supplied"],
