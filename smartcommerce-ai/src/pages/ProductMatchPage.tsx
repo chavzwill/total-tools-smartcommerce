@@ -14,7 +14,7 @@ import toolsImage from "../assets/smartcommerce-tools-optimized.jpg";
 import { matchProductPhoto, prepareProductMatchImage } from "../lib/productMatch";
 import { go, routeHref } from "../lib/router";
 import type { CommerceProduct, InventoryAvailability } from "../platform";
-import type { ProductMatchResult } from "../types/productMatch";
+import type { ProductMatchCandidate, ProductMatchResult } from "../types/productMatch";
 
 type Props = { onAdd: (id: string) => void };
 type MatchState = "idle" | "preparing" | "scanning" | "results" | "error";
@@ -74,6 +74,32 @@ function evidenceStrength(value: number) {
   if (value >= 0.85) return "High evidence";
   if (value >= 0.65) return "Moderate evidence";
   return "Limited evidence";
+}
+
+function productMatchAdvisorPrompt(
+  result: ProductMatchResult,
+  candidate: ProductMatchCandidate,
+) {
+  const analysis = result.analysis;
+  const visualClues = [
+    analysis.productType ? `product type: ${analysis.productType}` : "",
+    analysis.brand ? `brand clue: ${analysis.brand}` : "",
+    analysis.model ? `model clue: ${analysis.model}` : "",
+    ...analysis.visibleText.slice(0, 6).map((value) => `visible text: ${value}`),
+    ...analysis.attributes.slice(0, 6).map((value) => `visible attribute: ${value}`),
+  ].filter(Boolean);
+  const reasons = candidate.reasons.slice(0, 4);
+  const evidenceState = confidenceLabel(candidate.confidence, result.needsClarification);
+
+  return [
+    "This is a Product Match follow-up. Do not claim you can see or re-analyze the original photo in this chat; use only the supplied visual-analysis clues and connected catalogue facts.",
+    `Catalogue candidate: ${candidate.product.name}.`,
+    `Product Match evidence state: ${evidenceState}.`,
+    visualClues.length ? `Supplied visual clues: ${visualClues.join("; ")}.` : "Supplied visual clues were limited.",
+    reasons.length ? `Why Product Match ranked it: ${reasons.join("; ")}.` : "Product Match returned no additional ranking reasons.",
+    result.clarification ? `Product Match still needs clarification: ${result.clarification}` : "",
+    "Help me assess whether this catalogue candidate is consistent with those supplied clues, explain what supports the match, and tell me the single most useful additional clue that would confirm or rule it out. Use connected catalogue data only and do not invent unseen photo details.",
+  ].filter(Boolean).join("\n").slice(0, 2200);
 }
 
 export default function ProductMatchPage({ onAdd }: Props) {
@@ -321,12 +347,12 @@ export default function ProductMatchPage({ onAdd }: Props) {
                         onClick={() =>
                           go(
                             `/assistant?prompt=${encodeURIComponent(
-                              `Help me verify whether ${top.product.name} is the right match for my photo.`
+                              productMatchAdvisorPrompt(result, top)
                             )}`
                           )
                         }
                       >
-                        <UserCheck size={16} /> Ask AI to verify
+                        <UserCheck size={16} /> Ask AI about this match
                       </button>
                     </div>
                   </div>
