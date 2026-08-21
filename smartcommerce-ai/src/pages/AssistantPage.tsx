@@ -9,6 +9,7 @@ import {
   type AdvisorUiResult,
 } from "../lib/advisor";
 import { routeHref } from "../lib/router";
+import { isShoppingBranch, setShoppingBranch } from "../lib/shoppingBranch";
 import type { CommerceProduct } from "../platform";
 import type { AssistantConversationTurn, AssistantRecommendationEvidence } from "../backend";
 
@@ -161,16 +162,16 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
   };
 }
 
-function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailability }) {
+function ProductAvailability({
+  snapshot,
+  onSwitchBranch,
+}: {
+  snapshot?: AdvisorProductAvailability;
+  onSwitchBranch: (branchName: string) => void;
+}) {
   const summary = availabilitySummary(snapshot);
   if (!summary) return null;
   const alternatives = (snapshot?.alternatives || []).slice(0, 2);
-  const alternativeText = alternatives.map((item) => {
-    const quantity = typeof item.quantityAvailable === "number" && Number.isFinite(item.quantityAvailable)
-      ? `, ${item.quantityAvailable} provider-listed available`
-      : "";
-    return `${item.branchName} — ${item.status.replace(/_/g, " ")}${quantity}`;
-  }).join("; ");
 
   return (
     <div className="sc-assistant-evidence sc-assistant-availability">
@@ -179,7 +180,22 @@ function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailabili
         <strong>{summary.title}</strong>
       </div>
       <p>{summary.detail}</p>
-      {alternativeText ? <p><strong>Other provider-listed branch option{alternatives.length === 1 ? "" : "s"}:</strong> {alternativeText}.</p> : null}
+      {alternatives.length ? (
+        <div className="sc-assistant-availability__alternatives">
+          <span>Other provider-listed branch option{alternatives.length === 1 ? "" : "s"}</span>
+          {alternatives.map((item) => {
+            const quantity = typeof item.quantityAvailable === "number" && Number.isFinite(item.quantityAvailable)
+              ? ` · ${item.quantityAvailable} provider-listed available`
+              : "";
+            return (
+              <button type="button" key={item.branchId} onClick={() => onSwitchBranch(item.branchName)}>
+                <strong>Switch to {item.branchName}</strong>
+                <small>{item.status.replace(/_/g, " ")}{quantity}</small>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -212,6 +228,12 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
       { role: "user", content: clean },
       { role: "assistant", content: result.data.summary },
     ].slice(-6) as AssistantConversationTurn[]);
+  };
+
+  const switchBranchAndRefresh = (branchName: string) => {
+    if (!isShoppingBranch(branchName) || branchName === "Online") return;
+    setShoppingBranch(branchName);
+    void submitPrompt(prompt);
   };
 
   useEffect(() => {
@@ -335,7 +357,7 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                         <span>{product.brand || product.sku || "Connected catalogue"}</span>
                         <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
                         <strong>{productPrice(product)}</strong>
-                        <ProductAvailability snapshot={availability} />
+                        <ProductAvailability snapshot={availability} onSwitchBranch={switchBranchAndRefresh} />
                         <RecommendationEvidence evidence={evidence} />
                         <div className="sc-assistant-product__actions">
                           {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
