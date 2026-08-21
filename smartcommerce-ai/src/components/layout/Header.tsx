@@ -22,14 +22,20 @@ import {
   type CustomerAccount,
   type CustomerAccountState,
 } from "../../lib/customerAccount";
+import {
+  SHOPPING_BRANCH_CHANGED_EVENT,
+  SHOPPING_BRANCHES,
+  branchAwareHref,
+  branchDescription,
+  getShoppingBranch,
+  isShoppingBranch,
+  setShoppingBranch,
+  type ShoppingBranch,
+} from "../../lib/shoppingBranch";
 import Container from "../shared/Container";
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
-export const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
-export const SHOPPING_BRANCH_CHANGED_EVENT = "smartcommerce:shopping-branch-changed";
-export const SHOPPING_BRANCHES = ["Ocho Rios", "Drax Hall", "Kingston", "Online"] as const;
-type ShoppingBranch = (typeof SHOPPING_BRANCHES)[number];
 
 const navigation = [
   { label: "Shop", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
@@ -74,26 +80,6 @@ function initialGuestCartCount() {
   }
 }
 
-function initialShoppingBranch(): ShoppingBranch {
-  try {
-    const stored = window.localStorage.getItem(SHOPPING_BRANCH_KEY) as ShoppingBranch | null;
-    return stored && SHOPPING_BRANCHES.includes(stored) ? stored : "Online";
-  } catch {
-    return "Online";
-  }
-}
-
-function branchDescription(branch: ShoppingBranch) {
-  return branch === "Online" ? "Browse the widest online selection" : `Prioritize ${branch} stock and pickup`;
-}
-
-function branchAwareHref(href: string, branch: ShoppingBranch) {
-  if (branch === "Online") return href;
-  const isBranchScoped = href === "/products" || href === "/rentals" || href.startsWith("/category/");
-  if (!isBranchScoped) return href;
-  return `${href}${href.includes("?") ? "&" : "?"}branch=${encodeURIComponent(branch)}`;
-}
-
 export default function Header() {
   const [search, setSearch] = useState("");
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -101,7 +87,7 @@ export default function Header() {
   const [customer, setCustomer] = useState<CustomerAccount | null>(null);
   const [path, setPath] = useState(() => getRoute().path);
   const [guestCartCount, setGuestCartCount] = useState(initialGuestCartCount);
-  const [branch, setBranch] = useState<ShoppingBranch>(initialShoppingBranch);
+  const [branch, setBranch] = useState<ShoppingBranch>(() => getShoppingBranch());
   const [branchOpen, setBranchOpen] = useState(false);
   const launcherInputRef = useRef<HTMLInputElement>(null);
   const launcherTriggerRef = useRef<HTMLButtonElement>(null);
@@ -141,6 +127,15 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    const syncBranch = (event: Event) => {
+      const next = (event as CustomEvent<{ branch?: unknown }>).detail?.branch;
+      if (isShoppingBranch(next)) setBranch(next);
+    };
+    window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch);
+    return () => window.removeEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncBranch);
+  }, []);
+
+  useEffect(() => {
     const closeBranch = (event: PointerEvent) => {
       if (!branchRef.current?.contains(event.target as Node)) setBranchOpen(false);
     };
@@ -177,10 +172,8 @@ export default function Header() {
   }, [launcherOpen]);
 
   function chooseBranch(next: ShoppingBranch) {
-    setBranch(next);
+    setShoppingBranch(next);
     setBranchOpen(false);
-    window.localStorage.setItem(SHOPPING_BRANCH_KEY, next);
-    window.dispatchEvent(new CustomEvent(SHOPPING_BRANCH_CHANGED_EVENT, { detail: { branch: next } }));
     branchTriggerRef.current?.focus();
   }
 
