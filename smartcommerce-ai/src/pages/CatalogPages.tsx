@@ -192,6 +192,27 @@ function ProductResults({
 
   const categoryOptions = useMemo(() => Array.from(new Set(items.map((product) => product.category).filter(Boolean))).sort(), [items]);
   const brandOptions = useMemo(() => Array.from(new Set(items.map(getBrand).filter(Boolean))).sort(), [items]);
+  const pricedCurrencies = useMemo(() => Array.from(new Set(
+    items
+      .filter((product) => product.price > 0 && Boolean(product.currency))
+      .map((product) => String(product.currency).toUpperCase()),
+  )), [items]);
+  const comparableCurrency = connected && pricedCurrencies.length === 1 ? pricedCurrencies[0] : undefined;
+  const mixedCurrencies = connected && pricedCurrencies.length > 1;
+
+  useEffect(() => {
+    if (!connected || loadStatus !== "ready" || comparableCurrency) return;
+    setState((previous) => {
+      const invalidSort = previous.sort === "price-asc" || previous.sort === "price-desc";
+      if (!invalidSort && !previous.minPrice && !previous.maxPrice) return previous;
+      return {
+        ...previous,
+        minPrice: "",
+        maxPrice: "",
+        sort: invalidSort ? "best" : previous.sort,
+      };
+    });
+  }, [comparableCurrency, connected, loadStatus]);
 
   const attributeOptions = useMemo(() => {
     const counts = new Map<string, Set<string>>();
@@ -222,20 +243,20 @@ function ProductResults({
       if (state.brands.length && !state.brands.includes(getBrand(product))) return false;
       if (state.availability && getAvailabilityGroup(product) !== state.availability) return false;
       if (state.rentable && !product.rentable) return false;
-      if (connected && min !== undefined && Number.isFinite(min) && (product.price <= 0 || product.price < min)) return false;
-      if (connected && max !== undefined && Number.isFinite(max) && (product.price <= 0 || product.price > max)) return false;
+      if (connected && comparableCurrency && min !== undefined && Number.isFinite(min) && (product.price <= 0 || String(product.currency || "").toUpperCase() !== comparableCurrency || product.price < min)) return false;
+      if (connected && comparableCurrency && max !== undefined && Number.isFinite(max) && (product.price <= 0 || String(product.currency || "").toUpperCase() !== comparableCurrency || product.price > max)) return false;
       for (const [key, selections] of Object.entries(state.attributes)) {
         if (selections.length && !selections.includes(product.specs?.[key] || "")) return false;
       }
       return true;
     });
 
-    if (state.sort === "price-asc") result.sort((a, b) => (a.price || Number.MAX_SAFE_INTEGER) - (b.price || Number.MAX_SAFE_INTEGER));
-    else if (state.sort === "price-desc") result.sort((a, b) => (b.price || 0) - (a.price || 0));
+    if (comparableCurrency && state.sort === "price-asc") result.sort((a, b) => (a.price || Number.MAX_SAFE_INTEGER) - (b.price || Number.MAX_SAFE_INTEGER));
+    else if (comparableCurrency && state.sort === "price-desc") result.sort((a, b) => (b.price || 0) - (a.price || 0));
     else if (state.sort === "name") result.sort((a, b) => a.name.localeCompare(b.name));
     else if (state.sort === "availability") result.sort((a, b) => getAvailabilityGroup(a).localeCompare(getAvailabilityGroup(b)));
     return result;
-  }, [connected, items, state]);
+  }, [comparableCurrency, connected, items, state]);
 
   const activeFilters = [
     ...state.categories.map((value) => ["Category", value] as const),
@@ -266,9 +287,10 @@ function ProductResults({
 
   const filterPanel = (
     <div className="sc-filter-panel__body">
-      {connected ? (
-        <fieldset><legend>Price range</legend><div className="sc-price-filter"><label>Minimum<input inputMode="decimal" value={state.minPrice} onChange={(event) => setState((previous) => ({ ...previous, minPrice: event.target.value.replace(/[^0-9.]/g, "") }))} placeholder="No minimum" /></label><label>Maximum<input inputMode="decimal" value={state.maxPrice} onChange={(event) => setState((previous) => ({ ...previous, maxPrice: event.target.value.replace(/[^0-9.]/g, "") }))} placeholder="No maximum" /></label></div></fieldset>
+      {connected && comparableCurrency ? (
+        <fieldset><legend>Price range ({comparableCurrency})</legend><div className="sc-price-filter"><label>Minimum<input inputMode="decimal" value={state.minPrice} onChange={(event) => setState((previous) => ({ ...previous, minPrice: event.target.value.replace(/[^0-9.]/g, "") }))} placeholder="No minimum" /></label><label>Maximum<input inputMode="decimal" value={state.maxPrice} onChange={(event) => setState((previous) => ({ ...previous, maxPrice: event.target.value.replace(/[^0-9.]/g, "") }))} placeholder="No maximum" /></label></div></fieldset>
       ) : null}
+      {mixedCurrencies ? <p>Price sorting and range filters are unavailable across mixed provider currencies.</p> : null}
       {categoryOptions.length > 1 ? <fieldset><legend>Category</legend>{categoryOptions.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={state.categories.includes(value)} onChange={() => setState((previous) => ({ ...previous, categories: toggled(previous.categories, value) }))} /><span>{value}</span></label>)}</fieldset> : null}
       {brandOptions.length ? <fieldset><legend>Brand</legend>{brandOptions.map((value) => <label className="sc-filter-check" key={value}><input type="checkbox" checked={state.brands.includes(value)} onChange={() => setState((previous) => ({ ...previous, brands: toggled(previous.brands, value) }))} /><span>{value}</span></label>)}</fieldset> : null}
       {connected ? <fieldset><legend>Availability</legend>{[["available", "Available"], ["limited", "Limited"], ["out", "Out of stock"]].map(([value, label]) => <label className="sc-filter-radio" key={value}><input type="radio" name="availability" checked={state.availability === value} onChange={() => setState((previous) => ({ ...previous, availability: previous.availability === value ? "" : value }))} /><span>{label}</span></label>)}</fieldset> : null}
@@ -298,7 +320,7 @@ function ProductResults({
         <div className="sc-product-discovery__toolbar">
           <button ref={filterTriggerRef} type="button" onClick={() => setFiltersOpen(true)}><Filter size={17} /> Filters {activeFilters.length ? `(${activeFilters.length})` : ""}</button>
           <strong aria-live="polite">{loadStatus === "loading" ? "Checking connected catalogue…" : `${visible.length} results`}</strong>
-          <label>Sort<select value={state.sort} onChange={(event) => setState((previous) => ({ ...previous, sort: event.target.value as SortMode }))}><option value="best">Best match</option>{connected ? <><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="availability">Availability</option></> : null}<option value="name">Name A–Z</option></select></label>
+          <label>Sort<select value={state.sort} onChange={(event) => setState((previous) => ({ ...previous, sort: event.target.value as SortMode }))}><option value="best">Best match</option>{connected && comparableCurrency ? <><option value="price-asc">Price: low to high ({comparableCurrency})</option><option value="price-desc">Price: high to low ({comparableCurrency})</option></> : null}{connected ? <option value="availability">Availability</option> : null}<option value="name">Name A–Z</option></select></label>
         </div>
         {activeFilters.length ? <div className="sc-active-filters" aria-label="Active filters">{activeFilters.map(([label, value]) => <button key={`${label}-${value}`} onClick={() => removeFilter(label, value)} type="button"><span>{label}: {value}</span><X size={13} /></button>)}<button className="is-clear" onClick={clearAll} type="button">Clear all</button></div> : null}
         <div className="sc-product-discovery__layout">
