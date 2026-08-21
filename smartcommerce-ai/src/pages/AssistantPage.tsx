@@ -164,6 +164,14 @@ function availabilitySummary(snapshot?: AdvisorProductAvailability) {
 function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailability }) {
   const summary = availabilitySummary(snapshot);
   if (!summary) return null;
+  const alternatives = (snapshot?.alternatives || []).slice(0, 2);
+  const alternativeText = alternatives.map((item) => {
+    const quantity = typeof item.quantityAvailable === "number" && Number.isFinite(item.quantityAvailable)
+      ? `, ${item.quantityAvailable} provider-listed available`
+      : "";
+    return `${item.branchName} — ${item.status.replace(/_/g, " ")}${quantity}`;
+  }).join("; ");
+
   return (
     <div className="sc-assistant-evidence sc-assistant-availability">
       <div>
@@ -171,6 +179,7 @@ function ProductAvailability({ snapshot }: { snapshot?: AdvisorProductAvailabili
         <strong>{summary.title}</strong>
       </div>
       <p>{summary.detail}</p>
+      {alternativeText ? <p><strong>Other provider-listed branch option{alternatives.length === 1 ? "" : "s"}:</strong> {alternativeText}.</p> : null}
     </div>
   );
 }
