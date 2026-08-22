@@ -79,6 +79,19 @@ WiPay is a candidate Jamaican rail because it advertises JMD/USD support, local-
 
 ---
 
+## 2026-08-22 — Payment buttons are server-capability gated
+
+### Decision
+A payment method must not become selectable because its frontend component exists. SmartCommerce will expose server-derived payment capabilities and only enable methods when the required merchant provider, webhook/verification credentials, and explicit environment enablement are present.
+
+### Current implementation
+`api/payment-capabilities.ts` reports capability state for Apple Pay, Google Pay, Click to Pay, card, PayPal, and Pay in Store. Primary-acquirer methods share one configuration gate where possible; PayPal and store-POS settlement remain independent rails.
+
+### Integrity rule
+Frontend redirects, device ownership, or the presence of a wallet logo are not proof that the method can process a real transaction. Production eligibility must be confirmed by the connected provider and server configuration.
+
+---
+
 ## Documentation policy adopted 2026-08-22
 
 For every material production feature, keep role-specific documentation for:
