@@ -92,6 +92,26 @@ Frontend redirects, device ownership, or the presence of a wallet logo are not p
 
 ---
 
+## 2026-08-22 — Checkout consumes verified capability state but adapters remain a second gate
+
+### Decision
+The customer checkout now reads `/api/payment-capabilities` and presents the supported payment families in one normalized panel. A method is still non-actionable until its SmartCommerce checkout adapter exists, even if merchant/provider configuration is present.
+
+### Why
+Merchant credentials prove that a rail may be configured; they do not prove that SmartCommerce has implemented initiation, return handling, webhook verification, idempotency, failure recovery, refunds, and reconciliation for that rail.
+
+### Current customer behavior
+- Apple Pay, Google Pay and Click to Pay are grouped as Express Checkout.
+- PayPal and card appear under other online methods.
+- Pay in Store appears as a branch settlement path.
+- Commercial Account Credit remains an independent, already validated flow.
+- If capability verification fails, no online payment method is enabled.
+
+### Production activation gate
+A method becomes genuinely selectable only after provider onboarding plus its payment initiation adapter, verified server confirmation, ledger posting, reconciliation mapping, refund behavior, and failure tests are complete.
+
+---
+
 ## Documentation policy adopted 2026-08-22
 
 For every material production feature, keep role-specific documentation for:
