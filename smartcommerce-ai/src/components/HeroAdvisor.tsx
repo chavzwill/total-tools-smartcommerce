@@ -11,7 +11,9 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { getCategories, getProducts } from "../data/products";
+import { slugify } from "../lib/format";
 import { go } from "../lib/router";
 
 const matchTerms = ["match this", "find this", "picture", "photo", "image search", "what is this", "do you have this"];
@@ -46,6 +48,33 @@ export default function HeroAdvisor({ prompt, setPrompt, onCommandFocusChange }:
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchMode, setSearchMode] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  const query = prompt.trim().toLowerCase();
+  const typedSuggestions = useMemo(() => {
+    if (query.length < 2) return { categories: [], products: [] };
+
+    const categories = getCategories()
+      .filter((category) => `${category.name} ${category.description || ""}`.toLowerCase().includes(query))
+      .slice(0, 3);
+
+    const products = getProducts()
+      .filter((product) => {
+        const haystack = [
+          product.name,
+          product.sku,
+          product.category,
+          product.department,
+          product.subcategory,
+          ...(product.tags || []),
+        ].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice(0, 4);
+
+    return { categories, products };
+  }, [query]);
+
+  const hasTypedSuggestions = typedSuggestions.categories.length > 0 || typedSuggestions.products.length > 0;
 
   useEffect(() => {
     if (!searchMode) return;
@@ -105,6 +134,13 @@ export default function HeroAdvisor({ prompt, setPrompt, onCommandFocusChange }:
     inputRef.current?.focus();
   }
 
+  function openSuggestion(href: string, value?: string) {
+    if (value) rememberSearch(value);
+    setSearchMode(false);
+    onCommandFocusChange?.(false);
+    go(href);
+  }
+
   return (
     <div
       className={`v2-command${searchMode ? " is-search-mode" : ""}`}
@@ -147,38 +183,75 @@ export default function HeroAdvisor({ prompt, setPrompt, onCommandFocusChange }:
       <div className="v2-command__hint"><span>Natural search</span><span>Photo match</span><span>Voice-assisted</span><span>Live data when connected</span></div>
 
       <div className="v2-command__search-content">
-        {recentSearches.length > 0 ? (
-          <section className="v2-command__recent" aria-labelledby="recent-searches-title">
+        {query.length >= 2 ? (
+          <section className="v2-command__suggestions" aria-labelledby="search-suggestions-title">
             <div className="v2-command__section-head">
-              <h2 id="recent-searches-title">Recent searches</h2>
-              <button type="button" onClick={clearRecent}>Clear</button>
+              <h2 id="search-suggestions-title">Suggestions</h2>
             </div>
-            <div className="v2-command__recent-list">
-              {recentSearches.map((item) => (
-                <button type="button" key={item} onClick={() => useRecent(item)}>
-                  <Clock3 size={18} aria-hidden="true" />
-                  <span>{item}</span>
-                  <ArrowRight size={17} aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
-        <section className="v2-command__quick-paths" aria-labelledby="quick-paths-title">
-          <div className="v2-command__section-head">
-            <h2 id="quick-paths-title">Quick paths</h2>
-          </div>
-          <div className="v2-command__path-list">
-            {quickPaths.map(({ label, detail, href, icon: Icon }) => (
-              <button type="button" key={href} onClick={() => go(href)}>
-                <span className="v2-command__path-icon"><Icon size={20} aria-hidden="true" /></span>
-                <span><strong>{label}</strong><small>{detail}</small></span>
-                <ArrowRight size={18} aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        </section>
+            {hasTypedSuggestions ? (
+              <div className="v2-command__suggestion-list">
+                {typedSuggestions.categories.map((category) => (
+                  <button type="button" key={`category-${category.name}`} onClick={() => openSuggestion(`/category/${slugify(category.name)}`, category.name)}>
+                    <span className="v2-command__suggestion-icon"><PackageSearch size={19} aria-hidden="true" /></span>
+                    <span><strong>{category.name}</strong><small>Category</small></span>
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
+                ))}
+                {typedSuggestions.products.map((product) => (
+                  <button type="button" key={`product-${product.id}`} onClick={() => openSuggestion(`/product/${product.id}`, product.name)}>
+                    <span className="v2-command__suggestion-icon"><Search size={19} aria-hidden="true" /></span>
+                    <span><strong>{product.name}</strong><small>{product.category}{product.sku ? ` · ${product.sku}` : ""}</small></span>
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="v2-command__no-match">No direct catalogue match yet. SmartCommerce can still understand the job or problem you describe.</p>
+            )}
+
+            <button type="button" className="v2-command__search-all" onClick={() => openSuggestion(`/search?q=${encodeURIComponent(prompt.trim())}`, prompt.trim())}>
+              <Search size={18} aria-hidden="true" />
+              <span>Search all products for “{prompt.trim()}”</span>
+              <ArrowRight size={17} aria-hidden="true" />
+            </button>
+          </section>
+        ) : (
+          <>
+            {recentSearches.length > 0 ? (
+              <section className="v2-command__recent" aria-labelledby="recent-searches-title">
+                <div className="v2-command__section-head">
+                  <h2 id="recent-searches-title">Recent searches</h2>
+                  <button type="button" onClick={clearRecent}>Clear</button>
+                </div>
+                <div className="v2-command__recent-list">
+                  {recentSearches.map((item) => (
+                    <button type="button" key={item} onClick={() => useRecent(item)}>
+                      <Clock3 size={18} aria-hidden="true" />
+                      <span>{item}</span>
+                      <ArrowRight size={17} aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="v2-command__quick-paths" aria-labelledby="quick-paths-title">
+              <div className="v2-command__section-head">
+                <h2 id="quick-paths-title">Quick paths</h2>
+              </div>
+              <div className="v2-command__path-list">
+                {quickPaths.map(({ label, detail, href, icon: Icon }) => (
+                  <button type="button" key={href} onClick={() => openSuggestion(href)}>
+                    <span className="v2-command__path-icon"><Icon size={20} aria-hidden="true" /></span>
+                    <span><strong>{label}</strong><small>{detail}</small></span>
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );
