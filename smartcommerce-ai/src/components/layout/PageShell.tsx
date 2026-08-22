@@ -14,6 +14,7 @@ import "../../styles/assistant-experience.css";
 import "../../styles/product-match-experience.css";
 import "../../styles/accessibility-responsive.css";
 import "../../styles/search-modernization.css";
+import "../../styles/search-mode.css";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
