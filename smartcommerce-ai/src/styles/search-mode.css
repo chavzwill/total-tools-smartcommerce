@@ -163,12 +163,14 @@
   }
 
   .v2-command__recent-list,
-  .v2-command__path-list {
+  .v2-command__path-list,
+  .v2-command__suggestion-list {
     display: grid;
   }
 
   .v2-command__recent-list > button,
-  .v2-command__path-list > button {
+  .v2-command__path-list > button,
+  .v2-command__suggestion-list > button {
     width: 100%;
     border: 0;
     border-bottom: 1px solid rgba(7,17,12,.08);
@@ -200,7 +202,8 @@
     padding-bottom: 16px;
   }
 
-  .v2-command__path-list > button {
+  .v2-command__path-list > button,
+  .v2-command__suggestion-list > button {
     display: grid;
     grid-template-columns: 46px minmax(0,1fr) auto;
     align-items: center;
@@ -209,7 +212,8 @@
     padding: 7px 0;
   }
 
-  .v2-command__path-icon {
+  .v2-command__path-icon,
+  .v2-command__suggestion-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -220,20 +224,28 @@
     color: #075537;
   }
 
-  .v2-command__path-list > button > span:nth-child(2) {
+  .v2-command__suggestion-icon {
+    background: #f0f2ef;
+    color: #58645d;
+  }
+
+  .v2-command__path-list > button > span:nth-child(2),
+  .v2-command__suggestion-list > button > span:nth-child(2) {
     display: grid;
     gap: 3px;
     min-width: 0;
   }
 
-  .v2-command__path-list strong {
+  .v2-command__path-list strong,
+  .v2-command__suggestion-list strong {
     color: #07110c;
     font-size: 15px;
     font-weight: 820;
     letter-spacing: -.01em;
   }
 
-  .v2-command__path-list small {
+  .v2-command__path-list small,
+  .v2-command__suggestion-list small {
     overflow: hidden;
     color: #718078;
     font-size: 12px;
@@ -242,7 +254,48 @@
     white-space: nowrap;
   }
 
-  .v2-command__path-list > button > svg {
+  .v2-command__path-list > button > svg,
+  .v2-command__suggestion-list > button > svg {
+    color: #9aa39e;
+  }
+
+  .v2-command__suggestions {
+    padding-bottom: 18px;
+  }
+
+  .v2-command__no-match {
+    margin: 4px 0 14px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(7,17,12,.08);
+    color: #66736b;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .v2-command__search-all {
+    display: grid;
+    grid-template-columns: 28px minmax(0,1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 58px;
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid rgba(7,17,12,.08);
+    background: transparent;
+    color: #075537;
+    text-align: left;
+  }
+
+  .v2-command__search-all > span {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .v2-command__search-all > svg:last-child {
     color: #9aa39e;
   }
 
