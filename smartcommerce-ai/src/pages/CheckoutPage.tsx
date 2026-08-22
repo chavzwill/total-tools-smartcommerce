@@ -1,9 +1,11 @@
 import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, PackageCheck, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import PaymentMethodPanel from "../components/checkout/PaymentMethodPanel";
 import Container from "../components/shared/Container";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
 import { go, routeHref } from "../lib/router";
 import { listCommercialAccounts, type CommercialAccountSummary } from "../services/commercialAccountClient";
+import "../styles/payment-methods.css";
 
 type SettlementMode = "standard" | "commercial-credit";
 
@@ -109,12 +111,8 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
         const firstEligible = accounts.find(canUseCredit);
         setSelectedCommercialAccountId(firstEligible?.id || "");
       })
-      .catch(() => {
-        if (active) setCommercialAccounts([]);
-      })
-      .finally(() => {
-        if (active) setCommercialLoading(false);
-      });
+      .catch(() => { if (active) setCommercialAccounts([]); })
+      .finally(() => { if (active) setCommercialLoading(false); });
     return () => { active = false; };
   }, [quote, guest]);
 
@@ -172,7 +170,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             <div className="sc-checkout-settlement__options">
               <button type="button" className={settlementMode === "standard" ? "is-active" : ""} onClick={() => setSettlementMode("standard")}>
                 <CreditCard size={19} />
-                <span><strong>Standard payment</strong><small>Card/payment processor connection required.</small></span>
+                <span><strong>Pay now or at branch</strong><small>Available methods are verified from server configuration.</small></span>
               </button>
               {!guest ? <button type="button" className={settlementMode === "commercial-credit" ? "is-active" : ""} onClick={() => setSettlementMode("commercial-credit")}>
                 <BriefcaseBusiness size={19} />
@@ -181,10 +179,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             </div>
           </div>
 
-          {settlementMode === "standard" ? <>
-            <div className="sc-checkout-trust"><ShieldCheck size={22} /><div><strong>Payment capture is not connected yet.</strong><span>SmartCommerce will not collect card data or claim an order is paid until a real processor and webhook-confirmed paid-order flow are connected.</span></div></div>
-            <button disabled>Payment setup required</button>
-          </> : null}
+          {settlementMode === "standard" ? <PaymentMethodPanel /> : null}
 
           {settlementMode === "commercial-credit" && !guest ? (
             <div className="sc-commercial-credit-checkout">
