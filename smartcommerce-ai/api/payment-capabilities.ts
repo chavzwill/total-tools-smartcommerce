@@ -1,5 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
 type Capability = {
   id: "apple-pay" | "google-pay" | "click-to-pay" | "paypal" | "card" | "pay-in-store";
   enabled: boolean;
@@ -8,7 +6,19 @@ type Capability = {
 
 const configured = (value: string | undefined) => Boolean(value && value.trim());
 
-export default function handler(_request: VercelRequest, response: VercelResponse) {
+function send(response: any, status: number, payload: unknown) {
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Cache-Control", "no-store");
+  response.end(JSON.stringify(payload));
+}
+
+export default function handler(request: any, response: any) {
+  if (request.method !== "GET") {
+    response.setHeader("Allow", "GET");
+    return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Use GET for payment capabilities." } });
+  }
+
   const primaryAcquirerReady =
     configured(process.env.PAYMENT_PRIMARY_PROVIDER) &&
     configured(process.env.PAYMENT_WEBHOOK_SECRET);
@@ -57,8 +67,7 @@ export default function handler(_request: VercelRequest, response: VercelRespons
     },
   ];
 
-  response.setHeader("Cache-Control", "no-store");
-  response.status(200).json({
+  return send(response, 200, {
     capabilities: capabilities.map((capability) => capability.enabled ? { ...capability, reason: undefined } : capability),
     policy: {
       browserRedirectIsProofOfPayment: false,
