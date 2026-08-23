@@ -1,7 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { handlePlatformRestRequest } from "../backend/platformRestApi.js";
 import { createConfiguredTotalToolsPlatformService } from "../integrations/totalToolsPlatformRuntime.js";
-import { getDispatchOrigin } from "./deliveryOperationsConfig.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
 const platformService = createConfiguredTotalToolsPlatformService();
@@ -22,6 +21,14 @@ function trustedHeaders() {
   if (businessAccountId) headers.set("x-business-account-id", businessAccountId);
   if (providerId) headers.set("x-provider-id", providerId);
   return headers;
+}
+
+function configuredInventoryBranchId() {
+  return (
+    process.env.SMARTCOMMERCE_TOTAL_TOOLS_DEFAULT_BRANCH_ID?.trim() ||
+    process.env.SMARTCOMMERCE_FULFILMENT_BRANCH_ID?.trim() ||
+    undefined
+  );
 }
 
 type CartRow = { provider_item_id: string; quantity: number; item_type: string };
@@ -72,8 +79,7 @@ async function checkLine(productId: string, quantity: number, branchId?: string)
 
 export async function validateCustomerCartInventory(customerId: string) {
   const rows = await cartRows(customerId);
-  const origin = await getDispatchOrigin().catch(() => null as any);
-  const branchId = String(origin?.providerBranchId || "").trim() || undefined;
+  const branchId = configuredInventoryBranchId();
   const lines: CartInventoryLine[] = [];
   for (const row of rows) {
     if (row.item_type !== "product") {
@@ -86,7 +92,7 @@ export async function validateCustomerCartInventory(customerId: string) {
   return {
     verified: lines.length > 0 && blocking.length === 0,
     branchId: branchId || null,
-    originConfigured: Boolean(branchId),
+    branchConfigured: Boolean(branchId),
     lines,
     blocking,
     checkedAt: new Date().toISOString(),
