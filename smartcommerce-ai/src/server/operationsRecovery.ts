@@ -46,7 +46,7 @@ export type RecoveryMutation = {
 export async function listOperationsRecovery(limit = 100) {
   await ensureSchema();
   const safeLimit = Math.max(1, Math.min(300, Math.floor(limit || 100)));
-  return sql()`
+  const rows = await sql()`
     SELECT record_key,actor_id,operation,state,response_status,created_at,updated_at,expires_at,
            recovery_status,recovery_note,recovered_by_actor_id,recovered_at,recovery_reference
     FROM operations_mutation_idempotency
@@ -54,7 +54,8 @@ export async function listOperationsRecovery(limit = 100) {
       AND (response_status >= 500 OR updated_at < NOW() - INTERVAL '45 seconds')
     ORDER BY updated_at DESC
     LIMIT ${safeLimit}
-  ` as Promise<RecoveryMutation[]>;
+  `;
+  return rows as unknown as RecoveryMutation[];
 }
 
 export async function getOperationsRecovery(recordKey: string) {
@@ -65,7 +66,7 @@ export async function getOperationsRecovery(recordKey: string) {
     FROM operations_mutation_idempotency
     WHERE record_key=${recordKey}
     LIMIT 1
-  ` as RecoveryMutation[];
+  ` as unknown as RecoveryMutation[];
   return rows[0] || null;
 }
 
