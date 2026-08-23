@@ -4,6 +4,7 @@ import GuidedMode from "../components/guidance/GuidedMode";
 import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
+import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
@@ -181,7 +182,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -204,7 +205,7 @@ export default function OperationsPortalPage() {
         ) : section === "intelligence" ? (
           <ERPIntelligenceBoard />
         ) : section === "pos" ? (
-          <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>The protected operations gateway is ready for the existing checkout, drawer and transaction workflows. No duplicate payment engine is being created.</p></div>
+          <PointOfSaleWorkspace staff={staff} />
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
