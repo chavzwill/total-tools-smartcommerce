@@ -27,6 +27,16 @@ const RESOURCE_RULES: Record<string, ResourceRule> = {
   branches: { upstream: "branches", read: ["pos", "quotations", "transfers", "purchasing"] },
 };
 
+const BRANCH_FIELDS = [
+  "branch_id",
+  "source_branch_id",
+  "destination_branch_id",
+  "from_branch_id",
+  "to_branch_id",
+  "pickup_branch_id",
+  "dropoff_branch_id",
+] as const;
+
 function send(response: any, status: number, payload: unknown) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json");
@@ -135,6 +145,37 @@ function isMutation(method: string) {
   return !["GET", "HEAD", "OPTIONS"].includes(method);
 }
 
+function staffBranchScope(staff: NonNullable<ReturnType<typeof readStaffSession>>) {
+  const scope = new Set<string>();
+  for (const branch of Array.isArray(staff.branches) ? staff.branches : []) {
+    const id = String(branch?.id || "").trim();
+    if (id) scope.add(id);
+  }
+  if (staff.defaultBranchId) scope.add(String(staff.defaultBranchId));
+  return scope;
+}
+
+function requestedBranchIds(incoming: URL, jsonBody: Record<string, unknown> | null) {
+  const ids = new Set<string>();
+  for (const field of BRANCH_FIELDS) {
+    for (const value of incoming.searchParams.getAll(field)) {
+      const id = String(value || "").trim();
+      if (id) ids.add(id);
+    }
+    const raw = jsonBody?.[field];
+    if (Array.isArray(raw)) {
+      for (const value of raw) {
+        const id = String(value || "").trim();
+        if (id) ids.add(id);
+      }
+    } else {
+      const id = String(raw || "").trim();
+      if (id) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const segments = requestedSegments(request);
@@ -160,6 +201,24 @@ export default async function handler(request: any, response: any) {
     const contentType = firstHeader(request.headers?.["content-type"]);
     const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
     const jsonBody = parseJsonBody(body, contentType);
+    const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
+    const requestedBranches = requestedBranchIds(incoming, jsonBody);
+    if (requestedBranches.length) {
+      const scope = staffBranchScope(staff);
+      const denied = requestedBranches.filter((branchId) => !scope.has(branchId));
+      if (denied.length) {
+        await recordSecurityEvent({
+          request,
+          eventType: "staff_operations_branch_scope_denied",
+          eventStatus: "blocked",
+          riskLevel: "high",
+          subject: staff.employeeId,
+          metadata: { resource, method, requestedBranchCount: requestedBranches.length, deniedBranchCount: denied.length },
+        }).catch(() => undefined);
+        return send(response, 403, { success: false, error: { code: "STAFF_BRANCH_SCOPE_DENIED", message: "Your staff session does not allow access to one or more requested branches." } });
+      }
+    }
+
     if (resource === "transactions" && method === "POST" && segments.length === 1 && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
       return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
     }
@@ -214,7 +273,6 @@ export default async function handler(request: any, response: any) {
 
     const baseUrl = configuredPos();
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
-    const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
     const upstreamUrl = new URL(`${baseUrl}/api/${upstreamSegments.join("/")}`);
     incoming.searchParams.forEach((value, key) => { if (key !== "path") upstreamUrl.searchParams.append(key, value); });
     const headers: Record<string, string> = { Accept: "application/json" };
