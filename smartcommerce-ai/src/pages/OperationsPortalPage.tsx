@@ -3,6 +3,7 @@ import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } f
 import GuidedMode from "../components/guidance/GuidedMode";
 import CashDrawerLifecyclePanel from "../components/operations/CashDrawerLifecyclePanel";
 import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard";
+import IntegrationReviewCenter from "../components/operations/IntegrationReviewCenter";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import InventoryIntegrityPanel from "../components/operations/InventoryIntegrityPanel";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
@@ -46,10 +47,16 @@ function hasPermissionFamily(staff: StaffIdentity, key: string) {
   return staff.permissions[key] === true || Object.entries(staff.permissions).some(([permission, enabled]) => enabled && permission.startsWith(`${key}_`));
 }
 
+function canReviewIntegrations(staff: StaffIdentity) {
+  return ["reports", "quotations", "purchase_requests", "purchasing", "inventory", "rentals", "work_orders", "customers"]
+    .some((key) => hasPermissionFamily(staff, key));
+}
+
 function can(staff: StaffIdentity, section: OperationsSection) {
   if (section === "overview") return true;
   if (section === "intelligence") return ["reports", "inventory", "purchasing", "purchase_requests", "work_orders"].some((key) => hasPermissionFamily(staff, key));
-  const key: Record<Exclude<OperationsSection, "overview" | "intelligence">, string> = {
+  if (section === "reviews") return canReviewIntegrations(staff);
+  const key: Record<Exclude<OperationsSection, "overview" | "intelligence" | "reviews">, string> = {
     pos: "pos", repairs: "work_orders", technicians: "work_orders", inventory: "inventory",
     purchasing: "purchasing", quotes: "quotations", reports: "reports",
   };
@@ -87,7 +94,7 @@ export default function OperationsPortalPage() {
 
   const allowedSections = useMemo(() => {
     if (!staff) return ["overview"] as OperationsSection[];
-    return (["overview", "intelligence", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reports"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
+    return (["overview", "intelligence", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reviews", "reports"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
   }, [staff]);
 
   const loadSession = useCallback(async () => {
@@ -177,7 +184,7 @@ export default function OperationsPortalPage() {
   const title: Record<OperationsSection, string> = {
     overview: "Operations command center", intelligence: "ERP Intelligence", pos: "Point of sale", repairs: "Repair work orders",
     technicians: "Technician workspace", inventory: "Inventory control", purchasing: "Purchasing",
-    quotes: "Quotations", reports: "Reporting & Audit Center",
+    quotes: "Quotations", reviews: "Omnichannel Review & Approvals", reports: "Reporting & Audit Center",
   };
   const overdue = dashboard.activeWorkOrders.filter((row) => Number(row?.days_past_pickup_due || 0) > 0).length;
 
@@ -185,7 +192,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : section === "reports" ? "Report every operational event the POS records, with controlled exports and print-ready views" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : section === "reviews" ? "Review website, app and SmartCommerce exports before downstream POS processing" : section === "reports" ? "Report every operational event across POS, website, apps and connected systems, with controlled exports and print-ready views" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -211,6 +218,8 @@ export default function OperationsPortalPage() {
           <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /><TransactionServicePanel staff={staff} /></>
         ) : section === "quotes" ? (
           <QuotationWorkspace staff={staff} />
+        ) : section === "reviews" ? (
+          <IntegrationReviewCenter staff={staff} />
         ) : section === "reports" ? (
           <ReportingCenter staff={staff} />
         ) : selectedWorkOrder && section === "repairs" ? (
