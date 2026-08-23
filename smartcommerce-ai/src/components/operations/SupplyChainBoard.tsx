@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
 import PurchaseOrderLifecyclePanel from "./PurchaseOrderLifecyclePanel";
 import PurchaseOrderReceivingPanel from "./PurchaseOrderReceivingPanel";
+import PurchaseRequestReviewPanel from "./PurchaseRequestReviewPanel";
 import "../../styles/supply-chain-board.css";
 
 type Row = Record<string, any>;
@@ -28,7 +29,7 @@ export default function SupplyChainBoard() {
   const pendingPR=useMemo(()=>state.purchaseRequests.filter((row)=>["draft","submitted"].includes(String(row.status))).length,[state.purchaseRequests]);
   const openPO=useMemo(()=>state.purchaseOrders.filter((row)=>!["received","cancelled","closed"].includes(String(row.status))).length,[state.purchaseOrders]);
   const inTransit=useMemo(()=>state.transfers.filter((row)=>String(row.status)==="in_transit").length,[state.transfers]);
-  const rows=tab==="requests"?state.purchaseRequests:tab==="orders"?state.purchaseOrders:state.transfers;
+  const rows=tab==="transfers"?state.transfers:[];
   return <section className="sc-supply-chain" data-guide-id="supply-chain-board">
     <div className="sc-supply-chain__metrics">
       <article><ClipboardList size={18}/><span>Pending requests</span><strong>{pendingPR}</strong><small>Draft or submitted</small></article>
@@ -38,10 +39,10 @@ export default function SupplyChainBoard() {
     </div>
     <div className="sc-supply-chain__toolbar"><div>{(["requests","orders","transfers"] as const).map((key)=><button key={key} className={tab===key?"is-active":""} onClick={()=>setTab(key)}>{key==="requests"?"Purchase requests":key==="orders"?"Purchase orders":"Branch transfers"}</button>)}</div><button className="sc-supply-chain__refresh" onClick={()=>void load()} disabled={state.loading}><RefreshCw size={15}/>{state.loading?"Refreshing…":"Refresh"}</button></div>
     {state.error?<div className="sc-ops-empty is-error"><strong>Supply-chain data unavailable</strong><p>{state.error}</p></div>:null}
-    {tab === "orders" ? <><PurchaseOrderLifecyclePanel /><PurchaseOrderReceivingPanel /></> : <>
-      {!state.error && !rows.length && !state.loading?<div className="sc-ops-empty"><strong>No {tab.replace(/s$/,'')} records</strong><p>The board only shows records returned by the connected POS.</p></div>:null}
+    {tab === "requests" ? <PurchaseRequestReviewPanel /> : tab === "orders" ? <><PurchaseOrderLifecyclePanel /><PurchaseOrderReceivingPanel /></> : <>
+      {!state.error && !rows.length && !state.loading?<div className="sc-ops-empty"><strong>No transfer records</strong><p>The board only shows records returned by the connected POS.</p></div>:null}
       {rows.length?<div className="sc-supply-chain__list">{rows.map((row,index)=><article key={String(row.id??index)}>
-        <div><span>{tab==="requests"?(row.pr_number||`PR ${row.id}`):(row.transfer_number||`Transfer ${row.id}`)}</span><strong>{tab==="transfers"?`${row.from_branch_name||"Source"} → ${row.to_branch_name||"Destination"}`:(row.supplier_name||row.department||row.branch_name||"Total Tools")}</strong><small>{tab==="transfers"?(row.item_summary||"Inventory transfer"):(row.notes||row.request_type||"Purchasing record")}</small></div>
+        <div><span>{row.transfer_number||`Transfer ${row.id}`}</span><strong>{`${row.from_branch_name||"Source"} → ${row.to_branch_name||"Destination"}`}</strong><small>{row.item_summary||"Inventory transfer"}</small></div>
         <div><em className={`is-${String(row.status||"unknown")}`}>{label(row.status)}</em><small>{row.created_at||row.expected_date||row.required_date||""}</small></div>
       </article>)}</div>:null}
     </>}
