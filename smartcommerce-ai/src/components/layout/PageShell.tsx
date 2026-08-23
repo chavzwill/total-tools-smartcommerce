@@ -16,6 +16,7 @@ import "../../styles/accessibility-responsive.css";
 import "../../styles/search-modernization.css";
 import "../../styles/search-mode.css";
 import "../../styles/commerce-recovery.css";
+import "../../styles/commercial-mobile-fix.css";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
