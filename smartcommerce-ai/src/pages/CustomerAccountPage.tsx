@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
 import AccountRentalsPanel from "../components/account/AccountRentalsPanel";
+import AccountRepairsPanel from "../components/account/AccountRepairsPanel";
 import AccountOverviewAttention from "../components/account/AccountOverviewAttention";
 import "../styles/accountTabs.css";
 import {
@@ -199,7 +200,7 @@ export default function CustomerAccountPage() {
 
               {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage active equipment, return deadlines, extensions and rental history without leaving your account.</p></div><AccountRentalsPanel /></section>}
 
-              {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history.</p></div><div className="sc-account-placeholder"><Wrench size={28} /><h3>Repair tracking is coming online</h3><p>Once the repair system is connected, live repair status and approvals will be available here.</p></div></section>}
+              {accountTab === "repairs" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Repairs</span><h2>Your repairs</h2><p>Follow diagnostics, approvals, repair progress and completed service history imported from Total Tools operations.</p></div><AccountRepairsPanel /></section>}
 
               {accountTab === "commercial" && (
                 <section className="sc-account-tab-panel">
