@@ -97,8 +97,8 @@ export default async function handler(request: any, response: any) {
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (Number(error?.status) === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The request is too large." } });
-    if (error?.message === "INVALID_MANUAL_DELIVERY_PRICE") return send(response, 400, { error: { code: error.message, message: "Enter a valid customer delivery charge before pricing this review." } });
-    if (error?.message === "DELIVERY_REVIEW_NOT_FOUND") return send(response, 404, { error: { code: error.message, message: "That delivery review no longer exists." } });
+    if (error?.message === "INVALID_MANUAL_DELIVERY_PRICE") return send(response, 400, { error: { code: "INVALID_MANUAL_DELIVERY_PRICE", message: "Enter a valid customer delivery charge before pricing this review." } });
+    if (error?.message === "DELIVERY_REVIEW_NOT_FOUND") return send(response, 404, { error: { code: "DELIVERY_REVIEW_NOT_FOUND", message: "That delivery review no longer exists." } });
     console.error("delivery_reviews_api_error", { code: error instanceof Error ? error.message : "unknown" });
     return send(response, 503, { error: { code: "DELIVERY_REVIEWS_UNAVAILABLE", message: "Delivery reviews are temporarily unavailable.", retryable: true } });
   }
