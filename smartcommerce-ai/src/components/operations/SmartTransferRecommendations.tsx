@@ -55,6 +55,7 @@ const BASE_TARGET_DAYS = 45;
 const SOURCE_SAFETY_DAYS = 45;
 const LOW_COVER_DAYS = 21;
 const DETAIL_LIMIT = 80;
+const CREDIBLE_PO_STATUSES = new Set(["sent", "approved", "partial"]);
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function n(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
@@ -165,7 +166,7 @@ async function loadCommitments(): Promise<CommitmentState> {
   if (poResult.status === "fulfilled") {
     state.coverage.purchaseOrders = true;
     const now = Date.now();
-    const open = poResult.value.filter((row) => !["received", "cancelled", "closed"].includes(String(row.status || "")));
+    const open = poResult.value.filter((row) => CREDIBLE_PO_STATUSES.has(String(row.status || "")));
     for (const po of await settledDetails(open, (row) => `purchase-orders/${encodeURIComponent(String(row.id))}`)) {
       const expected = po.expected_date ? new Date(String(po.expected_date)).getTime() : NaN;
       if (!Number.isFinite(expected) || expected < now - 86400000) continue;
@@ -329,6 +330,6 @@ export default function SmartTransferRecommendations() {
       <p>{item.reason}</p>
       <div className="sc-smart-transfer__meta"><span>{item.destinationDirection} destination demand</span><span>{item.destinationTrendPct == null ? "No trend baseline" : `${item.destinationTrendPct > 0 ? "+" : ""}${Math.round(item.destinationTrendPct)}% vs prior 30d`}</span><span>{item.targetDays}-day target</span><span>{item.destinationForecastDaily.toFixed(2)} forecast units/day</span><span>{item.destinationDaysCover == null ? "No forecast cover" : `${item.destinationDaysCover.toFixed(1)} days effective cover`}</span><em className={`is-${item.confidence}`}>{item.confidence} confidence</em></div>
     </article>)}</div> : null}
-    <p className="sc-smart-transfer__footnote">Forecasting uses two complete 30-day movement windows, weights the recent window more heavily, and caps trend adjustment to reduce overreaction to one unusual period. Accelerating demand receives a longer target horizon; declining and stagnant demand receive shorter targets. Actual stock movement still requires the POS transfer workflow.</p>
+    <p className="sc-smart-transfer__footnote">Forecasting uses two complete 30-day movement windows, weights the recent window more heavily, and caps trend adjustment to reduce overreaction to one unusual period. Accelerating demand receives a longer target horizon; declining and stagnant demand receive shorter targets. Draft purchase orders are excluded from credible inbound until sent or approved. Actual stock movement still requires the POS transfer workflow.</p>
   </section>;
 }
