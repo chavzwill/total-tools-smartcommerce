@@ -1,5 +1,5 @@
 import { AlertTriangle, Clock3, ExternalLink, Timer, UserRound, Wrench } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../../styles/technician-live-board.css";
 
 type ActiveTask = {
@@ -27,25 +27,30 @@ function duration(totalMinutes: number) {
   return hours ? `${hours}h ${String(minutes).padStart(2, "0")}m` : `${minutes}m`;
 }
 
-function taskElapsed(task: ActiveTask, now: number) {
-  const started = task.started_at ? new Date(task.started_at).getTime() : NaN;
-  if (Number.isFinite(started)) return Math.max(0, (now - started) / 60000);
-  return Math.max(0, Number(task.elapsed_minutes || 0));
-}
-
 export default function TechnicianLiveBoard({ tasks, onOpenWorkOrder }: Props) {
+  const baselineAt = useRef(Date.now());
   const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    baselineAt.current = Date.now();
+    setNow(baselineAt.current);
+  }, [tasks]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(timer);
   }, []);
 
+  const elapsedFor = (task: ActiveTask) => {
+    const serverMinutes = Math.max(0, Number(task.elapsed_minutes || 0));
+    return serverMinutes + Math.max(0, now - baselineAt.current) / 60000;
+  };
+
   const summary = useMemo(() => {
     let over = 0;
     let elapsed = 0;
     tasks.forEach((task) => {
-      const current = taskElapsed(task, now);
+      const current = Math.max(0, Number(task.elapsed_minutes || 0)) + Math.max(0, now - baselineAt.current) / 60000;
       elapsed += current;
       const allowed = Number(task.allotted_minutes || 0);
       if (allowed > 0 && current > allowed) over += 1;
@@ -66,7 +71,7 @@ export default function TechnicianLiveBoard({ tasks, onOpenWorkOrder }: Props) {
       ) : (
         <div className="sc-tech-live__list">
           {tasks.map((task, index) => {
-            const elapsed = taskElapsed(task, now);
+            const elapsed = elapsedFor(task);
             const allowed = Math.max(0, Number(task.allotted_minutes || 0));
             const over = allowed > 0 && elapsed > allowed;
             const progress = allowed > 0 ? Math.min(100, (elapsed / allowed) * 100) : 0;
