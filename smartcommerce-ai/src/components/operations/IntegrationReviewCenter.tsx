@@ -1,11 +1,11 @@
-import { AlertCircle, CheckCircle2, Clock3, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { StaffIdentity } from "../../lib/staffOperations";
+import type { OperationsSection } from "./OperationsWorkspace";
 import "../../styles/integration-review-center.css";
 
 type Row = Record<string, any>;
-
-type ApiPayload = { success: boolean; data?: Row[]; error?: { message?: string } };
+type ApiPayload = { success: boolean; data?: Row | Row[]; destination?: Row; error?: { message?: string } };
 
 async function request(path = "", init?: RequestInit) {
   const response = await fetch(`/api/omnichannel${path}`, {
@@ -20,8 +20,9 @@ async function request(path = "", init?: RequestInit) {
 
 const titleCase = (value: unknown) => String(value || "—").replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 const formatDate = (value: unknown) => value ? new Intl.DateTimeFormat("en-JM", { dateStyle: "medium", timeStyle: "short" }).format(new Date(String(value))) : "—";
+const routableSections = new Set<OperationsSection>(["pos", "repairs", "rentals", "inventory", "purchasing", "quotes", "reports", "reviews"]);
 
-export default function IntegrationReviewCenter({ staff }: { staff: StaffIdentity }) {
+export default function IntegrationReviewCenter({ staff, onNavigate }: { staff: StaffIdentity; onNavigate?: (section: OperationsSection) => void }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,22 +46,37 @@ export default function IntegrationReviewCenter({ staff }: { staff: StaffIdentit
     total: rows.length,
     urgent: rows.filter((row) => ["high", "urgent", "critical"].includes(String(row.priority || "").toLowerCase())).length,
     pending: rows.filter((row) => ["received", "review_required"].includes(String(row.status))).length,
-    decided: rows.filter((row) => ["approved", "rejected"].includes(String(row.status))).length,
+    processing: rows.filter((row) => String(row.status) === "processing").length,
   }), [rows]);
 
   async function decide(row: Row, decision: "approved" | "rejected") {
     if (workingId) return;
     setWorkingId(String(row.id)); setError("");
     try {
-      await request("", { method: "PATCH", body: JSON.stringify({ id: row.id, itemType: row.item_type, decision, note: note[String(row.id)] || "" }) });
-      setRows((current) => current.filter((item) => item.id !== row.id));
+      const payload = await request("", { method: "PATCH", body: JSON.stringify({ action: "review", id: row.id, itemType: row.item_type, decision, note: note[String(row.id)] || "" }) });
+      const updated = payload?.data as Row;
+      if (filter === "review_required" || filter === "received") setRows((current) => current.filter((item) => item.id !== row.id));
+      else setRows((current) => current.map((item) => item.id === row.id ? updated : item));
+    } catch (e) { setError((e as Error).message); }
+    finally { setWorkingId(""); }
+  }
+
+  async function dispatch(row: Row) {
+    if (workingId) return;
+    setWorkingId(String(row.id)); setError("");
+    try {
+      const payload = await request("", { method: "PATCH", body: JSON.stringify({ action: "dispatch", id: row.id, itemType: row.item_type }) });
+      const updated = payload?.data as Row;
+      setRows((current) => current.map((item) => item.id === row.id ? updated : item));
+      const section = String(updated?.destination_section || payload?.destination?.section || "") as OperationsSection;
+      if (routableSections.has(section) && section !== "reviews") onNavigate?.(section);
     } catch (e) { setError((e as Error).message); }
     finally { setWorkingId(""); }
   }
 
   return <section className="sc-integration-review" data-guide-id="integration-review-center">
     <header className="sc-integration-review__header">
-      <div><span>Omnichannel control</span><h2>Manual Review & Approvals</h2><p>Website, app and SmartCommerce exports that require a human decision land here before downstream processing.</p></div>
+      <div><span>Omnichannel control</span><h2>Manual Review & Approvals</h2><p>Website, app and SmartCommerce exports are reviewed here, then explicitly routed into the correct operational workflow.</p></div>
       <button className="sc-button sc-button--secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} />Refresh</button>
     </header>
 
@@ -68,32 +84,43 @@ export default function IntegrationReviewCenter({ staff }: { staff: StaffIdentit
       <article><Clock3 size={18}/><span>Visible records</span><strong>{metrics.total}</strong></article>
       <article><AlertCircle size={18}/><span>Urgent / high</span><strong>{metrics.urgent}</strong></article>
       <article><ShieldCheck size={18}/><span>Awaiting decision</span><strong>{metrics.pending}</strong></article>
-      <article><CheckCircle2 size={18}/><span>Decided in view</span><strong>{metrics.decided}</strong></article>
+      <article><ArrowRight size={18}/><span>In processing</span><strong>{metrics.processing}</strong></article>
     </div>
 
     <div className="sc-integration-review__toolbar">
-      <label>Status<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="review_required">Needs review</option><option value="received">Received</option><option value="auto_accepted">Auto accepted</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="failed">Failed</option><option value="all">All</option></select></label>
-      <small>Signed decisions are recorded against employee {staff.employeeId}. Approval does not bypass downstream POS permission checks.</small>
+      <label>Status<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="review_required">Needs review</option><option value="received">Received</option><option value="auto_accepted">Auto accepted</option><option value="approved">Approved</option><option value="processing">Processing</option><option value="applied">Applied</option><option value="rejected">Rejected</option><option value="failed">Failed</option><option value="all">All</option></select></label>
+      <small>Approval authorizes the handoff. It does not silently mutate the POS; the destination workflow retains its own permissions and controls.</small>
     </div>
 
     {error ? <div className="sc-integration-review__error" role="alert"><AlertCircle size={16}/>{error}</div> : null}
-    {loading ? <div className="sc-integration-review__empty">Loading omnichannel intake…</div> : rows.length === 0 ? <div className="sc-integration-review__empty"><ShieldCheck size={24}/><strong>No records in this queue.</strong><span>New website/app exports requiring review will appear here automatically.</span></div> : (
+    {loading ? <div className="sc-integration-review__empty">Loading omnichannel intake…</div> : rows.length === 0 ? <div className="sc-integration-review__empty"><ShieldCheck size={24}/><strong>No records in this queue.</strong><span>New website/app/SmartCommerce exports will appear here automatically.</span></div> : (
       <div className="sc-integration-review__list">
         {rows.map((row) => <article key={String(row.id)} className="sc-integration-review__card">
           <div className="sc-integration-review__card-head"><div><span>{titleCase(row.source_channel)} · {titleCase(row.source_application)}</span><strong>{titleCase(row.item_type)}</strong></div><em data-status={String(row.status)}>{titleCase(row.status)}</em></div>
           <dl>
             <div><dt>Received</dt><dd>{formatDate(row.received_at)}</dd></div>
             <div><dt>External ref</dt><dd>{row.external_id || row.entity_id || "—"}</dd></div>
-            <div><dt>Entity</dt><dd>{titleCase(row.entity_type || row.item_type)}</dd></div>
             <div><dt>Priority</dt><dd>{titleCase(row.priority)}</dd></div>
+            <div><dt>Destination</dt><dd>{row.destination_label || titleCase(row.destination_section) || "Manual routing"}</dd></div>
           </dl>
           {row.review_reason ? <p className="sc-integration-review__reason"><strong>Why review is required:</strong> {String(row.review_reason)}</p> : null}
+          {row.processing_note ? <p className="sc-integration-review__reason"><strong>Routing instruction:</strong> {String(row.processing_note)}</p> : null}
           <details><summary>Inspect payload</summary><pre>{JSON.stringify(row.payload || {}, null, 2)}</pre></details>
-          {["received", "review_required", "auto_accepted"].includes(String(row.status)) ? <div className="sc-integration-review__decision">
+
+          {["received", "review_required"].includes(String(row.status)) ? <div className="sc-integration-review__decision">
             <textarea value={note[String(row.id)] || ""} onChange={(event) => setNote((current) => ({ ...current, [String(row.id)]: event.target.value }))} maxLength={1000} placeholder="Decision note / approval conditions (optional)" />
             <button type="button" className="sc-button sc-button--secondary" disabled={workingId === row.id} onClick={() => void decide(row, "rejected")}><XCircle size={15}/>Reject</button>
             <button type="button" className="sc-button sc-button--primary" disabled={workingId === row.id} onClick={() => void decide(row, "approved")}><CheckCircle2 size={15}/>Approve</button>
-          </div> : <p className="sc-integration-review__reviewed">Reviewed by {row.reviewer_employee_id || "system"} · {formatDate(row.reviewed_at)}</p>}
+          </div> : null}
+
+          {["approved", "auto_accepted"].includes(String(row.status)) ? <div className="sc-integration-review__decision">
+            <span>Authorized by {row.reviewer_employee_id || "policy"}. Send this record into {row.destination_label || "its registered workflow"}.</span>
+            <button type="button" className="sc-button sc-button--primary" disabled={workingId === row.id || row.destination_section === "reviews"} onClick={() => void dispatch(row)}><ArrowRight size={15}/>Route to {row.destination_label || "workflow"}</button>
+          </div> : null}
+
+          {String(row.status) === "processing" ? <div className="sc-integration-review__decision"><span>Dispatched by {row.dispatched_by_employee_id || "staff"} · {formatDate(row.dispatched_at)}</span>{routableSections.has(String(row.destination_section) as OperationsSection) && row.destination_section !== "reviews" ? <button type="button" className="sc-button sc-button--secondary" onClick={() => onNavigate?.(row.destination_section as OperationsSection)}><ArrowRight size={15}/>Open {row.destination_label || "workflow"}</button> : null}</div> : null}
+
+          {["applied", "failed", "rejected"].includes(String(row.status)) ? <p className="sc-integration-review__reviewed">{row.status === "rejected" ? `Reviewed by ${row.reviewer_employee_id || "system"} · ${formatDate(row.reviewed_at)}` : `${titleCase(row.status)}${row.downstream_reference ? ` · ${row.downstream_reference}` : ""}`}</p> : null}
         </article>)}
       </div>
     )}
