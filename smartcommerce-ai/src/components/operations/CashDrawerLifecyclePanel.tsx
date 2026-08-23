@@ -42,7 +42,7 @@ export default function CashDrawerLifecyclePanel({ staff }: { staff: StaffIdenti
       const active = Array.isArray(sessions) && sessions.length ? sessions[0] : null;
       if (!active) { setSession(null); setOpen(false); return; }
       const detail = await operationsRequest<Session>(`drawers/sessions/${encodeURIComponent(String(active.id))}`);
-      setSession(detail);
+      setSession({ ...active, ...detail });
     } catch (cause) { setError((cause as OperationsApiError).message || "Drawer session could not be loaded."); }
     finally { setLoading(false); }
   }
@@ -57,10 +57,11 @@ export default function CashDrawerLifecyclePanel({ staff }: { staff: StaffIdenti
         operationsRequest<Session>(`drawers/sessions/${encodeURIComponent(String(session.id))}`),
         operationsRequest<Denomination[]>("denominations?currency=JMD"),
       ]);
-      setSession(detail);
+      const merged = { ...session, ...detail };
+      setSession(merged);
       setDenominations((Array.isArray(denoms) ? denoms : []).filter((row) => n(row.value) > 0));
       const initial: Record<string, string> = {};
-      for (const method of methods) initial[method] = method === "cash" ? "" : String(n((detail.tenders || []).find((r) => String(r.payment_method) === method)?.total));
+      for (const method of methods) initial[method] = method === "cash" ? "" : String(n((merged.tenders || []).find((r) => String(r.payment_method) === method)?.total));
       setCounted(initial); setCounts({}); setNotes(""); setOpen(true);
     } catch (cause) { setError((cause as OperationsApiError).message || "Drawer reconciliation could not be prepared."); }
     finally { setLoading(false); }
