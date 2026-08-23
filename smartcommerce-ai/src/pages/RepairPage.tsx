@@ -149,17 +149,17 @@ export default function RepairPage() {
               <span>1</span>
               <div><strong>What are we repairing?</strong><small>Equipment and model information</small></div>
             </div>
-            <label>Equipment type
-              <input list="repair-equipment-options" required value={equipment} onChange={(event) => setEquipment(event.target.value)} placeholder="Eg. Pressure washer" />
+            <label htmlFor="repair-equipment">Equipment type
+              <input id="repair-equipment" list="repair-equipment-options" required value={equipment} onChange={(event) => setEquipment(event.target.value)} placeholder="Eg. Pressure washer" />
               <datalist id="repair-equipment-options">{repairs.map((repair) => <option key={repair.id} value={repair.toolType} />)}</datalist>
             </label>
-            <label>Model or serial number <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Optional if unknown" /></label>
+            <label htmlFor="repair-model">Model or serial number <input id="repair-model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Optional if unknown" /></label>
 
             <div className="sc-repair-next__step">
               <span>2</span>
               <div><strong>What is it doing?</strong><small>Describe the fault in your own words</small></div>
             </div>
-            <label>Describe the issue<textarea required value={issue} onChange={(event) => setIssue(event.target.value)} placeholder="For example: starts, loses pressure after a minute, then makes a rattling sound." /></label>
+            <label htmlFor="repair-issue">Describe the issue<textarea id="repair-issue" required value={issue} onChange={(event) => setIssue(event.target.value)} placeholder="For example: starts, loses pressure after a minute, then makes a rattling sound." /></label>
             {issueHints.length ? <div className="sc-repair-hints"><span>Common symptoms for this equipment</span>{issueHints.map((hint) => <button type="button" key={hint} onClick={() => setIssue(hint)}>{hint}</button>)}</div> : null}
             <p className="sc-flow-note">Photo attachments will appear here only after the connected service provider supports file transfer. SmartCommerce will not ask you to select files that it cannot submit.</p>
 
@@ -167,11 +167,11 @@ export default function RepairPage() {
               <span>3</span>
               <div><strong>Where and how should we contact you?</strong><small>Service location and follow-up</small></div>
             </div>
-            <label>Preferred branch<select value={branch} onChange={(event) => setBranch(event.target.value)}><option value="">No preference</option>{company.branches.map((item) => <option key={item.name} value={item.name}>{item.name} · {item.address}</option>)}</select></label>
-            <label>Preferred date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-            <label>Phone or email<input required value={contact} onChange={(event) => setContact(event.target.value)} placeholder="How should the service team contact you?" /></label>
+            <label htmlFor="repair-branch">Preferred branch<select id="repair-branch" value={branch} onChange={(event) => setBranch(event.target.value)}><option value="">No preference</option>{company.branches.map((item) => <option key={item.name} value={item.name}>{item.name} · {item.address}</option>)}</select></label>
+            <label htmlFor="repair-date">Preferred date<input id="repair-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+            <label htmlFor="repair-contact">Phone or email<input id="repair-contact" required value={contact} onChange={(event) => setContact(event.target.value)} placeholder="How should the service team contact you?" /></label>
 
-            <button type="submit" disabled={status === "submitting"}>{status === "submitting" ? <><Loader2 size={17} /> Sending request…</> : "Send repair request"}</button>
+            <button id="repair-submit" type="submit" disabled={status === "submitting"}>{status === "submitting" ? <><Loader2 size={17} /> Sending request…</> : "Send repair request"}</button>
             {status === "error" ? <p className="sc-flow-status is-error" role="status">{message}</p> : null}
             {status === "success" ? <p className="sc-flow-status is-success" role="status"><CheckCircle2 size={16} /> {message}</p> : null}
           </form>
