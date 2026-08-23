@@ -10,7 +10,7 @@ type ResourceRule = { upstream: string; read: PermissionRequirement; write?: Per
 const RESOURCE_RULES: Record<string, ResourceRule> = {
   "work-orders": { upstream: "work-orders", read: "work_orders", write: "work_orders" },
   employees: { upstream: "employees", read: "employees", write: "employees_edit" },
-  inventory: { upstream: "products", read: ["inventory", "pos"], write: "inventory_edit" },
+  inventory: { upstream: "products", read: ["inventory", "pos", "quotations"], write: "inventory_edit" },
   suppliers: { upstream: "suppliers", read: "suppliers", write: "suppliers_edit" },
   "purchase-requests": { upstream: "purchase-requests", read: "purchase_requests", write: "pr_create" },
   "purchase-orders": { upstream: "purchase-orders", read: "purchasing", write: "purchasing_create" },
@@ -21,8 +21,8 @@ const RESOURCE_RULES: Record<string, ResourceRule> = {
   denominations: { upstream: "denominations", read: "pos", write: "settings" },
   reports: { upstream: "reports", read: "reports" },
   rentals: { upstream: "rentals", read: "rentals", write: "rentals_manage_items" },
-  customers: { upstream: "customers", read: ["customers", "pos"], write: "customers_edit" },
-  branches: { upstream: "branches", read: "pos" },
+  customers: { upstream: "customers", read: ["customers", "pos", "quotations"], write: "customers_edit" },
+  branches: { upstream: "branches", read: ["pos", "quotations"] },
 };
 
 function send(response: any, status: number, payload: unknown) {
