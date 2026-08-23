@@ -4,7 +4,7 @@ import Container from "../components/shared/Container";
 import { createCustomerReturn, listCustomerReturns, type ReturnRequest } from "../services/returnsClient";
 import "../styles/returns.css";
 
-const STATUS_LABEL:Record<string,string>={requested:"Request received",under_review:"Under review",approved:"Approved",rejected:"Not approved",awaiting_item:"Awaiting item",received:"Item received",refund_pending:"Refund pending",refund_completed:"Refund completed",exchange_pending:"Exchange pending",exchange_completed:"Exchange completed",repair_pending:"Repair pending",store_credit_pending:"Store credit pending",closed:"Closed"};
+const STATUS_LABEL:Record<string,string>={requested:"Request received",under_review:"Under review",approved:"Approved",rejected:"Not approved",awaiting_item:"Awaiting item",received:"Item received",refund_pending:"Refund pending",refund_completed:"Refund completed",exchange_pending:"Exchange pending",exchange_completed:"Exchange completed",repair_pending:"Repair pending",repair_completed:"Repair completed",store_credit_pending:"Store credit pending",store_credit_completed:"Store credit completed",closed:"Closed"};
 function money(value:number|null|undefined,currency="JMD"){if(value==null)return "—";return new Intl.NumberFormat("en-JM",{style:"currency",currency}).format(Number(value)/100);}
 
 export default function ReturnsPage(){
@@ -14,7 +14,7 @@ export default function ReturnsPage(){
  useEffect(()=>{void refresh();},[]);
  async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);setError("");setSuccess("");try{const result=await createCustomerReturn({orderId:orderId.trim(),requestedResolution:resolution,reason,itemSummary:itemSummary.trim()||undefined,customerNotes:notes.trim()||undefined});setReturns((current)=>[result.return,...current.filter((item)=>item.id!==result.return.id)]);setSuccess("Your return request has been submitted for review.");setOrderId("");setItemSummary("");setNotes("");}catch(err:any){setError(err?.message||"We could not submit this return request.");}finally{setSaving(false);}}
  return <div className="sc-returns-page"><Container className="sc-returns-shell">
-  <header className="sc-returns-hero"><div><span className="sc-returns-kicker"><RotateCcw size={16}/> Returns & exchanges</span><h1>Resolve an order without the runaround.</h1><p>Start a return, exchange, repair assessment or store-credit request. SmartCommerce verifies the order belongs to your account before staff can review it.</p></div><a href="#/track-order">Track an order</a></header>
+  <header className="sc-returns-hero"><div><span className="sc-returns-kicker"><RotateCcw size={16}/> Returns & exchanges</span><h1>Resolve an order without the runaround.</h1><p>Start a return, exchange, repair assessment or store-credit request. SmartCommerce verifies the order belongs to your account before staff can review it.</p></div><a href="#/account/orders">View my orders</a></header>
   <div className="sc-returns-grid">
    <form className="sc-return-form" onSubmit={submit}><div className="sc-return-form__head"><div><strong>Start a request</strong><span>No refund is issued until staff verifies the order, item and payment path.</span></div><PackageCheck size={22}/></div>
     <label>Order reference<input value={orderId} onChange={(e)=>setOrderId(e.target.value)} placeholder="ord_…" required /></label>
