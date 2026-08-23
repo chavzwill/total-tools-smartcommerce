@@ -143,6 +143,8 @@ export function technicianPayPeriodFor(date: Date | string): TechnicianPayPeriod
   };
 }
 
+export const resolveTechnicianPayPeriod = technicianPayPeriodFor;
+
 export function nextTechnicianPayPeriod(period: TechnicianPayPeriod): TechnicianPayPeriod {
   const nextDay = new Date(`${period.end}T12:00:00Z`);
   nextDay.setUTCDate(nextDay.getUTCDate() + 1);
