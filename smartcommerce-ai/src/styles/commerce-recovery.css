@@ -1,0 +1,171 @@
+/* Commerce recovery and mobile legibility pass.
+   Loaded last so cart/checkout/account states remain readable even when older
+   presentation layers carry darker legacy rules. */
+
+.sc-order-summary {
+  background: #fffdf8 !important;
+  border: 1px solid #e6dfcf !important;
+  color: #17231b !important;
+  box-shadow: 0 16px 42px rgba(19, 35, 25, .07) !important;
+}
+
+.sc-order-summary :where(h1,h2,h3,strong,span,p,small) {
+  color: #17231b !important;
+}
+
+.sc-order-summary__eyebrow {
+  color: #177443 !important;
+}
+
+.sc-order-summary > div:not(.sc-order-summary__actions) {
+  border-color: rgba(23,35,27,.09) !important;
+}
+
+.sc-order-summary p,
+.sc-order-summary small {
+  color: #667169 !important;
+}
+
+.sc-order-summary .sc-checkout-primary {
+  background: #2f7f49 !important;
+  border-color: #2f7f49 !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(47,127,73,.16) !important;
+}
+
+.sc-order-summary .sc-checkout-secondary {
+  background: #fff !important;
+  border-color: #dce2dd !important;
+  color: #33453a !important;
+}
+
+.sc-checkout-intro button,
+.sc-checkout-back {
+  min-height: 46px;
+  padding: 0 17px;
+  border-radius: 14px !important;
+  font-weight: 800;
+}
+
+.sc-checkout-intro button:not(.sc-checkout-back) {
+  background: #2f7f49 !important;
+  color: #fff !important;
+  border: 1px solid #2f7f49 !important;
+}
+
+.sc-account-real--signed-out {
+  max-width: 680px !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__intro {
+  max-width: 560px;
+}
+
+.sc-account-real--signed-out .sc-account-real__tabs {
+  margin-top: 24px;
+}
+
+.sc-account-real--signed-out .sc-account-real__form {
+  padding: 22px !important;
+  border: 1px solid rgba(20,42,29,.09) !important;
+  border-radius: 20px !important;
+  background: #fff !important;
+  box-shadow: 0 12px 32px rgba(20,34,26,.045) !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__form label {
+  gap: 7px !important;
+  color: #314238 !important;
+  font-size: .88rem !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__form input {
+  min-height: 48px !important;
+  padding: 0 14px !important;
+  border: 1px solid #d8dfda !important;
+  border-radius: 13px !important;
+  background: #fff !important;
+  color: #18231c !important;
+  font-size: 16px !important;
+  box-shadow: none !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__form input:focus {
+  border-color: #55a16f !important;
+  box-shadow: 0 0 0 4px rgba(47,127,73,.09) !important;
+  outline: none !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__error {
+  padding: 11px 13px !important;
+  border: 1px solid rgba(160,49,42,.13) !important;
+  border-radius: 12px !important;
+  background: #fff5f3 !important;
+  color: #8f312b !important;
+  font-size: .82rem !important;
+  line-height: 1.4 !important;
+}
+
+.sc-account-real--signed-out .sc-account-real__form > button:last-child {
+  background: #2f7f49 !important;
+  color: #fff !important;
+  min-height: 50px !important;
+}
+
+@media (max-width: 760px) {
+  .sc-order-summary {
+    padding: 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .sc-order-summary h2 {
+    font-size: 1.45rem !important;
+  }
+
+  .sc-account-real.sc-account-real--signed-out {
+    width: calc(100% - 20px) !important;
+    padding: 22px 16px 28px !important;
+    border-radius: 22px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__intro {
+    gap: 7px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__intro > svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__intro h1 {
+    font-size: 2rem !important;
+    line-height: 1 !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__intro p {
+    margin: 3px 0 0 !important;
+    font-size: .9rem !important;
+    line-height: 1.48 !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__tabs {
+    margin: 18px 0 14px !important;
+    padding: 5px !important;
+    border-radius: 15px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__tabs button {
+    min-height: 44px !important;
+    border-radius: 11px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__form {
+    gap: 14px !important;
+    padding: 17px !important;
+    border-radius: 17px !important;
+  }
+
+  .sc-account-real--signed-out .sc-account-real__form button {
+    min-height: 48px !important;
+  }
+}
