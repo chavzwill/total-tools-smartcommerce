@@ -69,6 +69,13 @@ export type CompensationResult = {
   metrics: MetricResult[];
 };
 
+export type TechnicianPayPeriod = {
+  start: string;
+  end: string;
+  label: string;
+  cycle: "29-13" | "14-28";
+};
+
 export const DEFAULT_TECHNICIAN_PLAN: CompensationPlan = {
   id: "total-tools-technician-standard",
   version: 1,
@@ -97,6 +104,50 @@ export const DEFAULT_TECHNICIAN_PLAN: CompensationPlan = {
 };
 
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const isoDate = (year: number, monthIndex: number, day: number) => `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+export function technicianPayPeriodFor(date: Date | string): TechnicianPayPeriod {
+  const value = typeof date === "string" ? new Date(`${date.slice(0, 10)}T12:00:00Z`) : new Date(date.getTime());
+  if (Number.isNaN(value.getTime())) throw new Error("INVALID_PAY_PERIOD_DATE");
+  const year = value.getUTCFullYear();
+  const month = value.getUTCMonth();
+  const day = value.getUTCDate();
+
+  if (day >= 14 && day <= 28) {
+    return {
+      start: isoDate(year, month, 14),
+      end: isoDate(year, month, 28),
+      label: `${isoDate(year, month, 14)} to ${isoDate(year, month, 28)}`,
+      cycle: "14-28",
+    };
+  }
+
+  if (day >= 29) {
+    const nextMonth = month === 11 ? 0 : month + 1;
+    const nextYear = month === 11 ? year + 1 : year;
+    return {
+      start: isoDate(year, month, 29),
+      end: isoDate(nextYear, nextMonth, 13),
+      label: `${isoDate(year, month, 29)} to ${isoDate(nextYear, nextMonth, 13)}`,
+      cycle: "29-13",
+    };
+  }
+
+  const previousMonth = month === 0 ? 11 : month - 1;
+  const previousYear = month === 0 ? year - 1 : year;
+  return {
+    start: isoDate(previousYear, previousMonth, 29),
+    end: isoDate(year, month, 13),
+    label: `${isoDate(previousYear, previousMonth, 29)} to ${isoDate(year, month, 13)}`,
+    cycle: "29-13",
+  };
+}
+
+export function nextTechnicianPayPeriod(period: TechnicianPayPeriod): TechnicianPayPeriod {
+  const nextDay = new Date(`${period.end}T12:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  return technicianPayPeriodFor(nextDay);
+}
 
 function scoreMetric(rule: MetricRule, raw: number): number {
   const value = Number(raw);
