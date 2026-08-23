@@ -55,7 +55,7 @@ async function audit(context: MutationContext | null, eventType: string, eventSt
   await recordSecurityEvent({
     eventType,
     eventStatus,
-    riskLevel: eventStatus === "blocked" || eventStatus === "failed" ? "high" : "medium",
+    riskLevel: eventStatus === "blocked" || eventStatus === "failed" || eventStatus === "uncertain" ? "high" : "medium",
     subject: context.actorId,
     metadata: { operation: context.operation, ...metadata },
   }).catch(() => undefined);
@@ -123,12 +123,19 @@ export async function completeOperationsMutation(recordKey: string, status: numb
   await ensureSchema();
   const context = await mutationContext(recordKey);
   if (status >= 500) {
-    await audit(context, "staff_operations_mutation_upstream_failed", "failed", { recordKey: recordKey.slice(0, 16), responseStatus: status });
-    await sql()`DELETE FROM operations_mutation_idempotency WHERE record_key=${recordKey}`;
+    await sql()`UPDATE operations_mutation_idempotency SET response_status=${status},response_content_type=${contentType},response_body_base64=${body.toString("base64")},updated_at=NOW() WHERE record_key=${recordKey}`;
+    await audit(context, "staff_operations_mutation_outcome_uncertain", "uncertain", { recordKey: recordKey.slice(0, 16), responseStatus: status, reason: "upstream_server_error_after_write_attempt" });
     return;
   }
   await sql()`UPDATE operations_mutation_idempotency SET state='completed',response_status=${status},response_content_type=${contentType},response_body_base64=${body.toString("base64")},updated_at=NOW() WHERE record_key=${recordKey}`;
   await audit(context, "staff_operations_mutation_completed", status >= 400 ? "rejected" : "success", { recordKey: recordKey.slice(0, 16), responseStatus: status });
+}
+
+export async function markOperationsMutationUncertain(recordKey: string, reason: string) {
+  await ensureSchema();
+  const context = await mutationContext(recordKey);
+  await sql()`UPDATE operations_mutation_idempotency SET updated_at=NOW() WHERE record_key=${recordKey}`;
+  await audit(context, "staff_operations_mutation_outcome_uncertain", "uncertain", { recordKey: recordKey.slice(0, 16), reason: String(reason || "upstream_outcome_unknown").slice(0, 160) });
 }
 
 export async function abandonOperationsMutation(recordKey: string) {
