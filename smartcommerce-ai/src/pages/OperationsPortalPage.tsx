@@ -6,6 +6,7 @@ import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard"
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
+import QuotationWorkspace from "../components/operations/QuotationWorkspace";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import TransactionServicePanel from "../components/operations/TransactionServicePanel";
@@ -32,7 +33,6 @@ const sectionResource: Partial<Record<OperationsSection, string>> = {
   repairs: "work-orders?view=active",
   technicians: "work-orders/active-tasks",
   inventory: "inventory",
-  quotes: "quotations",
   reports: "transactions",
 };
 
@@ -184,7 +184,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -208,6 +208,8 @@ export default function OperationsPortalPage() {
           <ERPIntelligenceBoard />
         ) : section === "pos" ? (
           <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /><TransactionServicePanel staff={staff} /></>
+        ) : section === "quotes" ? (
+          <QuotationWorkspace staff={staff} />
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
