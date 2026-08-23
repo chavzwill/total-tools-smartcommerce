@@ -61,6 +61,11 @@ export async function operationsRequest<T>(resourcePath: string, init?: RequestI
   return jsonRequest<T>(`/api/operations/${normalized}`, init);
 }
 
+export async function reportingRequest<T>(resourcePath: string): Promise<T> {
+  const normalized = resourcePath.replace(/^\/+/, "");
+  return jsonRequest<T>(`/api/reporting/${normalized}`);
+}
+
 export function listActiveWorkOrders() {
   return operationsRequest<any[]>("work-orders?view=active");
 }
