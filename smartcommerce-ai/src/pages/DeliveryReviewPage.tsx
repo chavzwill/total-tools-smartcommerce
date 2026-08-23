@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck, Loader2, LogOut, RefreshCw, ShieldCheck, Truck } from "lucide-react";
+import FulfilmentOriginPanel from "../components/operations/FulfilmentOriginPanel";
 import Container from "../components/shared/Container";
 import { getStaffSession, listDeliveryReviews, loginStaff, logoutStaff, priceDeliveryReview, type DeliveryReview, type StaffSessionSummary } from "../services/deliveryReviewClient";
 import "../styles/delivery-review.css";
@@ -125,6 +126,8 @@ export default function DeliveryReviewPage() {
 
   return <div className="sc-delivery-review-page"><Container className="sc-delivery-review-shell">
     <header className="sc-delivery-review-header"><div><div className="sc-delivery-review-badge"><Truck size={18} /> Manual logistics queue</div><h1>Delivery review</h1><p>Price large items, rentals and special-handling shipments without weakening merchandise-price revalidation.</p></div><div className="sc-delivery-review-user"><span>{staff.firstName || staff.username}{staff.role ? ` · ${staff.role}` : ""}</span><button type="button" onClick={signOut}><LogOut size={16} /> Sign out</button></div></header>
+
+    <FulfilmentOriginPanel />
 
     <section className="sc-delivery-review-toolbar"><div className="sc-delivery-review-tabs"><button type="button" className={status === "pending" ? "is-active" : ""} onClick={() => setStatus("pending")}>Pending</button><button type="button" className={status === "priced" ? "is-active" : ""} onClick={() => setStatus("priced")}>Priced</button><button type="button" className={status === "all" ? "is-active" : ""} onClick={() => setStatus("all")}>All</button></div><button type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "sc-spin" : ""} /> Refresh</button></section>
 
