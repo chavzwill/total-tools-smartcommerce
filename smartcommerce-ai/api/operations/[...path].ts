@@ -76,7 +76,6 @@ function requestedSegments(request: any) {
 function requiredPermission(method: string, rule: ResourceRule, segments: string[]): PermissionRequirement {
   if (method === "GET" || method === "HEAD") return rule.read;
   const joined = segments.join("/");
-
   if (segments[0] === "work-orders") {
     if (/\/confirm-parts(?:\/|$)/.test(joined) || /\/parts(?:\/|$)/.test(joined)) return "wo_assign_parts";
     if (/\/assessment-paid(?:\/|$)/.test(joined) || /\/deposit-paid(?:\/|$)/.test(joined) || /\/final-payment(?:\/|$)/.test(joined)) return ["wo_assess", "pos"];
@@ -86,7 +85,7 @@ function requiredPermission(method: string, rule: ResourceRule, segments: string
     if (method === "POST" && segments.length === 1) return "wo_intake";
   }
   if (segments[0] === "purchase-requests") {
-    if (/\/approve(?:\/|$)/.test(joined) || /\/status(?:\/|$)/.test(joined)) return "pr_approve";
+    if (/\/status(?:\/|$)/.test(joined) && method === "PATCH") return ["pr_create", "pr_approve"];
     if (/\/convert(?:\/|$)/.test(joined)) return "pr_convert";
   }
   if (segments[0] === "purchase-orders") {
@@ -118,9 +117,7 @@ function requiredPermission(method: string, rule: ResourceRule, segments: string
 }
 
 function hasRequiredPermission(staff: NonNullable<ReturnType<typeof readStaffSession>>, requirement: PermissionRequirement) {
-  return Array.isArray(requirement)
-    ? requirement.some((permission) => canStaff(staff, permission))
-    : canStaff(staff, requirement);
+  return Array.isArray(requirement) ? requirement.some((permission) => canStaff(staff, permission)) : canStaff(staff, requirement);
 }
 
 function parseJsonBody(body: Buffer | undefined, contentType: string | undefined) {
@@ -133,30 +130,25 @@ export default async function handler(request: any, response: any) {
   const segments = requestedSegments(request);
   const resource = segments[0] || "";
   const rule = RESOURCE_RULES[resource];
-
   if (!rule) return send(response, 404, { success: false, error: { code: "OPERATIONS_ROUTE_NOT_FOUND", message: "That operations resource is not exposed." } });
   if (!["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(method)) return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "That method is not allowed." } });
   if (!sameOrigin(request)) {
     await recordSecurityEvent({ request, eventType: "staff_operations_origin_rejected", eventStatus: "blocked", riskLevel: "high" }).catch(() => undefined);
     return send(response, 403, { success: false, error: { code: "ORIGIN_REJECTED", message: "This request was rejected." } });
   }
-
   const token = parseCookie(firstHeader(request.headers?.cookie))[STAFF_COOKIE_NAME];
   const staff = readStaffSession(token);
   if (!staff) return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
-
   const permission = requiredPermission(method, rule, segments);
   if (!hasRequiredPermission(staff, permission)) {
     const permissionLabel = Array.isArray(permission) ? permission.join(" OR ") : permission;
     await recordSecurityEvent({ request, eventType: "staff_operations_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { permission: permissionLabel, resource, method } }).catch(() => undefined);
     return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this operation.", details: { permission: permissionLabel } } });
   }
-
   try {
     const contentType = firstHeader(request.headers?.["content-type"]);
     const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
     const jsonBody = parseJsonBody(body, contentType);
-
     if (resource === "transactions" && method === "POST" && segments.length === 1 && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
       await recordSecurityEvent({ request, eventType: "staff_pos_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
       return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
@@ -168,18 +160,17 @@ export default async function handler(request: any, response: any) {
     if (resource === "quotations" && method === "PATCH" && segments[2] === "status") {
       const nextStatus = String(jsonBody?.status || "");
       const required = nextStatus === "accepted" || nextStatus === "declined" ? "quotations_approve" : "quotations_create";
-      if (!canStaff(staff, required)) {
-        await recordSecurityEvent({ request, eventType: "staff_quotation_status_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { status: nextStatus, permission: required } }).catch(() => undefined);
-        return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this quotation status change.", details: { permission: required } } });
-      }
+      if (!canStaff(staff, required)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this quotation status change.", details: { permission: required } } });
     }
     if (resource === "purchase-orders" && method === "PATCH" && segments[2] === "status") {
       const nextStatus = String(jsonBody?.status || "");
       const required = nextStatus === "approved" ? "purchasing_approve" : "purchasing_create";
-      if (!canStaff(staff, required)) {
-        await recordSecurityEvent({ request, eventType: "staff_purchase_order_status_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { status: nextStatus, permission: required } }).catch(() => undefined);
-        return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this purchase-order status change.", details: { permission: required } } });
-      }
+      if (!canStaff(staff, required)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this purchase-order status change.", details: { permission: required } } });
+    }
+    if (resource === "purchase-requests" && method === "PATCH" && segments[2] === "status") {
+      const nextStatus = String(jsonBody?.status || "");
+      const required = nextStatus === "approved" || nextStatus === "rejected" ? "pr_approve" : "pr_create";
+      if (!canStaff(staff, required)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this purchase-request status change.", details: { permission: required } } });
     }
 
     const baseUrl = configuredPos();
@@ -187,14 +178,12 @@ export default async function handler(request: any, response: any) {
     const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
     const upstreamUrl = new URL(`${baseUrl}/api/${upstreamSegments.join("/")}`);
     incoming.searchParams.forEach((value, key) => { if (key !== "path") upstreamUrl.searchParams.append(key, value); });
-
     const headers: Record<string, string> = { Accept: "application/json" };
     if (contentType) headers["Content-Type"] = contentType;
     const apiKey = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim();
     if (apiKey) headers["X-API-Key"] = apiKey;
     headers["X-SmartCommerce-Actor-Id"] = staff.employeeId;
     if (staff.defaultBranchId) headers["X-SmartCommerce-Branch-Id"] = staff.defaultBranchId;
-
     const requestFetch = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
