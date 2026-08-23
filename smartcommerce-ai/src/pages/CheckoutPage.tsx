@@ -2,6 +2,7 @@ import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, MapPin, PackageCh
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentMethodPanel from "../components/checkout/PaymentMethodPanel";
 import Container from "../components/shared/Container";
+import { bindCheckoutFulfilment, type BoundFulfilment, type CheckoutDeliveryAddress } from "../services/checkoutFulfilmentClient";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
 import { go, routeHref } from "../lib/router";
 import { listCommercialAccounts, type CommercialAccountSummary } from "../services/commercialAccountClient";
@@ -70,6 +71,20 @@ const canUseCredit = (account: CommercialAccountSummary) =>
   Boolean(account.payment_terms_code) &&
   ["owner", "admin", "buyer", "approver"].includes(account.role);
 
+const emptyAddress: CheckoutDeliveryAddress = {
+  type: "home",
+  recipientName: "",
+  phone: "",
+  line1: "",
+  line2: "",
+  city: "",
+  region: "",
+  postalCode: "",
+  countryCode: "JM",
+  siteName: "",
+  notes: "",
+};
+
 export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutItem[] }) {
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,6 +98,10 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState("");
   const [selectedDeliveryServiceId, setSelectedDeliveryServiceId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState<CheckoutDeliveryAddress>(emptyAddress);
+  const [boundFulfilment, setBoundFulfilment] = useState<BoundFulfilment | null>(null);
+  const [bindingLoading, setBindingLoading] = useState(false);
+  const [bindingError, setBindingError] = useState("");
   const [commercialAccounts, setCommercialAccounts] = useState<CommercialAccountSummary[]>([]);
   const [commercialLoading, setCommercialLoading] = useState(false);
   const [selectedCommercialAccountId, setSelectedCommercialAccountId] = useState("");
@@ -95,6 +114,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
     setError("");
     setRecoveryReason("unknown");
     setQuote(null);
+    setBoundFulfilment(null);
     try {
       const value = await createCheckoutQuote();
       setQuote(value);
@@ -129,6 +149,22 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const guest = quote?.checkoutMode === "guest";
 
   useEffect(() => {
+    if (!quote || guest || fulfilmentMode !== "pickup") return;
+    let active = true;
+    setBindingLoading(true);
+    setBindingError("");
+    bindCheckoutFulfilment({ quoteId: quote.id, mode: "pickup" })
+      .then((result) => {
+        if (!active) return;
+        setBoundFulfilment(result.fulfilment);
+        setQuote((current) => current ? { ...current, deliveryMinor: result.quote.deliveryMinor, totalMinor: result.quote.totalMinor } : current);
+      })
+      .catch((err: any) => { if (active) setBindingError(err?.message || "Pickup could not be confirmed."); })
+      .finally(() => { if (active) setBindingLoading(false); });
+    return () => { active = false; };
+  }, [quote?.id, guest, fulfilmentMode]);
+
+  useEffect(() => {
     if (!quote || fulfilmentMode !== "delivery") {
       setDeliveryQuote(null);
       setDeliveryError("");
@@ -159,7 +195,13 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
       .finally(() => { if (active) setDeliveryLoading(false); });
 
     return () => { active = false; };
-  }, [quote, fulfilmentMode, destinationClass, deliverySpeed]);
+  }, [quote?.id, fulfilmentMode, destinationClass, deliverySpeed]);
+
+  useEffect(() => {
+    if (fulfilmentMode !== "delivery") return;
+    setBoundFulfilment(null);
+    setBindingError("");
+  }, [fulfilmentMode, destinationClass, deliverySpeed, selectedDeliveryServiceId, deliveryAddress]);
 
   useEffect(() => {
     if (!quote || guest) {
@@ -179,7 +221,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
       .catch(() => { if (active) setCommercialAccounts([]); })
       .finally(() => { if (active) setCommercialLoading(false); });
     return () => { active = false; };
-  }, [quote, guest]);
+  }, [quote?.id, guest]);
 
   const expiresLabel = useMemo(() => quote ? new Date(quote.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "", [quote]);
   const eligibleCommercialAccounts = useMemo(() => commercialAccounts.filter(canUseCredit), [commercialAccounts]);
@@ -187,10 +229,41 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const selectedDeliveryOption = deliveryQuote?.status === "quoted"
     ? deliveryQuote.options.find((option) => option.serviceId === selectedDeliveryServiceId)
     : undefined;
-  const deliveryNeedsBinding = fulfilmentMode === "delivery";
+  const deliveryAddressComplete = Boolean(deliveryAddress.recipientName.trim() && deliveryAddress.phone.trim() && deliveryAddress.line1.trim() && deliveryAddress.city.trim() && deliveryAddress.region.trim());
+  const fulfilmentReady = guest
+    ? fulfilmentMode === "pickup"
+    : boundFulfilment?.status === "bound" && boundFulfilment.mode === fulfilmentMode;
+  const deliveryNeedsBinding = fulfilmentMode === "delivery" && !fulfilmentReady;
+
+  function updateAddress<K extends keyof CheckoutDeliveryAddress>(key: K, value: CheckoutDeliveryAddress[K]) {
+    setDeliveryAddress((current) => ({ ...current, [key]: value }));
+  }
+
+  async function finalizeDelivery() {
+    if (!quote || guest || !selectedDeliveryServiceId || !deliveryAddressComplete || bindingLoading) return;
+    setBindingLoading(true);
+    setBindingError("");
+    try {
+      const result = await bindCheckoutFulfilment({
+        quoteId: quote.id,
+        mode: "delivery",
+        serviceId: selectedDeliveryServiceId,
+        destinationClass,
+        requestedSpeed: deliverySpeed,
+        address: deliveryAddress,
+      });
+      setBoundFulfilment(result.fulfilment);
+      setQuote((current) => current ? { ...current, deliveryMinor: result.quote.deliveryMinor, totalMinor: result.quote.totalMinor } : current);
+    } catch (err: any) {
+      setBoundFulfilment(null);
+      setBindingError(err?.message || "Delivery could not be finalized.");
+    } finally {
+      setBindingLoading(false);
+    }
+  }
 
   async function placeOnCommercialCredit() {
-    if (!quote || guest || !selectedCommercialAccountId || creditSubmitting || deliveryNeedsBinding) return;
+    if (!quote || guest || !selectedCommercialAccountId || creditSubmitting || !fulfilmentReady) return;
     setCreditSubmitting(true);
     setCreditError("");
     try {
@@ -257,24 +330,41 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
           <div className="sc-checkout-divider" />
           <div className="sc-checkout-line"><span>Subtotal</span><strong>{formatMinor(quote.subtotalMinor, quote.currency)}</strong></div>
           <div className="sc-checkout-line"><span>Tax</span><strong>{formatMinor(quote.taxMinor, quote.currency)}</strong></div>
-          <div className="sc-checkout-line"><span>Delivery</span><strong>{fulfilmentMode === "pickup" ? "Free pickup" : selectedDeliveryOption ? `${formatJmd(selectedDeliveryOption.customerChargeJmd)} estimate` : "Pending fulfilment"}</strong></div>
-          <div className="demo-cart-total"><span>Verified merchandise total</span><strong>{formatMinor(quote.totalMinor, quote.currency)}</strong></div>
+          <div className="sc-checkout-line"><span>Delivery</span><strong>{fulfilmentMode === "pickup" ? "Free pickup" : boundFulfilment?.status === "bound" && boundFulfilment.mode === "delivery" ? formatMinor(quote.deliveryMinor, quote.currency) : selectedDeliveryOption ? `${formatJmd(selectedDeliveryOption.customerChargeJmd)} estimate` : "Pending fulfilment"}</strong></div>
+          <div className="demo-cart-total"><span>{fulfilmentReady ? "Verified total" : "Verified merchandise total"}</span><strong>{formatMinor(quote.totalMinor, quote.currency)}</strong></div>
 
           <div className="sc-fulfilment" aria-label="Fulfilment method">
             <div className="sc-fulfilment__heading">
               <span className="sc-order-summary__eyebrow">How do you want your order?</span>
-              <p>Delivery pricing is calculated separately from merchandise and must be verified before final payment.</p>
+              <p>Delivery is revalidated server-side before it becomes part of the amount you can pay or charge to an account.</p>
             </div>
             <div className="sc-fulfilment__modes">
-              <button type="button" className={fulfilmentMode === "pickup" ? "is-active" : ""} onClick={() => setFulfilmentMode("pickup")}>
+              <button type="button" className={fulfilmentMode === "pickup" ? "is-active" : ""} onClick={() => { setFulfilmentMode("pickup"); setBoundFulfilment(null); setBindingError(""); }}>
                 <Store size={20} /><span><strong>Pick up in store</strong><small>No delivery charge. Branch readiness is confirmed before collection.</small></span>
               </button>
-              <button type="button" className={fulfilmentMode === "delivery" ? "is-active" : ""} onClick={() => setFulfilmentMode("delivery")}>
+              <button type="button" className={fulfilmentMode === "delivery" ? "is-active" : ""} onClick={() => { setFulfilmentMode("delivery"); setBoundFulfilment(null); setBindingError(""); }}>
                 <Truck size={20} /><span><strong>Deliver my order</strong><small>Small parcels can be courier-rated; large items and rentals go to manual logistics review.</small></span>
               </button>
             </div>
 
+            {fulfilmentMode === "pickup" && !guest ? <div className="sc-fulfilment__status">{bindingLoading ? <Loader2 size={18} className="sc-spin" /> : <CheckCircle2 size={18} />}<span>{bindingLoading ? "Confirming pickup on this quote…" : boundFulfilment?.status === "bound" ? "Pickup is attached to the verified checkout quote at J$0 delivery." : bindingError || "Pickup will be confirmed before order submission."}</span></div> : null}
+
             {fulfilmentMode === "delivery" ? <div className="sc-fulfilment__delivery">
+              <div className="sc-fulfilment__address">
+                <div className="sc-fulfilment__address-head"><MapPin size={18} /><div><strong>Delivery destination</strong><span>Use a home, business, or job-site address. This becomes part of the verified fulfilment record.</span></div></div>
+                <div className="sc-fulfilment__address-grid">
+                  <label>Address type<select value={deliveryAddress.type} onChange={(event) => updateAddress("type", event.target.value as CheckoutDeliveryAddress["type"])}><option value="home">Home</option><option value="business">Business</option><option value="job_site">Job site</option></select></label>
+                  {deliveryAddress.type === "job_site" ? <label>Job-site name<input value={deliveryAddress.siteName || ""} onChange={(event) => updateAddress("siteName", event.target.value)} placeholder="Eg. Half-Way Tree renovation" /></label> : null}
+                  <label>Recipient<input value={deliveryAddress.recipientName} onChange={(event) => updateAddress("recipientName", event.target.value)} autoComplete="name" /></label>
+                  <label>Phone<input value={deliveryAddress.phone} onChange={(event) => updateAddress("phone", event.target.value)} inputMode="tel" autoComplete="tel" /></label>
+                  <label className="is-wide">Street address<input value={deliveryAddress.line1} onChange={(event) => updateAddress("line1", event.target.value)} autoComplete="address-line1" /></label>
+                  <label className="is-wide">Address line 2 <span>(optional)</span><input value={deliveryAddress.line2 || ""} onChange={(event) => updateAddress("line2", event.target.value)} autoComplete="address-line2" /></label>
+                  <label>Town / city<input value={deliveryAddress.city} onChange={(event) => updateAddress("city", event.target.value)} autoComplete="address-level2" /></label>
+                  <label>Parish / region<input value={deliveryAddress.region} onChange={(event) => updateAddress("region", event.target.value)} autoComplete="address-level1" /></label>
+                  <label className="is-wide">Delivery notes <span>(optional)</span><textarea value={deliveryAddress.notes || ""} onChange={(event) => updateAddress("notes", event.target.value)} placeholder="Gate, landmark, site contact, access instructions…" rows={3} /></label>
+                </div>
+              </div>
+
               <div className="sc-fulfilment__controls">
                 <label><MapPin size={16} /> Delivery area
                   <select value={destinationClass} onChange={(event) => setDestinationClass(event.target.value as DeliveryDestinationClass)}>
@@ -291,7 +381,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                   </select>
                 </label>
               </div>
-              <p className="sc-fulfilment__estimate-note">Area selection gives a preliminary courier estimate. The final address/zone will be verified server-side before the delivery charge can be attached to the order.</p>
+              <p className="sc-fulfilment__estimate-note">The courier list is an estimate until you attach a service to the verified checkout quote. The server re-resolves product freight facts and recalculates the selected service before changing the order total.</p>
 
               {deliveryLoading ? <div className="sc-fulfilment__status"><Loader2 size={18} className="sc-spin" /><span>Checking parcel facts and courier rates…</span></div> : null}
               {deliveryError ? <div className="sc-fulfilment__manual"><strong>Delivery pricing is temporarily unavailable.</strong><span>{deliveryError}</span></div> : null}
@@ -302,8 +392,17 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                   <span><strong>{option.label}</strong><small>{option.mode === "door_to_door" ? "Door to door" : "Collection point / branch service"}</small></span>
                   <strong>{formatJmd(option.customerChargeJmd)}</strong>
                 </button>)}
-                <div className="sc-fulfilment__cost-note"><ShieldCheck size={16} /><span>Courier cost and our 20% operational markup are recorded separately for reconciliation. This estimate is not added to the authoritative order total until final address verification.</span></div>
+                <div className="sc-fulfilment__cost-note"><ShieldCheck size={16} /><span>Courier cost and our 20% operational markup are recorded separately for reconciliation.</span></div>
               </div> : null}
+
+              {guest ? <div className="sc-fulfilment__manual"><strong>Guest delivery finalization is the next checkout adapter.</strong><span>You can review courier estimates now, but SmartCommerce will not pretend an estimate is a payable delivery charge until the guest-order binding contract is implemented.</span></div> : <>
+                {boundFulfilment?.status === "manual_review" ? <div className="sc-fulfilment__manual"><strong>Sent for manual logistics review.</strong><span>{boundFulfilment.message}</span><small>Your address and delivery request were recorded with the checkout quote; payment remains blocked until staff set the final transport price.</small></div> : null}
+                {boundFulfilment?.status === "bound" && boundFulfilment.mode === "delivery" ? <div className="sc-fulfilment__verified"><CheckCircle2 size={18} /><div><strong>Delivery verified and attached.</strong><span>{boundFulfilment.serviceLabel} · {formatJmd(boundFulfilment.customerChargeJmd)}. The verified total above now includes delivery.</span></div></div> : null}
+                {bindingError ? <div className="sc-fulfilment__manual"><strong>Delivery was not attached.</strong><span>{bindingError}</span></div> : null}
+                <button type="button" className="sc-fulfilment__bind" disabled={!deliveryAddressComplete || !selectedDeliveryServiceId || bindingLoading || deliveryLoading} onClick={() => void finalizeDelivery()}>
+                  {bindingLoading ? <><Loader2 size={17} className="sc-spin" /> Verifying delivery…</> : <><ShieldCheck size={17} /> Verify & attach delivery</>}
+                </button>
+              </>}
             </div> : null}
           </div>
 
@@ -327,7 +426,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             <div className="sc-commercial-credit-checkout">
               <div className="sc-checkout-trust"><BriefcaseBusiness size={22} /><div><strong>Charge this purchase to an approved commercial account.</strong><span>SmartCommerce rechecks organisation verification, your purchasing authority, provider mapping, payment terms and approval thresholds on the server before the provider order is created.</span></div></div>
 
-              {deliveryNeedsBinding ? <div className="sc-fulfilment__manual"><strong>Delivery must be finalized first.</strong><span>Courier/manual delivery pricing has not yet been attached to the authoritative checkout quote, so SmartCommerce will not create a commercial-credit order with a zero or estimated delivery charge.</span></div> : null}
+              {!fulfilmentReady ? <div className="sc-fulfilment__manual"><strong>Fulfilment must be finalized first.</strong><span>{deliveryNeedsBinding ? "Verify and attach the selected delivery service before creating the order." : "SmartCommerce is still confirming pickup on the checkout quote."}</span></div> : null}
 
               {commercialLoading ? <p role="status"><Loader2 size={16} /> Checking commercial credit eligibility…</p> : eligibleCommercialAccounts.length ? <>
                 <label>Commercial account
@@ -340,7 +439,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                   <input value={purchaseOrderReference} onChange={(event) => setPurchaseOrderReference(event.target.value.slice(0, 120))} placeholder="Eg. PO-1048 or Kingston site" maxLength={120} />
                 </label>
                 {creditError ? <p className="sc-account-real__error" role="alert">{creditError}</p> : null}
-                <button type="button" disabled={!selectedCommercialAccountId || creditSubmitting || deliveryNeedsBinding} onClick={placeOnCommercialCredit}>{creditSubmitting ? <><Loader2 size={16} /> Submitting to provider…</> : "Place order on commercial credit"}</button>
+                <button type="button" disabled={!selectedCommercialAccountId || creditSubmitting || !fulfilmentReady} onClick={placeOnCommercialCredit}>{creditSubmitting ? <><Loader2 size={16} /> Submitting to provider…</> : "Place order on commercial credit"}</button>
                 <p className="sc-flow-note">This does not mark the invoice as paid. The provider creates the order on the organisation’s approved account terms.</p>
               </> : <div className="sc-commercial-credit-checkout__locked"><strong>No approved commercial credit account is available.</strong><p>Apply for a commercial account or complete organisation verification, purchasing authority and provider payment-term setup first.</p><a href={routeHref("/commercial?mode=credit")}>Open Commercial</a></div>}
             </div>
