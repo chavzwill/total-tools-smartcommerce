@@ -1,4 +1,4 @@
-import { AlertCircle, BadgeDollarSign, CheckCircle2, ClipboardCheck, PackageCheck, Save, ShieldCheck, XCircle } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, CheckCircle2, ClipboardCheck, Copy, Link2, PackageCheck, Save, ShieldCheck, XCircle } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
 import "../../styles/service-advisor.css";
@@ -22,6 +22,10 @@ async function authorizationRequest<T>(url: string, init?: RequestInit): Promise
   return payload as T;
 }
 
+function publicAuthorizationUrl(token: string) {
+  return `${window.location.origin}${window.location.pathname}#/repair-authorization?token=${encodeURIComponent(token)}`;
+}
+
 export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAssess = false, canAssignParts = false, onUpdated }: Props) {
   const [labor, setLabor] = useState(String(workOrder.estimate_labor || ""));
   const [consumables, setConsumables] = useState(String(workOrder.estimate_consumables || ""));
@@ -32,6 +36,8 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
   const [decisionNote, setDecisionNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [customerLink, setCustomerLink] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const partsTotal = useMemo(() => (workOrder.items || []).reduce((sum: number, item: any) => sum + Number(item.total || 0), 0), [workOrder.items]);
   const estimatedTotal = Number(workOrder.estimate_labor || 0) + Number(workOrder.estimate_consumables || 0) + partsTotal;
@@ -47,7 +53,7 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
     } catch { setAuths([]); }
   }
 
-  useEffect(() => { void loadAuthorizations(); }, [workOrder.id]);
+  useEffect(() => { setCustomerLink(""); setCopied(false); void loadAuthorizations(); }, [workOrder.id]);
 
   async function saveEstimate(event: FormEvent) {
     event.preventDefault();
@@ -62,12 +68,35 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
 
   async function requestAuthorization() {
     if (!canRequestAuthorization || !scope.trim() || busy) return;
-    setBusy("authorization"); setError("");
+    setBusy("authorization"); setError(""); setCopied(false);
     try {
-      await authorizationRequest(`/api/repair-authorizations?workOrderId=${encodeURIComponent(String(workOrder.id))}`, { method: "POST", body: JSON.stringify({ action: "request_authorization", laborAmount: Number(workOrder.estimate_labor || 0), consumablesAmount: Number(workOrder.estimate_consumables || 0), partsAmount: partsTotal, depositAmount: Number(workOrder.deposit_amount || 0), scopeText: scope.trim(), reason: latest ? "Revised repair scope / change order" : "Initial repair authorization" }) });
+      const result = await authorizationRequest<{ customerToken?: string }>(`/api/repair-authorizations?workOrderId=${encodeURIComponent(String(workOrder.id))}`, { method: "POST", body: JSON.stringify({ action: "request_authorization", laborAmount: Number(workOrder.estimate_labor || 0), consumablesAmount: Number(workOrder.estimate_consumables || 0), partsAmount: partsTotal, depositAmount: Number(workOrder.deposit_amount || 0), scopeText: scope.trim(), reason: latest ? "Revised repair scope / change order" : "Initial repair authorization" }) });
+      if (result.customerToken) setCustomerLink(publicAuthorizationUrl(result.customerToken));
       setScope(""); await loadAuthorizations();
     } catch (e) { setError(e instanceof Error ? e.message : "Authorization could not be requested."); }
     finally { setBusy(null); }
+  }
+
+  async function reissueCustomerLink() {
+    if (!latest || latest.status !== "pending" || busy) return;
+    setBusy("reissue-link"); setError(""); setCopied(false);
+    try {
+      const result = await authorizationRequest<{ customerToken: string }>(`/api/repair-authorizations?workOrderId=${encodeURIComponent(String(workOrder.id))}`, { method: "POST", body: JSON.stringify({ action: "reissue_customer_link", authorizationId: latest.id }) });
+      setCustomerLink(publicAuthorizationUrl(result.customerToken));
+      await loadAuthorizations();
+    } catch (e) { setError(e instanceof Error ? e.message : "A new customer link could not be issued."); }
+    finally { setBusy(null); }
+  }
+
+  async function copyCustomerLink() {
+    if (!customerLink) return;
+    try {
+      await navigator.clipboard.writeText(customerLink);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError("Copying is not available on this device. Press and hold the link to copy it manually.");
+    }
   }
 
   async function decide(decision: "approved" | "declined") {
@@ -75,7 +104,7 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
     setBusy(decision); setError("");
     try {
       await authorizationRequest(`/api/repair-authorizations?workOrderId=${encodeURIComponent(String(workOrder.id))}`, { method: "POST", body: JSON.stringify({ action: "record_decision", authorizationId: latest.id, decision, channel: "staff_recorded", note: decisionNote.trim() || null }) });
-      setDecisionNote(""); await loadAuthorizations();
+      setDecisionNote(""); setCustomerLink(""); await loadAuthorizations();
     } catch (e) { setError(e instanceof Error ? e.message : "Decision could not be recorded."); }
     finally { setBusy(null); }
   }
@@ -117,8 +146,13 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
       <button type="button" onClick={()=>void requestAuthorization()} disabled={!scope.trim() || busy === "authorization"}><ShieldCheck size={15}/>{busy === "authorization" ? "Issuing…" : latest ? "Issue change order" : "Request authorization"}</button>
     </div> : null}
 
+    {latest?.status === "pending" && canAssess ? <div className="sc-service-advisor__customer-link" data-guide-id="repair-authorization-link">
+      <div><Link2 size={17}/><div><strong>Secure customer approval link</strong><span>The token is never stored in plaintext. Reissuing invalidates the previous link.</span></div></div>
+      {customerLink ? <div className="sc-service-advisor__link-row"><input readOnly value={customerLink} aria-label="Customer repair authorization link"/><button type="button" onClick={()=>void copyCustomerLink()}><Copy size={15}/>{copied ? "Copied" : "Copy link"}</button></div> : <button type="button" onClick={()=>void reissueCustomerLink()} disabled={busy === "reissue-link"}><Link2 size={15}/>{busy === "reissue-link" ? "Issuing…" : "Generate new secure link"}</button>}
+    </div> : null}
+
     {latest?.status === "pending" && canAssess ? <div className="sc-service-advisor__decision">
-      <strong>Record customer decision</strong><input value={decisionNote} onChange={(e)=>setDecisionNote(e.target.value)} placeholder="Channel/reference/note (optional)"/>
+      <strong>Record customer decision manually</strong><input value={decisionNote} onChange={(e)=>setDecisionNote(e.target.value)} placeholder="Channel/reference/note (optional)"/>
       <button className="is-approve" type="button" onClick={()=>void decide("approved")} disabled={Boolean(busy)}><CheckCircle2 size={15}/>Approved</button>
       <button className="is-decline" type="button" onClick={()=>void decide("declined")} disabled={Boolean(busy)}><XCircle size={15}/>Declined</button>
     </div> : null}
