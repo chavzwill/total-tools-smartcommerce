@@ -1,7 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import GuidedMode from "../components/guidance/GuidedMode";
+import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
+import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
 import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
@@ -26,7 +28,6 @@ const sectionResource: Partial<Record<OperationsSection, string>> = {
   repairs: "work-orders?view=active",
   technicians: "work-orders/active-tasks",
   inventory: "inventory",
-  purchasing: "purchase-orders",
   quotes: "quotations",
   reports: "transactions",
 };
@@ -217,6 +218,10 @@ export default function OperationsPortalPage() {
             tasks={items as any[]}
             onOpenWorkOrder={(id) => { setSection("repairs"); window.setTimeout(() => setSelectedWorkOrder(id), 0); }}
           />
+        ) : section === "inventory" ? (
+          <InventoryControlBoard rows={items as Record<string, any>[]} onRefresh={() => void loadResource("inventory")} />
+        ) : section === "purchasing" ? (
+          <SupplyChainBoard />
         ) : (
           <div className="sc-ops-live-resource">
             <div className="sc-ops-live-resource__summary"><span>Connected POS records</span><strong>{items.length}</strong><small>No sample records are added by SmartCommerce.</small></div>
