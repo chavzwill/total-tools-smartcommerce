@@ -45,6 +45,8 @@ export default async function handler(request: any, response: any) {
       businessAccountId: present("SMARTCOMMERCE_BUSINESS_ACCOUNT_ID"),
       providerId: present("SMARTCOMMERCE_PROVIDER_ID"),
       inventoryBranchId: present("SMARTCOMMERCE_TOTAL_TOOLS_DEFAULT_BRANCH_ID") || present("SMARTCOMMERCE_FULFILMENT_BRANCH_ID"),
+      onlineEmployeeId: present("SMARTCOMMERCE_TOTAL_TOOLS_POS_ONLINE_EMPLOYEE_ID"),
+      writeGuardDatabase: present("SMARTCOMMERCE_DATABASE_URL") || present("DATABASE_URL"),
     };
     const health = await platformGet("/integrations/health");
     const branches = health.ok ? await platformGet("/branches") : { ok: false, status: 503, payload: null };
@@ -70,15 +72,32 @@ export default async function handler(request: any, response: any) {
         repairs: Boolean(capability.repairs),
         commercialQuotes: Boolean(capability.commercialQuotes),
       },
+      writeCompatibility: {
+        customerSync: Boolean(capability.customers),
+        pickupCommercialCreditOrders: Boolean(capability.customers && configured.onlineEmployeeId && configured.writeGuardDatabase),
+        deliveryOrders: false,
+        invoices: false,
+        safeguards: {
+          smartCommerceWriteGuard: true,
+          ambiguousWriteQuarantine: true,
+          exactCustomerDeduplication: true,
+          posNativeIdempotency: false,
+          explicitPosDeliveryCharge: false,
+        },
+      },
       blockers: [
         ...(!configured.posUrl ? ["POS_BASE_URL_NOT_CONFIGURED"] : []),
+        ...(!configured.apiKey ? ["POS_API_KEY_NOT_CONFIGURED"] : []),
         ...(!configured.businessAccountId ? ["BUSINESS_ACCOUNT_ID_NOT_CONFIGURED"] : []),
         ...(!configured.providerId ? ["PROVIDER_ID_NOT_CONFIGURED"] : []),
         ...(!configured.inventoryBranchId ? ["INVENTORY_BRANCH_NOT_CONFIGURED"] : []),
+        ...(!configured.onlineEmployeeId ? ["POS_ONLINE_EMPLOYEE_NOT_CONFIGURED"] : []),
+        ...(!configured.writeGuardDatabase ? ["POS_WRITE_GUARD_DATABASE_NOT_CONFIGURED"] : []),
         ...(!health.ok ? ["POS_HEALTH_CHECK_FAILED"] : []),
-        ...(capability.orders ? [] : ["POS_ORDER_WRITE_NOT_SUPPORTED"]),
-        ...(capability.invoices ? [] : ["POS_INVOICE_WRITE_NOT_SUPPORTED"]),
         ...(capability.customers ? [] : ["POS_CUSTOMER_WRITE_NOT_SUPPORTED"]),
+        "POS_NATIVE_IDEMPOTENCY_NOT_SUPPORTED",
+        "POS_DELIVERY_CHARGE_FIELD_NOT_SUPPORTED",
+        "POS_INVOICE_WRITE_NOT_SUPPORTED",
       ],
     });
   } catch (error: any) {
