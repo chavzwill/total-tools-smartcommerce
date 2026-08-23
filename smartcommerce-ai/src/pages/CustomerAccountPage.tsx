@@ -4,6 +4,7 @@ import Container from "../components/shared/Container";
 import AccountPasskeyPanel from "../components/account/AccountPasskeyPanel";
 import AccountRentalsPanel from "../components/account/AccountRentalsPanel";
 import AccountOverviewAttention from "../components/account/AccountOverviewAttention";
+import CustomerOrdersPage from "./CustomerOrdersPage";
 import "../styles/accountTabs.css";
 import {
   getCustomerAccount,
@@ -195,7 +196,7 @@ export default function CustomerAccountPage() {
                 </section>
               )}
 
-              {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
+              {accountTab === "orders" && <section className="sc-account-tab-panel sc-account-tab-panel--orders"><CustomerOrdersPage embedded /></section>}
 
               {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage active equipment, return deadlines, extensions and rental history without leaving your account.</p></div><AccountRentalsPanel /></section>}
 
