@@ -30,6 +30,11 @@ const sectionResource: Partial<Record<OperationsSection, string>> = {
   reports: "transactions",
 };
 
+function hasPermission(staff: StaffIdentity, key: string, parent?: string) {
+  if (Object.prototype.hasOwnProperty.call(staff.permissions, key)) return staff.permissions[key] === true;
+  return parent ? staff.permissions[parent] === true : staff.permissions[key] === true;
+}
+
 function can(staff: StaffIdentity, section: OperationsSection) {
   if (section === "overview") return true;
   const key: Record<Exclude<OperationsSection, "overview">, string> = {
@@ -192,7 +197,12 @@ export default function OperationsPortalPage() {
         ) : section === "pos" ? (
           <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>The protected operations gateway is ready for the existing checkout, drawer and transaction workflows. No duplicate payment engine is being created.</p></div>
         ) : selectedWorkOrder && section === "repairs" ? (
-          <WorkOrderDetailPanel workOrderId={selectedWorkOrder} onClose={() => setSelectedWorkOrder(null)} />
+          <WorkOrderDetailPanel
+            workOrderId={selectedWorkOrder}
+            onClose={() => setSelectedWorkOrder(null)}
+            staffEmployeeId={staff.employeeId}
+            canManageTasks={hasPermission(staff, "wo_technician", "work_orders")}
+          />
         ) : resource.loading ? (
           <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={22} /><strong>Loading live POS data…</strong></div>
         ) : resource.error ? (
