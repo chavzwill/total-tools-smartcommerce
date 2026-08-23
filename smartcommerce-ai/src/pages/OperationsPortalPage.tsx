@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import GuidedMode from "../components/guidance/GuidedMode";
+import CashDrawerLifecyclePanel from "../components/operations/CashDrawerLifecyclePanel";
 import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
@@ -205,7 +206,7 @@ export default function OperationsPortalPage() {
         ) : section === "intelligence" ? (
           <ERPIntelligenceBoard />
         ) : section === "pos" ? (
-          <PointOfSaleWorkspace staff={staff} />
+          <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /></>
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
