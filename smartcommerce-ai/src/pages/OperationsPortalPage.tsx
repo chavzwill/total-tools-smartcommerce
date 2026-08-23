@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import GuidedMode from "../components/guidance/GuidedMode";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
+import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
 import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
 import {
@@ -209,6 +210,11 @@ export default function OperationsPortalPage() {
           <div className="sc-ops-empty is-error"><AlertCircle size={20} /><strong>Live POS data unavailable</strong><p>{resource.error}</p><button className="sc-button sc-button--secondary" type="button" onClick={() => loadResource(section)}><RefreshCw size={16} />Retry</button></div>
         ) : section === "repairs" ? (
           <WorkOrderBoard rows={items as WorkOrderRow[]} currency="JMD" onOpen={setSelectedWorkOrder} />
+        ) : section === "technicians" ? (
+          <TechnicianLiveBoard
+            tasks={items as any[]}
+            onOpenWorkOrder={(id) => { setSection("repairs"); window.setTimeout(() => setSelectedWorkOrder(id), 0); }}
+          />
         ) : (
           <div className="sc-ops-live-resource">
             <div className="sc-ops-live-resource__summary"><span>Connected POS records</span><strong>{items.length}</strong><small>No sample records are added by SmartCommerce.</small></div>
