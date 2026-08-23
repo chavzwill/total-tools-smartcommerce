@@ -5,21 +5,22 @@ import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../.
 const MAX_BODY_BYTES = 128 * 1024;
 
 type PermissionRequirement = string | string[];
+type ResourceRule = { upstream: string; read: PermissionRequirement; write?: PermissionRequirement };
 
-const RESOURCE_RULES: Record<string, { upstream: string; read: string; write?: string }> = {
+const RESOURCE_RULES: Record<string, ResourceRule> = {
   "work-orders": { upstream: "work-orders", read: "work_orders", write: "work_orders" },
   employees: { upstream: "employees", read: "employees", write: "employees_edit" },
-  inventory: { upstream: "products", read: "inventory", write: "inventory_edit" },
+  inventory: { upstream: "products", read: ["inventory", "pos"], write: "inventory_edit" },
   suppliers: { upstream: "suppliers", read: "suppliers", write: "suppliers_edit" },
   "purchase-requests": { upstream: "purchase-requests", read: "purchase_requests", write: "pr_create" },
   "purchase-orders": { upstream: "purchase-orders", read: "purchasing", write: "purchasing_create" },
   transfers: { upstream: "transfers", read: "transfers", write: "transfers_create" },
   quotations: { upstream: "quotations", read: "quotations", write: "quotations_create" },
-  transactions: { upstream: "transactions", read: "transactions", write: "transactions_refund" },
-  drawers: { upstream: "drawers", read: "drawers", write: "drawers_manage" },
+  transactions: { upstream: "transactions", read: ["transactions", "pos"], write: "pos" },
+  drawers: { upstream: "drawers", read: ["drawers", "pos"], write: "drawers" },
   reports: { upstream: "reports", read: "reports" },
   rentals: { upstream: "rentals", read: "rentals", write: "rentals_manage_items" },
-  customers: { upstream: "customers", read: "customers", write: "customers_edit" },
+  customers: { upstream: "customers", read: ["customers", "pos"], write: "customers_edit" },
   branches: { upstream: "branches", read: "pos" },
 };
 
@@ -71,10 +72,11 @@ function requestedSegments(request: any) {
   return pathname.replace(/^\/api\/operations\/?/, "").split("/").filter(Boolean);
 }
 
-function requiredPermission(method: string, rule: { read: string; write?: string }, segments: string[]): PermissionRequirement {
+function requiredPermission(method: string, rule: ResourceRule, segments: string[]): PermissionRequirement {
   if (method === "GET" || method === "HEAD") return rule.read;
+  const joined = segments.join("/");
+
   if (segments[0] === "work-orders") {
-    const joined = segments.join("/");
     if (/\/confirm-parts(?:\/|$)/.test(joined) || /\/parts(?:\/|$)/.test(joined)) return "wo_assign_parts";
     if (/\/assessment-paid(?:\/|$)/.test(joined) || /\/deposit-paid(?:\/|$)/.test(joined) || /\/final-payment(?:\/|$)/.test(joined)) return ["wo_assess", "pos"];
     if (/\/estimate(?:\/|$)/.test(joined) || /\/assessment(?:\/|$)/.test(joined)) return "wo_assess";
@@ -83,25 +85,30 @@ function requiredPermission(method: string, rule: { read: string; write?: string
     if (method === "POST" && segments.length === 1) return "wo_intake";
   }
   if (segments[0] === "purchase-requests") {
-    const joined = segments.join("/");
-    if (/\/approve(?:\/|$)/.test(joined)) return "pr_approve";
+    if (/\/approve(?:\/|$)/.test(joined) || /\/status(?:\/|$)/.test(joined)) return "pr_approve";
     if (/\/convert(?:\/|$)/.test(joined)) return "pr_convert";
   }
   if (segments[0] === "purchase-orders") {
-    const joined = segments.join("/");
-    if (/\/approve(?:\/|$)/.test(joined)) return "purchasing_approve";
     if (/\/receive(?:\/|$)/.test(joined)) return "purchasing_receive";
+    if (/\/status(?:\/|$)/.test(joined) && method === "PATCH") return ["purchasing_create", "purchasing_approve"];
   }
   if (segments[0] === "transfers") {
-    const joined = segments.join("/");
     if (/\/approve(?:\/|$)/.test(joined)) return "transfers_approve";
-    if (/\/pickup(?:\/|$)/.test(joined)) return "transfers_pickup";
+    if (/\/dispatch(?:\/|$)/.test(joined) || /\/pickup(?:\/|$)/.test(joined)) return "transfers_pickup";
     if (/\/dropoff|\/receive/.test(joined)) return "transfers_dropoff";
   }
   if (segments[0] === "quotations") {
-    const joined = segments.join("/");
     if (/\/approve(?:\/|$)/.test(joined)) return "quotations_approve";
     if (/\/convert(?:\/|$)/.test(joined)) return "quotations_convert";
+  }
+  if (segments[0] === "transactions") {
+    if (/\/hold(?:\/|$)/.test(joined)) return "pos_hold";
+    if (/\/refund(?:\/|$)|\/void(?:\/|$)/.test(joined)) return "transactions_refund";
+    if (method === "POST" && segments.length === 1) return "pos";
+  }
+  if (segments[0] === "drawers") {
+    if (segments[1] === "sessions") return "pos";
+    return rule.write || "drawers";
   }
   return rule.write || rule.read;
 }
@@ -118,12 +125,8 @@ export default async function handler(request: any, response: any) {
   const resource = segments[0] || "";
   const rule = RESOURCE_RULES[resource];
 
-  if (!rule) {
-    return send(response, 404, { success: false, error: { code: "OPERATIONS_ROUTE_NOT_FOUND", message: "That operations resource is not exposed." } });
-  }
-  if (!["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(method)) {
-    return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "That method is not allowed." } });
-  }
+  if (!rule) return send(response, 404, { success: false, error: { code: "OPERATIONS_ROUTE_NOT_FOUND", message: "That operations resource is not exposed." } });
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(method)) return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "That method is not allowed." } });
   if (!sameOrigin(request)) {
     await recordSecurityEvent({ request, eventType: "staff_operations_origin_rejected", eventStatus: "blocked", riskLevel: "high" }).catch(() => undefined);
     return send(response, 403, { success: false, error: { code: "ORIGIN_REJECTED", message: "This request was rejected." } });
@@ -131,9 +134,7 @@ export default async function handler(request: any, response: any) {
 
   const token = parseCookie(firstHeader(request.headers?.cookie))[STAFF_COOKIE_NAME];
   const staff = readStaffSession(token);
-  if (!staff) {
-    return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
-  }
+  if (!staff) return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
 
   const permission = requiredPermission(method, rule, segments);
   if (!hasRequiredPermission(staff, permission)) {
@@ -147,9 +148,7 @@ export default async function handler(request: any, response: any) {
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
     const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
     const upstreamUrl = new URL(`${baseUrl}/api/${upstreamSegments.join("/")}`);
-    incoming.searchParams.forEach((value, key) => {
-      if (key !== "path") upstreamUrl.searchParams.append(key, value);
-    });
+    incoming.searchParams.forEach((value, key) => { if (key !== "path") upstreamUrl.searchParams.append(key, value); });
 
     const headers: Record<string, string> = { Accept: "application/json" };
     const contentType = firstHeader(request.headers?.["content-type"]);
@@ -163,7 +162,6 @@ export default async function handler(request: any, response: any) {
     const requestFetch = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
-
     response.statusCode = upstream.status;
     response.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
     response.setHeader("Cache-Control", "no-store");
