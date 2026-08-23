@@ -8,6 +8,7 @@ import {
   setDefaultDeliveryAddress,
   type SavedDeliveryAddress,
 } from "../../services/customerAddressClient";
+import "../../styles/saved-delivery-addresses.css";
 
 export default function SavedDeliveryAddressPicker({
   value,
