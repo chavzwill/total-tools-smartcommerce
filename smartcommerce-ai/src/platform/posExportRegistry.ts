@@ -1,4 +1,5 @@
 import type { SmartCommercePosExportManifest } from "./posOperationsContracts";
+import { TECHNICIAN_EVIDENCE_EXPORT_CONTRACTS } from "./technicianEvidenceContracts";
 
 export const POS_EXPORT_SCHEMA_VERSION = "1.0" as const;
 
@@ -16,6 +17,12 @@ export const POS_EXPORT_CONTRACTS = [
   { name: "technician_skills", endpoint: "/api/platform/operations/technician-skills", status: "contract_only" },
   { name: "technician_schedule", endpoint: "/api/platform/operations/technician-schedule", status: "contract_only" },
   { name: "technician_performance", endpoint: "/api/platform/operations/technician-performance", status: "contract_only" },
+  ...TECHNICIAN_EVIDENCE_EXPORT_CONTRACTS.map((resource) => ({
+    name: resource.name,
+    endpoint: resource.endpoint,
+    status: "contract_only" as const,
+    requiredFor: resource.requiredFor,
+  })),
   { name: "suppliers", endpoint: "/api/platform/operations/suppliers", status: "contract_only" },
   { name: "purchase_requests", endpoint: "/api/platform/operations/purchase-requests", status: "contract_only" },
   { name: "purchase_orders", endpoint: "/api/platform/operations/purchase-orders", status: "contract_only" },
@@ -46,5 +53,6 @@ export const buildSmartCommercePosExportManifest = (input: {
     contract: "smartcommerce-pos-operations",
     plannedResourceCount: POS_EXPORT_CONTRACTS.filter((resource) => resource.status === "contract_only").length,
     partialResourceCount: POS_EXPORT_CONTRACTS.filter((resource) => resource.status === "partial").length,
+    technicianEvidenceContractCount: TECHNICIAN_EVIDENCE_EXPORT_CONTRACTS.length,
   },
 });
