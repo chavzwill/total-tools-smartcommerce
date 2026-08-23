@@ -32,11 +32,14 @@ const positiveInt = (...values: unknown[]) => Math.max(1, Math.trunc(numeric(...
 
 function array(value: unknown) { return Array.isArray(value) ? value as Row[] : []; }
 function itemRows(payload: Row) {
-  return array(payload.items).length ? array(payload.items)
+  const listed = array(payload.items).length ? array(payload.items)
     : array(payload.lines).length ? array(payload.lines)
     : array(payload.products).length ? array(payload.products)
     : array(payload.cart).length ? array(payload.cart)
     : [];
+  if (listed.length) return listed;
+  const hasSingleProduct = payload.product_id !== undefined || payload.productId !== undefined || payload.sku || payload.product_sku || payload.productSku || payload.product_name || payload.productName;
+  return hasSingleProduct ? [payload] : [];
 }
 
 function items(payload: Row): HandoffItem[] {
@@ -45,7 +48,7 @@ function items(payload: Row): HandoffItem[] {
     sku: text(row.sku, row.product_sku, row.productSku),
     name: text(row.product_name, row.productName, row.name),
     description: text(row.description, row.details),
-    quantity: positiveInt(row.quantity, row.qty),
+    quantity: positiveInt(row.quantity, row.qty, row.transfer_quantity, row.transferQuantity),
     unitPrice: numeric(row.unit_price, row.unitPrice, row.price, row.quoted_price),
   })).filter((row) => row.productId !== undefined || row.sku || row.name || row.description);
 }
@@ -70,16 +73,30 @@ export function normalizeOmnichannelHandoff(row: Row): TypedHandoff {
   const normalizedItems = items(payload);
   const customerId = payload.customer_id ?? payload.customerId ?? row.customer_id;
   const branchId = payload.branch_id ?? payload.branchId ?? row.branch_id;
+  const sourceBranchId = payload.source_branch_id ?? payload.sourceBranchId ?? payload.from_branch_id ?? payload.fromBranchId;
+  const destinationBranchId = payload.destination_branch_id ?? payload.destinationBranchId ?? payload.to_branch_id ?? payload.toBranchId;
+  const adjustment = numeric(payload.adjustment, payload.quantity_change, payload.quantityChange, payload.stock_adjustment, payload.stockAdjustment);
+  const reason = text(payload.reason, payload.adjustment_reason, payload.adjustmentReason, payload.review_reason);
   const externalReference = text(row.external_id, payload.external_reference, payload.externalReference, payload.reference);
   const notes = text(payload.notes, payload.note, payload.details, payload.description, row.processing_note);
   const missing: string[] = [];
   const warnings: string[] = [];
 
-  if (["quote", "purchase_request", "purchase_order", "transfer", "sale"].includes(kind) && !normalizedItems.length) missing.push("items");
+  if (["quote", "purchase_request", "purchase_order", "transfer", "inventory", "sale"].includes(kind) && !normalizedItems.length) missing.push(kind === "inventory" ? "product" : "items");
   if (["quote", "repair", "rental", "sale"].includes(kind) && !customerId) warnings.push("Customer is not linked to an authoritative POS customer record.");
-  if (["quote", "repair", "rental", "purchase_request", "purchase_order", "transfer", "inventory", "sale"].includes(kind) && !branchId) warnings.push("Branch was not supplied; the staff member's assigned branch must be confirmed.");
+  if (["quote", "repair", "rental", "purchase_request", "purchase_order", "inventory", "sale"].includes(kind) && !branchId) warnings.push("Branch was not supplied; the staff member's assigned branch must be confirmed.");
+  if (kind === "transfer") {
+    if (!sourceBranchId) missing.push("source branch");
+    if (!destinationBranchId) missing.push("destination branch");
+    if (sourceBranchId && destinationBranchId && String(sourceBranchId) === String(destinationBranchId)) missing.push("different destination branch");
+  }
+  if (kind === "inventory") {
+    if (adjustment === undefined || !Number.isInteger(adjustment) || adjustment === 0) missing.push("non-zero whole-number adjustment");
+    if (!reason) missing.push("adjustment reason");
+  }
   for (const item of normalizedItems) {
     if (item.productId === undefined && !item.sku) warnings.push(`Item ${item.name || item.description || "line"} is not linked to an authoritative product ID/SKU.`);
+    if (["transfer", "inventory"].includes(kind) && item.productId === undefined) warnings.push(`Item ${item.name || item.sku || "line"} must be linked to an authoritative POS product ID before stock can be changed.`);
     if (item.unitPrice !== undefined && item.unitPrice < 0) warnings.push("A negative supplied item price was ignored by destination validation.");
   }
 
@@ -93,12 +110,12 @@ export function normalizeOmnichannelHandoff(row: Row): TypedHandoff {
       issue: text(payload.issue, payload.problem, payload.fault, payload.description),
       priority: text(payload.priority, row.priority),
       supplierId: payload.supplier_id ?? payload.supplierId,
-      sourceBranchId: payload.source_branch_id ?? payload.sourceBranchId,
-      destinationBranchId: payload.destination_branch_id ?? payload.destinationBranchId,
-      adjustment: numeric(payload.adjustment, payload.quantity_change, payload.quantityChange),
-      reason: text(payload.reason, payload.review_reason),
+      sourceBranchId,
+      destinationBranchId,
+      adjustment,
+      reason,
     },
-    missing,
+    missing: Array.from(new Set(missing)),
     warnings: Array.from(new Set(warnings)),
   };
 }
