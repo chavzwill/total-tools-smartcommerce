@@ -4,6 +4,7 @@ import GuidedMode from "../components/guidance/GuidedMode";
 import CashDrawerLifecyclePanel from "../components/operations/CashDrawerLifecyclePanel";
 import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
+import InventoryIntegrityPanel from "../components/operations/InventoryIntegrityPanel";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
 import QuotationWorkspace from "../components/operations/QuotationWorkspace";
@@ -184,7 +185,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -231,7 +232,7 @@ export default function OperationsPortalPage() {
             onOpenWorkOrder={(id) => { setSection("repairs"); window.setTimeout(() => setSelectedWorkOrder(id), 0); }}
           />
         ) : section === "inventory" ? (
-          <InventoryControlBoard rows={items as Record<string, any>[]} onRefresh={() => void loadResource("inventory")} />
+          <><InventoryControlBoard rows={items as Record<string, any>[]} onRefresh={() => void loadResource("inventory")} /><InventoryIntegrityPanel products={items as Record<string, any>[]} onInventoryRefresh={() => void loadResource("inventory")} /></>
         ) : section === "purchasing" ? (
           <SupplyChainBoard />
         ) : (
