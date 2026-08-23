@@ -1,10 +1,11 @@
 import { parseCookie, readStaffSession, STAFF_COOKIE_NAME, canStaff } from "../src/server/staffSession.js";
-import { listDeliveryLifecycles, updateDeliveryLifecycle, type DeliveryLifecycleStatus } from "../src/server/deliveryLifecycleStore.js";
+import { listDeliveryLifecycles, updateDeliveryLifecycle, type DeliveryLifecycleStatus, type DeliveryProofMethod } from "../src/server/deliveryLifecycleStore.js";
 import { enqueueLatestDeliveryEventNotification } from "../src/server/deliveryNotificationOutbox.js";
 import { enforceDurableRateLimit, requestIp } from "../src/server/securityInfrastructure.js";
 
 const MAX_BODY_BYTES = 20_000;
 const VALID = new Set<DeliveryLifecycleStatus>(["order_received","preparing","ready_for_collection","dispatched","out_for_delivery","delivered","collected","exception"]);
+const VALID_PROOF = new Set<DeliveryProofMethod>(["recipient_acknowledgement","signed_docket","photo_evidence","courier_confirmation","collection_receipt"]);
 
 function firstHeader(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function send(response: any, status: number, payload: unknown) {
@@ -55,7 +56,12 @@ export default async function handler(request: any, response: any) {
     const input = await readBody(request);
     const orderId = clean(input.orderId, 180);
     const status = clean(input.status, 40) as DeliveryLifecycleStatus;
+    const proofMethodRaw = clean(input.proofMethod, 40) as DeliveryProofMethod;
     if (!orderId || !VALID.has(status)) return send(response, 400, { error: { code: "INVALID_DELIVERY_UPDATE", message: "A valid order and delivery status are required." } });
+    if (["delivered","collected"].includes(status) && proofMethodRaw && !VALID_PROOF.has(proofMethodRaw)) {
+      return send(response, 400, { error: { code: "INVALID_DELIVERY_PROOF", message: "Choose a valid proof-of-completion method." } });
+    }
+
     const delivery = await updateDeliveryLifecycle({
       orderId,
       status,
@@ -68,6 +74,7 @@ export default async function handler(request: any, response: any) {
       scheduledFor: input.scheduledFor ? new Date(input.scheduledFor).toISOString() : null,
       exceptionMessage: clean(input.exceptionMessage, 500),
       proofRecipientName: clean(input.proofRecipientName, 120),
+      proofMethod: proofMethodRaw || undefined,
       proofReference: clean(input.proofReference, 180),
       proofNotes: clean(input.proofNotes, 500),
     });
@@ -86,6 +93,8 @@ export default async function handler(request: any, response: any) {
     if (error?.message === "DELIVERY_ORDER_NOT_FOUND") return send(response, 404, { error: { code: "DELIVERY_ORDER_NOT_FOUND", message: "That order does not have a delivery lifecycle." } });
     if (error?.message === "DELIVERY_STATUS_TRANSITION_INVALID") return send(response, 409, { error: { code: "DELIVERY_STATUS_TRANSITION_INVALID", message: "That status change is not valid from the order's current delivery state." } });
     if (error?.message === "DELIVERY_PROOF_RECIPIENT_REQUIRED") return send(response, 400, { error: { code: "DELIVERY_PROOF_REQUIRED", message: "Record who received or collected the order before completing it." } });
+    if (error?.message === "DELIVERY_PROOF_METHOD_REQUIRED") return send(response, 400, { error: { code: "DELIVERY_PROOF_METHOD_REQUIRED", message: "Choose how completion was verified before closing the order." } });
+    if (error?.message === "DELIVERY_PROOF_REFERENCE_REQUIRED") return send(response, 400, { error: { code: "DELIVERY_PROOF_REFERENCE_REQUIRED", message: "Add the signature, photo, courier-confirmation or collection-receipt reference." } });
     if (error?.message === "RATE_LIMITED") return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many delivery updates. Please wait and try again." } });
     if (Number(error?.status) === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The delivery update is too large." } });
     console.error("delivery_lifecycle_staff_error", { code: error instanceof Error ? error.message : "unknown" });
