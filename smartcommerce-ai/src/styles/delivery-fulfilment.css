@@ -105,10 +105,105 @@
   font: inherit;
 }
 
+.sc-fulfilment__address {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border: 1px solid rgba(24, 63, 41, 0.12);
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.sc-fulfilment__address-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.sc-fulfilment__address-head svg {
+  flex: 0 0 auto;
+  color: #2c7949;
+  margin-top: 0.1rem;
+}
+
+.sc-fulfilment__address-head > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sc-fulfilment__address-head strong {
+  color: #172019;
+}
+
+.sc-fulfilment__address-head span {
+  color: #6a746d;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.sc-fulfilment__address-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.sc-fulfilment__address-grid label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: #34433a;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.sc-fulfilment__address-grid label > span {
+  font-weight: 500;
+  color: #7a847d;
+}
+
+.sc-fulfilment__address-grid .is-wide {
+  grid-column: 1 / -1;
+}
+
+.sc-fulfilment__address-grid input,
+.sc-fulfilment__address-grid select,
+.sc-fulfilment__address-grid textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(24, 63, 41, 0.16);
+  border-radius: 0.8rem;
+  background: #fff;
+  color: #172019;
+  font: inherit;
+  font-weight: 500;
+  outline: none;
+}
+
+.sc-fulfilment__address-grid input,
+.sc-fulfilment__address-grid select {
+  min-height: 2.8rem;
+  padding: 0 0.8rem;
+}
+
+.sc-fulfilment__address-grid textarea {
+  resize: vertical;
+  min-height: 5.3rem;
+  padding: 0.75rem 0.8rem;
+}
+
+.sc-fulfilment__address-grid input:focus,
+.sc-fulfilment__address-grid select:focus,
+.sc-fulfilment__address-grid textarea:focus {
+  border-color: rgba(43, 123, 72, 0.55);
+  box-shadow: 0 0 0 3px rgba(43, 123, 72, 0.08);
+}
+
 .sc-fulfilment__status,
 .sc-fulfilment__manual,
 .sc-fulfilment__cost-note,
-.sc-fulfilment__facts {
+.sc-fulfilment__facts,
+.sc-fulfilment__verified {
   display: flex;
   gap: 0.55rem;
   align-items: flex-start;
@@ -160,6 +255,52 @@
   color: #2c7949;
 }
 
+.sc-fulfilment__verified {
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(43, 123, 72, 0.18);
+  background: #eef7f0;
+  color: #42584a;
+}
+
+.sc-fulfilment__verified svg {
+  flex: 0 0 auto;
+  color: #2c7949;
+}
+
+.sc-fulfilment__verified > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sc-fulfilment__verified strong {
+  color: #173b26;
+}
+
+.sc-fulfilment__verified span {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.sc-fulfilment__bind {
+  width: 100%;
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: #1f6c3f;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sc-fulfilment__bind:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .sc-spin {
   animation: sc-fulfilment-spin 0.8s linear infinite;
 }
@@ -175,8 +316,13 @@
     border-radius: 1rem;
   }
 
-  .sc-fulfilment__controls {
+  .sc-fulfilment__controls,
+  .sc-fulfilment__address-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sc-fulfilment__address-grid .is-wide {
+    grid-column: auto;
   }
 
   .sc-fulfilment__modes > button,
