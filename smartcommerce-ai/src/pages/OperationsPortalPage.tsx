@@ -203,6 +203,8 @@ export default function OperationsPortalPage() {
             onClose={() => setSelectedWorkOrder(null)}
             staffEmployeeId={staff.employeeId}
             canManageTasks={hasPermission(staff, "wo_technician", "work_orders")}
+            canAssess={hasPermission(staff, "wo_assess", "work_orders")}
+            canAssignParts={hasPermission(staff, "wo_assign_parts", "work_orders")}
           />
         ) : resource.loading ? (
           <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={22} /><strong>Loading live POS data…</strong></div>
