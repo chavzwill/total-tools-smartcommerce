@@ -13,6 +13,8 @@ import "../../styles/service-commercial.css";
 import "../../styles/assistant-experience.css";
 import "../../styles/product-match-experience.css";
 import "../../styles/accessibility-responsive.css";
+import "../../styles/guided-mode.css";
+import GuidedMode from "../guidance/GuidedMode";
 import CommerceToast from "./CommerceToast";
 import Footer from "./Footer";
 import Header from "./Header";
@@ -37,6 +39,7 @@ export default function PageShell({ children }: PageShellProps) {
       <Footer />
       <MobileCommerceNav />
       <CommerceToast />
+      <GuidedMode />
     </div>
   );
 }
