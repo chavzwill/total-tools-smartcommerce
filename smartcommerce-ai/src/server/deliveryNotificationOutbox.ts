@@ -92,15 +92,49 @@ export async function enqueueDeliveryNotification(input: {
   return rows;
 }
 
+export async function enqueueLatestDeliveryEventNotification(orderId: string) {
+  await ensureDeliveryNotificationSchema();
+  const rows = await sql()`
+    SELECT l.id AS lifecycle_id, l.order_id, l.customer_id, e.id AS event_id,
+           e.status, e.public_message
+    FROM delivery_lifecycles l
+    JOIN delivery_lifecycle_events e ON e.lifecycle_id = l.id
+    WHERE l.order_id = ${clean(orderId, 180)}
+      AND COALESCE(e.public_message, '') <> ''
+    ORDER BY e.created_at DESC
+    LIMIT 1
+  ` as unknown as Array<{ lifecycle_id: string; order_id: string; customer_id: string; event_id: string; status: string; public_message: string }>;
+  const event = rows[0];
+  if (!event) return [];
+  return enqueueDeliveryNotification({
+    lifecycleId: event.lifecycle_id,
+    lifecycleEventId: event.event_id,
+    orderId: event.order_id,
+    customerId: event.customer_id,
+    status: event.status,
+    message: event.public_message,
+  });
+}
+
 export async function listCustomerDeliveryNotifications(customerId: string, orderId?: string) {
   await ensureDeliveryNotificationSchema();
   const order = clean(orderId, 180);
+  if (order) {
+    return await sql()`
+      SELECT id, order_id, status, channel, subject, message, delivery_status, sent_at, read_at, created_at
+      FROM delivery_notification_outbox
+      WHERE customer_id = ${customerId}
+        AND channel = 'in_app'
+        AND order_id = ${order}
+      ORDER BY created_at DESC
+      LIMIT 100
+    ` as unknown as any[];
+  }
   return await sql()`
     SELECT id, order_id, status, channel, subject, message, delivery_status, sent_at, read_at, created_at
     FROM delivery_notification_outbox
     WHERE customer_id = ${customerId}
       AND channel = 'in_app'
-      ${order ? sql()`AND order_id = ${order}` : sql``}
     ORDER BY created_at DESC
     LIMIT 100
   ` as unknown as any[];
