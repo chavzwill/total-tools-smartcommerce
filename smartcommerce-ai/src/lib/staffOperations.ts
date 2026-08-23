@@ -56,9 +56,17 @@ export function logoutStaff() {
   });
 }
 
+function mutationIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return `ops_${crypto.randomUUID()}`;
+  return `ops_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+}
+
 export async function operationsRequest<T>(resourcePath: string, init?: RequestInit): Promise<T> {
   const normalized = resourcePath.replace(/^\/+/, "");
-  return jsonRequest<T>(`/api/operations/${normalized}`, init);
+  const method = String(init?.method || "GET").toUpperCase();
+  const headers = new Headers(init?.headers || {});
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && !headers.has("Idempotency-Key")) headers.set("Idempotency-Key", mutationIdempotencyKey());
+  return jsonRequest<T>(`/api/operations/${normalized}`, { ...init, headers });
 }
 
 export async function reportingRequest<T>(resourcePath: string): Promise<T> {
