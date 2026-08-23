@@ -18,6 +18,7 @@ const RESOURCE_RULES: Record<string, ResourceRule> = {
   quotations: { upstream: "quotations", read: "quotations", write: "quotations_create" },
   transactions: { upstream: "transactions", read: ["transactions", "pos"], write: "pos" },
   drawers: { upstream: "drawers", read: ["drawers", "pos"], write: "drawers" },
+  denominations: { upstream: "denominations", read: "pos", write: "settings" },
   reports: { upstream: "reports", read: "reports" },
   rentals: { upstream: "rentals", read: "rentals", write: "rentals_manage_items" },
   customers: { upstream: "customers", read: ["customers", "pos"], write: "customers_edit" },
