@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { quoteDelivery } from "../src/server/deliveryFulfilmentEngine.js";
 import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
 import { createManualDeliveryReview } from "../src/server/deliveryReviewQueue.js";
+import { getFulfilmentOrigin } from "../src/server/fulfilmentOriginStore.js";
 import { resolveJamaicaDeliveryZone } from "../src/server/jamaicaDeliveryZones.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 
@@ -216,7 +217,13 @@ export default async function handler(request: any, response: any) {
     const address = normalizeAddress(input.address);
     const requestedSpeed = input.requestedSpeed === "same_day" ? "same_day" : "standard";
     const serviceId = clean(input.serviceId, 100);
-    const zone = resolveJamaicaDeliveryZone({ town: address.city, parish: address.region });
+    const origin = await getFulfilmentOrigin();
+    const zone = resolveJamaicaDeliveryZone({
+      town: address.city,
+      parish: address.region,
+      originTown: origin.active ? origin.town : undefined,
+      originParish: origin.active ? origin.parish : undefined,
+    });
 
     const resolvedItems = await resolveDeliveryItems(items.map((item: any) => ({
       productId: clean(item.productId, 180),
@@ -261,14 +268,15 @@ export default async function handler(request: any, response: any) {
         address,
         destinationClass: destinationClass || null,
         zone,
+        origin: { configured: origin.active, branchId: origin.branchId || null, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
         requestedSpeed,
         requestedServiceId: serviceId || null,
         requestedAt: new Date().toISOString(),
       };
       const nextSnapshot = { ...snapshot, fulfilment: manualReview };
       await sql()`UPDATE checkout_quotes SET snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
-      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reviewId: review.id, reasonCode: delivery.reasonCode, destinationClass: destinationClass || null, requestedSpeed } });
-      return send(response, 202, { fulfilment: manualReview, zone, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
+      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reviewId: review.id, reasonCode: delivery.reasonCode, destinationClass: destinationClass || null, requestedSpeed, originTown: origin.town || null, originParish: origin.parish || null } });
+      return send(response, 202, { fulfilment: manualReview, zone, origin: manualReview.origin, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
     }
 
     if (zone.status !== "resolved") {
@@ -301,6 +309,7 @@ export default async function handler(request: any, response: any) {
       address,
       destinationClass: resolvedZone.destinationClass,
       zone: resolvedZone,
+      origin: { configured: origin.active, branchId: origin.branchId || null, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
       requestedSpeed,
       sourceStatus: option.sourceStatus,
       boundAt: new Date().toISOString(),
@@ -313,8 +322,8 @@ export default async function handler(request: any, response: any) {
           snapshot = ${JSON.stringify(nextSnapshot)}::jsonb
       WHERE id = ${quoteId} AND customer_id = ${customerId}
     `;
-    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: resolvedZone.destinationClass, deliveryMinor, totalMinor } });
-    return send(response, 200, { fulfilment: bound, zone: resolvedZone, quote: { id: quoteId, deliveryMinor, totalMinor } });
+    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: resolvedZone.destinationClass, originTown: origin.town || null, originParish: origin.parish || null, deliveryMinor, totalMinor } });
+    return send(response, 200, { fulfilment: bound, zone: resolvedZone, origin: bound.origin, quote: { id: quoteId, deliveryMinor, totalMinor } });
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (error?.message === "RATE_LIMITED") {
