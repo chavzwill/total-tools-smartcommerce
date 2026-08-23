@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Clock3, Loader2, PackageCheck, RefreshCw, RotateCcw, Truck } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Loader2, PackageCheck, RefreshCw, RotateCcw, ShieldAlert, Truck } from "lucide-react";
 import Container from "../components/shared/Container";
 import { listCustomerOrders, type CustomerOrderSummary } from "../services/customerOrdersClient";
 import "../styles/customer-orders.css";
@@ -10,6 +10,14 @@ function orderAction(order:CustomerOrderSummary){
  if(order.returnRequest)return {href:"#/account/returns",label:"View return"};
  if(order.fulfilment?.status)return {href:`#/track-order?ref=${encodeURIComponent(order.id)}`,label:"Track fulfilment"};
  return {href:"#/account/returns",label:"Request help"};
+}
+function refundCopy(order:CustomerOrderSummary){
+ const state=order.returnRequest?.refundReconciliation;
+ if(!state)return null;
+ if(state==="reconciled")return {tone:"good",icon:CheckCircle2,label:"Refund verified",detail:"SmartCommerce has matched the completed refund to the accounting record."};
+ if(state==="verification_pending")return {tone:"warn",icon:ShieldAlert,label:"Refund verification pending",detail:"The return is marked complete, but SmartCommerce is still verifying the accounting evidence. No action is required from you yet."};
+ if(state==="pending")return {tone:"pending",icon:Clock3,label:"Refund processing",detail:"The approved refund is still being processed."};
+ return {tone:"pending",icon:RotateCcw,label:"Return in progress",detail:"Your return is still moving through review and resolution."};
 }
 
 export default function CustomerOrdersPage({embedded=false}:{embedded?:boolean}){
@@ -23,11 +31,12 @@ export default function CustomerOrdersPage({embedded=false}:{embedded?:boolean})
   {error?<p className="sc-orders-alert" role="alert">{error}</p>:null}
   {loading?<div className="sc-orders-empty"><Loader2 className="sc-spin" size={24}/><strong>Loading your verified orders…</strong></div>:null}
   {!loading&&!orders.length?<div className="sc-orders-empty"><PackageCheck size={28}/><strong>No completed SmartCommerce orders yet.</strong><span>Provider-accepted orders will appear here automatically after checkout.</span><a href="#/products">Browse products</a></div>:null}
-  <div className="sc-orders-list">{orders.map((order)=>{const action=orderAction(order);const fulfilment=order.fulfilment||{status:"order_received",mode:"pickup"};return <article className="sc-order-card" key={order.id}>
+  <div className="sc-orders-list">{orders.map((order)=>{const action=orderAction(order);const fulfilment=order.fulfilment||{status:"order_received",mode:"pickup"};const refund=refundCopy(order);const RefundIcon=refund?.icon;return <article className="sc-order-card" key={order.id}>
    <div className="sc-order-card__head"><div><span>{new Date(order.orderedAt).toLocaleString("en-JM")}</span><strong>{order.reference}</strong><small>{order.purchaseOrderReference?`PO ${order.purchaseOrderReference}`:order.description||"SmartCommerce order"}</small></div><div className="sc-order-card__amount"><strong>{money(order.totalMinor,order.currency)}</strong><span>{order.sourceCoverage==="provider_synced"?"Provider synced":"SmartCommerce recorded"}</span></div></div>
    <div className="sc-order-progress"><div className={`sc-order-progress__icon is-${fulfilment.status}`}>{fulfilment.status==="exception"?<AlertTriangle size={19}/>:fulfilment.mode==="pickup"?<PackageCheck size={19}/>:<Truck size={19}/>}</div><div><span>{title(fulfilment.status||"order_received")}</span><strong>{fulfilment.mode==="pickup"?"Pickup":fulfilment.serviceLabel||fulfilment.provider||"Delivery"}</strong>{fulfilment.collectionPointName?<small>Collect at {fulfilment.collectionPointName}</small>:null}{fulfilment.scheduledFor?<small><Clock3 size={12}/> {new Date(fulfilment.scheduledFor).toLocaleString("en-JM")}</small>:null}{fulfilment.exceptionMessage?<small className="is-exception">{fulfilment.exceptionMessage}</small>:null}</div></div>
    <div className="sc-order-card__facts"><span>Delivery <strong>{order.deliveryMinor?money(order.deliveryMinor,order.currency):fulfilment.mode==="pickup"?"Pickup":"Included / pending"}</strong></span>{order.paymentTermsCode?<span>Terms <strong>{order.paymentTermsCode}</strong></span>:null}{order.returnRequest?<span>Return <strong>{title(order.returnRequest.status)}</strong></span>:null}</div>
    {order.returnRequest?<div className="sc-order-return"><RotateCcw size={17}/><div><strong>{title(order.returnRequest.resolution)} request</strong><span>{title(order.returnRequest.status)}{order.returnRequest.approvedAmountMinor!=null?` · ${money(order.returnRequest.approvedAmountMinor,order.currency)} approved`:""}</span>{order.returnRequest.refundReference?<small>Refund ref: {order.returnRequest.refundReference}</small>:null}</div></div>:null}
+   {refund&&RefundIcon?<div className={`sc-order-refund-state is-${refund.tone}`}><RefundIcon size={17}/><div><strong>{refund.label}</strong><span>{refund.detail}</span></div></div>:null}
    <footer><span>{order.id}</span><a href={action.href}>{action.label}<ArrowRight size={15}/></a></footer>
   </article>;})}</div>
  </>;
