@@ -1,6 +1,5 @@
 import { Download, Printer, RefreshCw, ShieldAlert, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { StaffIdentity } from "../../lib/staffOperations";
 import "../../styles/technician-compensation-reporting.css";
 
 type Row = Record<string, any>;
@@ -19,11 +18,6 @@ const money = (value: unknown) => new Intl.NumberFormat("en-JM", { style: "curre
 const number = (value: unknown, digits = 1) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
 const dateOnly = (value: unknown) => String(value || "").slice(0, 10) || "—";
 const title = (value: unknown) => String(value || "—").replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-const canSee = (staff: StaffIdentity) => {
-  const role = String(staff.role || "").toLowerCase();
-  const group = String(staff.securityGroupName || "").toLowerCase();
-  return role === "admin" || role === "owner" || group.includes("admin") || staff.permissions.technician_compensation_admin === true || staff.permissions.technician_compensation_review === true || staff.permissions.wo_supervisor === true;
-};
 
 async function loadCompensation(periodRef: string) {
   const response = await fetch(`/api/technician-compensation?periodRef=${encodeURIComponent(periodRef)}`, { credentials: "same-origin", headers: { Accept: "application/json" } });
@@ -37,22 +31,27 @@ function csv(value: unknown) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export default function TechnicianCompensationReportingPanel({ staff }: { staff: StaffIdentity }) {
+export default function TechnicianCompensationReportingPanel() {
   const today = new Date().toISOString().slice(0, 10);
   const [periodRef, setPeriodRef] = useState(today);
   const [data, setData] = useState<CompensationPayload>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [visible, setVisible] = useState(true);
 
-  const allowed = canSee(staff);
   async function refresh() {
-    if (!allowed) return;
     setLoading(true); setError("");
-    try { setData(await loadCompensation(periodRef)); }
-    catch (e) { setError((e as Error).message); setData({}); }
-    finally { setLoading(false); }
+    try {
+      const next = await loadCompensation(periodRef);
+      setData(next);
+      setVisible(next.canReview === true || next.canAdminister === true);
+    } catch (e) {
+      const message = (e as Error).message;
+      if (/permission|administrator|supervisor/i.test(message)) setVisible(false);
+      else { setError(message); setData({}); }
+    } finally { setLoading(false); }
   }
-  useEffect(() => { void refresh(); }, [allowed]);
+  useEffect(() => { void refresh(); }, []);
 
   const selected = data.currentPeriod || { start: "", end: "", label: "", cycle: "" };
   const periods = useMemo(() => (Array.isArray(data.periods) ? data.periods : []).filter((row) => {
@@ -80,7 +79,7 @@ export default function TechnicianCompensationReportingPanel({ staff }: { staff:
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `technician-pay-period-${selected.start || periodRef}-to-${selected.end || periodRef}.csv`; document.body.appendChild(a); a.click(); a.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  if (!allowed) return null;
+  if (!visible) return null;
 
   return <section className="sc-tech-pay-report" data-guide-id="technician-pay-period-report">
     <header>
