@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
 import ConsolidatedPurchasePlan from "./ConsolidatedPurchasePlan";
 import InventoryCapitalIntelligence from "./InventoryCapitalIntelligence";
+import ManagementEconomicsIntelligence from "./ManagementEconomicsIntelligence";
 import ReplenishmentDecisionBoard from "./ReplenishmentDecisionBoard";
 import SmartTransferRecommendations from "./SmartTransferRecommendations";
 import SupplierPurchaseIntelligence from "./SupplierPurchaseIntelligence";
@@ -84,6 +85,7 @@ export default function ERPIntelligenceBoard() {
       <section className="sc-erp-intelligence__panel"><div className="sc-erp-intelligence__title"><ShieldCheck size={18}/><div><strong>Evidence coverage</strong><span>Intelligence fails closed when source data is restricted or missing</span></div></div><div className="sc-erp-intelligence__coverage">{coverage.map(([name, dataset]) => <div key={name}><span>{name}</span><strong className={dataset.available ? "is-verified" : "is-unavailable"}>{dataset.available ? `${dataset.rows.length} records` : "Unavailable"}</strong><small>{dataset.available ? "Live POS evidence" : dataset.reason || "Not exposed"}</small></div>)}</div></section>
     </div>
 
+    <ManagementEconomicsIntelligence />
     <ReplenishmentDecisionBoard />
     <ConsolidatedPurchasePlan />
     <SupplierPurchaseIntelligence />
