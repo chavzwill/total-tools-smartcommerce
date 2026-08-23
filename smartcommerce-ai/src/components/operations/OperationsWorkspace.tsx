@@ -57,12 +57,13 @@ export default function OperationsWorkspace({ section, title, description, branc
   const visibleSections = allowedSections?.length ? sections.filter((item) => allowedSections.includes(item.id)) : sections;
   return (
     <div className="sc-ops-shell">
+      <a className="sc-ops-skip-link" href="#operations-main-content">Skip to Operations content</a>
       <aside className="sc-ops-sidebar" aria-label="POS and service navigation">
         <div className="sc-ops-sidebar__brand"><span>Total Tools</span><strong>Operations</strong></div>
-        <nav>
+        <nav aria-label="Operations sections">
           {visibleSections.map((item) => {
             const Icon = item.icon;
-            return <button key={item.id} type="button" className={item.id === section ? "is-active" : undefined} aria-current={item.id === section ? "page" : undefined} onClick={() => onNavigate?.(item.id)} data-guide-id={`operations-${item.id}`}><Icon size={18} aria-hidden="true" /><span>{item.label}</span></button>;
+            return <button key={item.id} type="button" className={item.id === section ? "is-active" : undefined} aria-label={item.label} title={item.label} aria-current={item.id === section ? "page" : undefined} onClick={() => onNavigate?.(item.id)} data-guide-id={`operations-${item.id}`}><Icon size={18} aria-hidden="true" /><span>{item.label}</span></button>;
           })}
         </nav>
       </aside>
@@ -75,7 +76,7 @@ export default function OperationsWorkspace({ section, title, description, branc
             {actions}
           </div>
         </header>
-        <main className="sc-ops-content" id="operations-main-content">{children}</main>
+        <main className="sc-ops-content" id="operations-main-content" tabIndex={-1}>{children}</main>
       </div>
     </div>
   );
