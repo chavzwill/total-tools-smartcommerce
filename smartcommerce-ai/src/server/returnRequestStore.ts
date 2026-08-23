@@ -27,11 +27,78 @@ export type ReturnStatus =
   | "exchange_pending"
   | "exchange_completed"
   | "repair_pending"
+  | "repair_completed"
   | "store_credit_pending"
+  | "store_credit_completed"
   | "closed";
+
+export type ReturnReviewAction =
+  | "start_review"
+  | "approve"
+  | "reject"
+  | "request_item_return"
+  | "mark_received"
+  | "mark_refund_pending"
+  | "mark_refund_completed"
+  | "mark_exchange_pending"
+  | "mark_exchange_completed"
+  | "mark_repair_pending"
+  | "mark_repair_completed"
+  | "mark_store_credit_pending"
+  | "mark_store_credit_completed"
+  | "close";
 
 const RESOLUTIONS = new Set<ReturnResolution>(["refund", "exchange", "repair", "store_credit"]);
 const REASONS = new Set<ReturnReason>(["defective", "damaged", "wrong_item", "not_as_described", "changed_mind", "other"]);
+
+const ACTION_STATUS: Record<ReturnReviewAction, ReturnStatus> = {
+  start_review: "under_review",
+  approve: "approved",
+  reject: "rejected",
+  request_item_return: "awaiting_item",
+  mark_received: "received",
+  mark_refund_pending: "refund_pending",
+  mark_refund_completed: "refund_completed",
+  mark_exchange_pending: "exchange_pending",
+  mark_exchange_completed: "exchange_completed",
+  mark_repair_pending: "repair_pending",
+  mark_repair_completed: "repair_completed",
+  mark_store_credit_pending: "store_credit_pending",
+  mark_store_credit_completed: "store_credit_completed",
+  close: "closed",
+};
+
+const ALLOWED_ACTIONS: Record<ReturnStatus, ReturnReviewAction[]> = {
+  requested: ["start_review", "reject"],
+  under_review: ["approve", "reject"],
+  approved: ["request_item_return", "mark_received", "mark_refund_pending", "mark_exchange_pending", "mark_repair_pending", "mark_store_credit_pending"],
+  rejected: ["close"],
+  awaiting_item: ["mark_received", "reject"],
+  received: ["mark_refund_pending", "mark_exchange_pending", "mark_repair_pending", "mark_store_credit_pending"],
+  refund_pending: ["mark_refund_completed"],
+  refund_completed: ["close"],
+  exchange_pending: ["mark_exchange_completed"],
+  exchange_completed: ["close"],
+  repair_pending: ["mark_repair_completed"],
+  repair_completed: ["close"],
+  store_credit_pending: ["mark_store_credit_completed"],
+  store_credit_completed: ["close"],
+  closed: [],
+};
+
+const RESOLUTION_ACTIONS: Record<ReturnResolution, Set<ReturnReviewAction>> = {
+  refund: new Set(["mark_refund_pending", "mark_refund_completed"]),
+  exchange: new Set(["mark_exchange_pending", "mark_exchange_completed"]),
+  repair: new Set(["mark_repair_pending", "mark_repair_completed"]),
+  store_credit: new Set(["mark_store_credit_pending", "mark_store_credit_completed"]),
+};
+
+const RESOLUTION_SPECIFIC_ACTIONS = new Set<ReturnReviewAction>([
+  "mark_refund_pending", "mark_refund_completed",
+  "mark_exchange_pending", "mark_exchange_completed",
+  "mark_repair_pending", "mark_repair_completed",
+  "mark_store_credit_pending", "mark_store_credit_completed",
+]);
 
 function clean(value: unknown, max = 500) { return String(value || "").trim().slice(0, max); }
 
@@ -110,7 +177,7 @@ export async function createReturnRequest(input: {
   if (!order) throw new Error("RETURN_ORDER_NOT_OWNED");
 
   const existing = await sql()`SELECT * FROM return_requests WHERE order_id=${orderId} AND customer_id=${input.customerId}
-    AND status NOT IN ('rejected','closed','refund_completed','exchange_completed') ORDER BY created_at DESC LIMIT 1` as unknown as Array<any>;
+    AND status NOT IN ('rejected','closed','refund_completed','exchange_completed','repair_completed','store_credit_completed') ORDER BY created_at DESC LIMIT 1` as unknown as Array<any>;
   if (existing[0]) return existing[0];
 
   const requestedAmount = Number(input.requestedAmountMinor);
@@ -152,7 +219,7 @@ export async function listStaffReturns(status?: string) {
 export async function reviewReturnRequest(input: {
   id: string;
   staffId: string;
-  action: "start_review" | "approve" | "reject" | "mark_received" | "mark_refund_pending" | "mark_refund_completed" | "mark_exchange_pending" | "mark_exchange_completed" | "mark_repair_pending" | "mark_store_credit_pending" | "close";
+  action: ReturnReviewAction;
   approvedAmountMinor?: number;
   providerReturnId?: string;
   refundReference?: string;
@@ -164,25 +231,45 @@ export async function reviewReturnRequest(input: {
   const rows = await sql()`SELECT * FROM return_requests WHERE id=${id} LIMIT 1` as unknown as Array<any>;
   const current = rows[0];
   if (!current) throw new Error("RETURN_NOT_FOUND");
-  const transitions: Record<string, ReturnStatus> = {
-    start_review: "under_review", approve: "approved", reject: "rejected", mark_received: "received",
-    mark_refund_pending: "refund_pending", mark_refund_completed: "refund_completed",
-    mark_exchange_pending: "exchange_pending", mark_exchange_completed: "exchange_completed",
-    mark_repair_pending: "repair_pending", mark_store_credit_pending: "store_credit_pending", close: "closed",
-  };
-  const next = transitions[input.action];
+
+  const action = clean(input.action, 40) as ReturnReviewAction;
+  const next = ACTION_STATUS[action];
   if (!next) throw new Error("RETURN_ACTION_INVALID");
-  if (next === "refund_completed" && !clean(input.refundReference, 180)) throw new Error("REFUND_REFERENCE_REQUIRED");
+  const currentStatus = clean(current.status, 40) as ReturnStatus;
+  if (!ALLOWED_ACTIONS[currentStatus]?.includes(action)) throw new Error("RETURN_TRANSITION_INVALID");
+
+  const resolution = clean(current.requested_resolution, 32) as ReturnResolution;
+  if (RESOLUTION_SPECIFIC_ACTIONS.has(action) && !RESOLUTION_ACTIONS[resolution]?.has(action)) {
+    throw new Error("RETURN_RESOLUTION_MISMATCH");
+  }
+
+  const providerReturnId = clean(input.providerReturnId, 180);
+  const refundReference = clean(input.refundReference, 180);
+  if (next === "refund_completed" && !refundReference) throw new Error("REFUND_REFERENCE_REQUIRED");
+  if ((next === "exchange_completed" || next === "repair_completed" || next === "store_credit_completed") && !providerReturnId) {
+    throw new Error("RESOLUTION_REFERENCE_REQUIRED");
+  }
+
+  const order = await ownedOrder(String(current.order_id), String(current.customer_id));
+  if (!order) throw new Error("RETURN_ORDER_NOT_OWNED");
+  const maxMinor = Number(order.debit_minor || 0);
   const approved = Number(input.approvedAmountMinor);
   const approvedMinor = Number.isFinite(approved) && approved >= 0 ? Math.trunc(approved) : null;
+  if (approvedMinor !== null && approvedMinor > maxMinor) throw new Error("RETURN_AMOUNT_EXCEEDS_ORDER");
+  if ((action === "approve" || action === "mark_refund_pending" || action === "mark_store_credit_pending") && approvedMinor === null && current.approved_amount_minor == null) {
+    throw new Error("RETURN_APPROVED_AMOUNT_REQUIRED");
+  }
+
   const updated = await sql()`UPDATE return_requests SET
       status=${next},
       approved_amount_minor=COALESCE(${approvedMinor},approved_amount_minor),
-      provider_return_id=COALESCE(${clean(input.providerReturnId,180) || null},provider_return_id),
-      refund_reference=COALESCE(${clean(input.refundReference,180) || null},refund_reference),
+      provider_return_id=COALESCE(${providerReturnId || null},provider_return_id),
+      refund_reference=COALESCE(${refundReference || null},refund_reference),
       staff_notes=COALESCE(${clean(input.staffNotes,3000) || null},staff_notes),
       reviewed_by=${input.staffId}, reviewed_at=NOW(), updated_at=NOW()
-    WHERE id=${id} RETURNING *` as unknown as Array<any>;
+    WHERE id=${id} AND status=${currentStatus}
+    RETURNING *` as unknown as Array<any>;
+  if (!updated[0]) throw new Error("RETURN_STATE_CHANGED");
   await addEvent({ returnId: id, status: next, actorType: "staff", actorId: input.staffId, publicMessage: clean(input.publicMessage,1000) || undefined, internalNote: clean(input.staffNotes,3000) || undefined });
   return updated[0];
 }
