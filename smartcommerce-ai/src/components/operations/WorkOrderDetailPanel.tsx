@@ -1,9 +1,14 @@
-import { AlertCircle, ArrowLeft, Clock3, PackageSearch, RefreshCw, UserRound, Wrench } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, PackageSearch, Play, RefreshCw, Square, UserRound, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
 import "../../styles/work-order-detail.css";
 
-type Props = { workOrderId: string; onClose: () => void };
+type Props = {
+  workOrderId: string;
+  onClose: () => void;
+  staffEmployeeId?: string;
+  canManageTasks?: boolean;
+};
 
 type Detail = Record<string, any> & {
   items?: any[];
@@ -19,8 +24,9 @@ const minutes = (value: unknown) => {
   return h ? `${h}h ${m}m` : `${m}m`;
 };
 
-export default function WorkOrderDetailPanel({ workOrderId, onClose }: Props) {
+export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmployeeId, canManageTasks = false }: Props) {
   const [state, setState] = useState<{ loading: boolean; data?: Detail; error?: string }>({ loading: true });
+  const [action, setAction] = useState<{ taskId?: string; type?: "clock-in" | "clock-out" | "complete"; error?: string }>({});
 
   const load = async () => {
     setState({ loading: true });
@@ -33,6 +39,32 @@ export default function WorkOrderDetailPanel({ workOrderId, onClose }: Props) {
   const data = state.data;
   const taskMinutes = useMemo(() => (data?.tasks || []).reduce((sum, task) => sum + Number(task.actual_minutes || 0), 0), [data]);
   const openTasks = useMemo(() => (data?.tasks || []).filter((task) => task.status !== "complete").length, [data]);
+
+  async function runTaskAction(task: any, type: "clock-in" | "clock-out" | "complete") {
+    const taskId = String(task.id);
+    setAction({ taskId, type });
+    try {
+      if (type === "clock-in") {
+        const technicianId = task.technician_id || staffEmployeeId;
+        if (!technicianId) throw new Error("Assign a technician before starting this timer.");
+        await operationsRequest(`work-orders/tasks/${encodeURIComponent(taskId)}/clock-in`, {
+          method: "POST",
+          body: JSON.stringify({ technician_id: technicianId }),
+        });
+      } else if (type === "clock-out") {
+        await operationsRequest(`work-orders/tasks/${encodeURIComponent(taskId)}/clock-out`, { method: "POST", body: JSON.stringify({}) });
+      } else {
+        await operationsRequest(`work-orders/tasks/${encodeURIComponent(taskId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "complete" }),
+        });
+      }
+      setAction({});
+      await load();
+    } catch (error) {
+      setAction({ taskId, type, error: (error as OperationsApiError).message || "The technician action could not be completed." });
+    }
+  }
 
   return (
     <section className="sc-wo-detail" aria-label="Work order detail" data-guide-id="work-order-detail">
@@ -67,7 +99,22 @@ export default function WorkOrderDetailPanel({ workOrderId, onClose }: Props) {
 
           <section className="sc-wo-detail__section">
             <div className="sc-wo-detail__section-title"><Clock3 size={18} /><div><strong>Technician tasks</strong><span>Assignments, allotted time and actual recorded work</span></div></div>
-            {(data.tasks || []).length ? <div className="sc-wo-task-list">{data.tasks!.map((task: any) => <article key={task.id}><div><span className={`sc-work-order-status is-${task.status === "complete" ? "pickup" : "active"}`}>{label(task.status)}</span><strong>{task.description || `Task ${task.id}`}</strong><small>{task.technician_name || "Unassigned technician"}</small></div><dl><div><dt>Allowed</dt><dd>{minutes(task.allotted_minutes)}</dd></div><div><dt>Actual</dt><dd>{minutes(task.actual_minutes)}</dd></div><div><dt>Skills</dt><dd>{task.required_skills || "—"}</dd></div></dl></article>)}</div> : <div className="sc-ops-empty"><strong>No technician tasks yet</strong><p>Tasks will appear when the work order has been broken into repair work.</p></div>}
+            {(data.tasks || []).length ? <div className="sc-wo-task-list">{data.tasks!.map((task: any) => {
+              const taskId = String(task.id);
+              const busy = action.taskId === taskId && Boolean(action.type);
+              const running = Boolean(task.open_time_entry_id);
+              const complete = task.status === "complete";
+              return <article key={task.id} className={running ? "is-running" : undefined}>
+                <div className="sc-wo-task-list__identity"><span className={`sc-work-order-status is-${complete ? "pickup" : "active"}`}>{label(task.status)}</span><strong>{task.description || `Task ${task.id}`}</strong><small>{task.technician_name || "Unassigned technician"}</small>{running ? <em><Clock3 size={13} />Timer active since {task.open_time_entry_started_at || "now"}</em> : null}</div>
+                <dl><div><dt>Allowed</dt><dd>{minutes(task.allotted_minutes)}</dd></div><div><dt>Actual</dt><dd>{minutes(task.actual_minutes)}</dd></div><div><dt>Skills</dt><dd>{task.required_skills || "—"}</dd></div></dl>
+                {canManageTasks ? <div className="sc-wo-task-actions" aria-label={`Actions for ${task.description || `task ${task.id}`}`}>
+                  {!complete && !running ? <button type="button" className="is-start" disabled={busy} onClick={() => void runTaskAction(task, "clock-in")}><Play size={15} />Start work</button> : null}
+                  {!complete && running ? <button type="button" className="is-stop" disabled={busy} onClick={() => void runTaskAction(task, "clock-out")}><Square size={14} />Stop timer</button> : null}
+                  {!complete ? <button type="button" disabled={busy || running} title={running ? "Stop the timer before completing this task" : undefined} onClick={() => void runTaskAction(task, "complete")}><CheckCircle2 size={15} />Complete</button> : <span className="sc-wo-task-done"><CheckCircle2 size={15} />Completed</span>}
+                </div> : null}
+                {action.taskId === taskId && action.error ? <p className="sc-wo-task-error" role="alert"><AlertCircle size={14} />{action.error}</p> : null}
+              </article>;
+            })}</div> : <div className="sc-ops-empty"><strong>No technician tasks yet</strong><p>Tasks will appear when the work order has been broken into repair work.</p></div>}
           </section>
 
           <section className="sc-wo-detail__section">
