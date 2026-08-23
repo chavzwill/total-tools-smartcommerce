@@ -1,7 +1,7 @@
 import { AlertCircle, FilePlus2, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { normalizeOmnichannelHandoff } from "../../lib/omnichannelContracts";
-import { operationsRequest, type StaffIdentity } from "../../lib/staffOperations";
+import { getStaffSession, operationsRequest, type StaffIdentity } from "../../lib/staffOperations";
 
 type Row = Record<string, any>;
 
@@ -16,7 +16,13 @@ async function acknowledge(id: string, itemType: string, downstreamReference: st
   return payload?.data as Row;
 }
 
-export default function TypedHandoffAction({ row, staff, onApplied }: { row: Row; staff: StaffIdentity; onApplied: (updated: Row) => void }) {
+async function currentStaff(): Promise<StaffIdentity> {
+  const state = await getStaffSession();
+  if (!state.authenticated || !state.staff) throw new Error("Your staff session has expired. Sign in again before creating this record.");
+  return state.staff;
+}
+
+export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApplied: (updated: Row) => void }) {
   const handoff = useMemo(() => normalizeOmnichannelHandoff(row), [row]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -25,12 +31,12 @@ export default function TypedHandoffAction({ row, staff, onApplied }: { row: Row
     if (working) return;
     setWorking(true); setError("");
     try {
+      const staff = await currentStaff();
       if (!handoff.items.length) throw new Error("The approved export does not contain quotation lines.");
       const branchId = handoff.branchId || staff.defaultBranchId;
-      const items = handoff.items.map((item) => {
-        if (item.productId !== undefined) return { product_id: item.productId, quantity: item.quantity, ...(item.unitPrice !== undefined && item.unitPrice >= 0 ? { unit_price: item.unitPrice } : {}) };
-        return { description: item.description || item.name || item.sku || "Approved SmartCommerce item", quantity: item.quantity, unit_price: Math.max(0, item.unitPrice || 0) };
-      });
+      const items = handoff.items.map((item) => item.productId !== undefined
+        ? { product_id: item.productId, quantity: item.quantity, ...(item.unitPrice !== undefined && item.unitPrice >= 0 ? { unit_price: item.unitPrice } : {}) }
+        : { description: item.description || item.name || item.sku || "Approved SmartCommerce item", quantity: item.quantity, unit_price: Math.max(0, item.unitPrice || 0) });
       const quote = await operationsRequest<Row>("quotations", { method: "POST", body: JSON.stringify({
         customer_id: handoff.customerId || null,
         employee_id: staff.employeeId,
@@ -51,6 +57,7 @@ export default function TypedHandoffAction({ row, staff, onApplied }: { row: Row
     if (working) return;
     setWorking(true); setError("");
     try {
+      const staff = await currentStaff();
       if (!handoff.customerId) throw new Error("Link this request to an authoritative POS customer before creating the repair intake.");
       const description = String(handoff.fields.issue || handoff.notes || "").trim();
       if (!description) throw new Error("The approved repair request does not contain a fault/issue description.");
@@ -68,15 +75,11 @@ export default function TypedHandoffAction({ row, staff, onApplied }: { row: Row
     finally { setWorking(false); }
   }
 
-  if (!['quote','repair'].includes(handoff.kind)) return null;
+  if (!["quote", "repair"].includes(handoff.kind)) return null;
   const blocked = handoff.missing.length > 0 || (handoff.kind === "repair" && !handoff.customerId);
 
   return <div className="sc-ops-handoff__typed">
-    <div>
-      <strong>Approved-data draft</strong>
-      <span>{handoff.warnings.length ? handoff.warnings.join(" ") : "Typed SmartCommerce fields are ready for destination validation."}</span>
-      {handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}
-    </div>
+    <div><strong>Approved-data draft</strong><span>{handoff.warnings.length ? handoff.warnings.join(" ") : "Typed SmartCommerce fields are ready for destination validation."}</span>{handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}</div>
     {handoff.kind === "quote" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createQuote()}><FilePlus2 size={15}/>{working ? "Creating…" : "Create draft quotation"}</button> : null}
     {handoff.kind === "repair" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRepair()}><Wrench size={15}/>{working ? "Creating…" : "Create repair intake"}</button> : null}
     {error ? <p className="sc-ops-handoff__error" role="alert"><AlertCircle size={15}/>{error}</p> : null}
