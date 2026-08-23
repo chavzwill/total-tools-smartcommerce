@@ -1,6 +1,7 @@
 import { AlertTriangle, BrainCircuit, Clock3, PackageSearch, RefreshCw, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import ConsolidatedPurchasePlan from "./ConsolidatedPurchasePlan";
 import InventoryCapitalIntelligence from "./InventoryCapitalIntelligence";
 import ReplenishmentDecisionBoard from "./ReplenishmentDecisionBoard";
 import SmartTransferRecommendations from "./SmartTransferRecommendations";
@@ -84,6 +85,7 @@ export default function ERPIntelligenceBoard() {
     </div>
 
     <ReplenishmentDecisionBoard />
+    <ConsolidatedPurchasePlan />
     <SupplierPurchaseIntelligence />
     <SmartTransferRecommendations />
     <InventoryCapitalIntelligence />
