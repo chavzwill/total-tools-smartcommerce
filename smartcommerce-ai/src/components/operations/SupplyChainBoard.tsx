@@ -4,6 +4,7 @@ import { operationsRequest, type OperationsApiError } from "../../lib/staffOpera
 import PurchaseOrderLifecyclePanel from "./PurchaseOrderLifecyclePanel";
 import PurchaseOrderReceivingPanel from "./PurchaseOrderReceivingPanel";
 import PurchaseRequestReviewPanel from "./PurchaseRequestReviewPanel";
+import TransferLifecyclePanel from "./TransferLifecyclePanel";
 import "../../styles/supply-chain-board.css";
 
 type Row = Record<string, any>;
@@ -11,7 +12,7 @@ type State = { loading: boolean; purchaseRequests: Row[]; purchaseOrders: Row[];
 const empty: State = { loading: true, purchaseRequests: [], purchaseOrders: [], transfers: [] };
 const label = (value: unknown) => String(value || "—").replace(/_/g," ").replace(/\b\w/g,(m)=>m.toUpperCase());
 
-export default function SupplyChainBoard() {
+export default function SupplyChainBoard({ employeeId }: { employeeId?: string }) {
   const [state, setState] = useState<State>(empty);
   const [tab, setTab] = useState<"requests"|"orders"|"transfers">("requests");
   async function load(){
@@ -40,6 +41,7 @@ export default function SupplyChainBoard() {
     <div className="sc-supply-chain__toolbar"><div>{(["requests","orders","transfers"] as const).map((key)=><button key={key} className={tab===key?"is-active":""} onClick={()=>setTab(key)}>{key==="requests"?"Purchase requests":key==="orders"?"Purchase orders":"Branch transfers"}</button>)}</div><button className="sc-supply-chain__refresh" onClick={()=>void load()} disabled={state.loading}><RefreshCw size={15}/>{state.loading?"Refreshing…":"Refresh"}</button></div>
     {state.error?<div className="sc-ops-empty is-error"><strong>Supply-chain data unavailable</strong><p>{state.error}</p></div>:null}
     {tab === "requests" ? <PurchaseRequestReviewPanel /> : tab === "orders" ? <><PurchaseOrderLifecyclePanel /><PurchaseOrderReceivingPanel /></> : <>
+      <TransferLifecyclePanel employeeId={employeeId} />
       {!state.error && !rows.length && !state.loading?<div className="sc-ops-empty"><strong>No transfer records</strong><p>The board only shows records returned by the connected POS.</p></div>:null}
       {rows.length?<div className="sc-supply-chain__list">{rows.map((row,index)=><article key={String(row.id??index)}>
         <div><span>{row.transfer_number||`Transfer ${row.id}`}</span><strong>{`${row.from_branch_name||"Source"} → ${row.to_branch_name||"Destination"}`}</strong><small>{row.item_summary||"Inventory transfer"}</small></div>
