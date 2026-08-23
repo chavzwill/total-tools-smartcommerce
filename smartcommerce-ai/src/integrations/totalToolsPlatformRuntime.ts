@@ -2,7 +2,7 @@ import { createPlatformBackendService } from "../backend/platformBackendService.
 import type { PlatformApiResult, PlatformSyncResult } from "../platform/contracts";
 import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch.js";
-import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter.js";
+import { createTotalToolsPosWriteAdapter } from "./totalToolsPosWriteAdapter.js";
 
 const unsupported = <T>(operation: string): PlatformApiResult<T> => ({
   success: false,
@@ -48,7 +48,7 @@ export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
     return unsupportedPlatformAdapter;
   }
 
-  return createTotalToolsPosReadAdapter({
+  return createTotalToolsPosWriteAdapter({
     baseUrl,
     apiKey: process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim() || undefined,
     apiKeyHeader:
