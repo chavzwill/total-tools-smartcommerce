@@ -34,8 +34,10 @@ export default async function handler(request:any,response:any){
   if(error instanceof SyntaxError)return send(response,400,{error:{code:"INVALID_JSON",message:"The request body is invalid."}});
   if(Number(error?.status)===413)return send(response,413,{error:{code:"REQUEST_TOO_LARGE",message:"The request is too large."}});
   if(error?.message==="RATE_LIMITED")return send(response,429,{error:{code:"RATE_LIMITED",message:"Too many return requests. Please wait and try again."}});
-  const known:Record<string,[number,string]>={RETURN_ORDER_REQUIRED:[400,"Enter a valid order reference."],RETURN_RESOLUTION_INVALID:[400,"Choose a supported return resolution."],RETURN_REASON_INVALID:[400,"Choose a supported return reason."],RETURN_ORDER_NOT_OWNED:[404,"We could not verify that order on this account."]};
-  if(known[error?.message]){const [status,message]=known[error.message];return send(response,status,{error:{code:error.message,message}});}
+  if(error?.message==="RETURN_ORDER_REQUIRED")return send(response,400,{error:{code:"RETURN_ORDER_REQUIRED",message:"Enter a valid order reference."}});
+  if(error?.message==="RETURN_RESOLUTION_INVALID")return send(response,400,{error:{code:"RETURN_RESOLUTION_INVALID",message:"Choose a supported return resolution."}});
+  if(error?.message==="RETURN_REASON_INVALID")return send(response,400,{error:{code:"RETURN_REASON_INVALID",message:"Choose a supported return reason."}});
+  if(error?.message==="RETURN_ORDER_NOT_OWNED")return send(response,404,{error:{code:"RETURN_ORDER_NOT_OWNED",message:"We could not verify that order on this account."}});
   console.error("customer_returns_api_error",{code:error instanceof Error?error.message:"unknown"});
   return send(response,503,{error:{code:"RETURNS_UNAVAILABLE",message:"Returns are temporarily unavailable.",retryable:true}});
  }
