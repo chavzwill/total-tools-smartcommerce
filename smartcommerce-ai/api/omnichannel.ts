@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { enforceDurableRateLimit, firstHeader, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME, type StaffSession } from "../src/server/staffSession.js";
-import { channelReport, ingestExport, listIntakeItems, recordChannelEvent, reviewIntakeItem } from "../src/server/omnichannelIntake.js";
+import { channelReport, dispatchIntakeItem, ingestExport, listIntakeItems, markIntakeOutcome, recordChannelEvent, reviewIntakeItem, workflowDestinationForType } from "../src/server/omnichannelIntake.js";
 
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -13,63 +13,14 @@ function send(response: any, status: number, payload: unknown) {
   response.setHeader("Referrer-Policy", "same-origin");
   response.end(JSON.stringify(payload));
 }
-
-function sameOrigin(request: any) {
-  const origin = firstHeader(request.headers?.origin);
-  if (!origin) return true;
-  const host = firstHeader(request.headers?.host);
-  if (!host) return false;
-  try { return new URL(origin).host === host; } catch { return false; }
-}
-
-async function readJson(request: AsyncIterable<unknown>) {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of request) {
-    if (chunk === undefined || chunk === null) continue;
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
-    total += buffer.length;
-    if (total > MAX_BODY_BYTES) throw Object.assign(new Error("REQUEST_TOO_LARGE"), { status: 413 });
-    chunks.push(buffer);
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as Record<string, any>;
-}
-
-function secureEqual(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function trustedIntegration(request: any) {
-  const configured = process.env.SMARTCOMMERCE_OMNICHANNEL_INGEST_KEY?.trim() || "";
-  if (configured.length < 24) return false;
-  const supplied = String(firstHeader(request.headers?.["x-smartcommerce-integration-key"]) || "").trim();
-  return supplied.length > 0 && secureEqual(supplied, configured);
-}
-
-function staffSession(request: any) {
-  return readStaffSession(parseCookie(firstHeader(request.headers?.cookie))[STAFF_COOKIE_NAME]);
-}
-
-function mayViewQueue(staff: StaffSession) {
-  return [
-    "reports", "quotations_approve", "pr_approve", "purchasing_approve", "inventory_edit",
-    "rentals_manage_items", "wo_assess", "customers_edit",
-  ].some((permission) => canStaff(staff, permission));
-}
-
-function mayApprove(staff: StaffSession, itemType: string) {
-  const type = itemType.toLowerCase();
-  if (/quote|commercial/.test(type)) return canStaff(staff, "quotations_approve");
-  if (/purchase_request|requisition/.test(type)) return canStaff(staff, "pr_approve");
-  if (/purchase_order/.test(type)) return canStaff(staff, "purchasing_approve");
-  if (/inventory|stock/.test(type)) return canStaff(staff, "inventory_edit");
-  if (/rental/.test(type)) return canStaff(staff, "rentals_manage_items");
-  if (/repair|work_order/.test(type)) return canStaff(staff, "wo_assess");
-  if (/customer/.test(type)) return canStaff(staff, "customers_edit");
-  return canStaff(staff, "reports");
-}
+function sameOrigin(request: any) { const origin = firstHeader(request.headers?.origin); if (!origin) return true; const host = firstHeader(request.headers?.host); if (!host) return false; try { return new URL(origin).host === host; } catch { return false; } }
+async function readJson(request: AsyncIterable<unknown>) { const chunks: Buffer[] = []; let total = 0; for await (const chunk of request) { if (chunk === undefined || chunk === null) continue; const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)); total += buffer.length; if (total > MAX_BODY_BYTES) throw Object.assign(new Error("REQUEST_TOO_LARGE"), { status: 413 }); chunks.push(buffer); } return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as Record<string, any>; }
+function secureEqual(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
+function trustedIntegration(request: any) { const configured = process.env.SMARTCOMMERCE_OMNICHANNEL_INGEST_KEY?.trim() || ""; if (configured.length < 24) return false; const supplied = String(firstHeader(request.headers?.["x-smartcommerce-integration-key"]) || "").trim(); return supplied.length > 0 && secureEqual(supplied, configured); }
+function staffSession(request: any) { return readStaffSession(parseCookie(firstHeader(request.headers?.cookie))[STAFF_COOKIE_NAME]); }
+function mayViewQueue(staff: StaffSession) { return ["reports", "quotations_approve", "pr_approve", "purchasing_approve", "inventory_edit", "rentals_manage_items", "wo_assess", "customers_edit", "pos"].some((permission) => canStaff(staff, permission)); }
+function requiredApprovalPermission(itemType: string) { const type = itemType.toLowerCase(); if (/quote|commercial/.test(type)) return "quotations_approve"; if (/purchase_request|requisition/.test(type)) return "pr_approve"; if (/purchase_order/.test(type)) return "purchasing_approve"; if (/transfer/.test(type)) return "transfers_create"; if (/inventory|stock/.test(type)) return "inventory_edit"; if (/rental/.test(type)) return "rentals_manage_items"; if (/repair|work_order/.test(type)) return "wo_assess"; if (/customer/.test(type)) return "customers_edit"; if (/order|checkout|sale|transaction/.test(type)) return "pos"; return "reports"; }
+function mayApprove(staff: StaffSession, itemType: string) { return canStaff(staff, requiredApprovalPermission(itemType)); }
 
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
@@ -95,20 +46,33 @@ export default async function handler(request: any, response: any) {
       if (!staff) return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
       const input = await readJson(request);
       const id = String(input.id || "").trim();
-      const decision = input.decision === "rejected" ? "rejected" : input.decision === "approved" ? "approved" : "";
       const itemType = String(input.itemType || "").trim();
-      if (!id || !decision || !itemType) return send(response, 400, { success: false, error: { code: "INVALID_REVIEW_DECISION", message: "Review id, item type and approve/reject decision are required." } });
-      if (!mayApprove(staff, itemType)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow approval of this record type." } });
+      const action = String(input.action || "review");
+      if (!id || !itemType) return send(response, 400, { success: false, error: { code: "INVALID_OMNICHANNEL_ACTION", message: "Review id and item type are required." } });
+      if (!mayApprove(staff, itemType)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this record type.", details: { permission: requiredApprovalPermission(itemType) } } });
+
+      if (action === "dispatch") {
+        const row = await dispatchIntakeItem({ id, employeeId: staff.employeeId });
+        const destination = workflowDestinationForType(itemType);
+        await recordSecurityEvent({ request, eventType: "omnichannel_dispatch", eventStatus: "processing", riskLevel: "medium", subject: staff.employeeId, metadata: { intakeId: id, itemType, destination: destination.section, resource: destination.resource } }).catch(() => undefined);
+        return send(response, 200, { success: true, data: row, destination });
+      }
+      if (action === "outcome") {
+        const outcome = input.outcome === "failed" ? "failed" : input.outcome === "applied" ? "applied" : "";
+        if (!outcome) return send(response, 400, { success: false, error: { code: "INVALID_PROCESSING_OUTCOME", message: "Use applied or failed." } });
+        const row = await markIntakeOutcome({ id, status: outcome, employeeId: staff.employeeId, downstreamReference: input.downstreamReference ? String(input.downstreamReference).slice(0, 240) : null, error: input.error ? String(input.error).slice(0, 1000) : null });
+        await recordSecurityEvent({ request, eventType: "omnichannel_processing_outcome", eventStatus: outcome, riskLevel: outcome === "failed" ? "medium" : "info", subject: staff.employeeId, metadata: { intakeId: id, itemType } }).catch(() => undefined);
+        return send(response, 200, { success: true, data: row });
+      }
+
+      const decision = input.decision === "rejected" ? "rejected" : input.decision === "approved" ? "approved" : "";
+      if (!decision) return send(response, 400, { success: false, error: { code: "INVALID_REVIEW_DECISION", message: "Approve or reject decision is required." } });
       const row = await reviewIntakeItem({ id, decision, employeeId: staff.employeeId, note: String(input.note || "").slice(0, 1000) || null });
       await recordSecurityEvent({ request, eventType: "omnichannel_review_decision", eventStatus: decision, riskLevel: decision === "approved" ? "medium" : "low", subject: staff.employeeId, metadata: { intakeId: id, itemType } }).catch(() => undefined);
-      return send(response, 200, { success: true, data: row });
+      return send(response, 200, { success: true, data: row, destination: workflowDestinationForType(itemType) });
     }
 
-    if (method !== "POST") {
-      response.setHeader("Allow", "GET, POST, PATCH");
-      return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "GET, POST or PATCH is required." } });
-    }
-
+    if (method !== "POST") { response.setHeader("Allow", "GET, POST, PATCH"); return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "GET, POST or PATCH is required." } }); }
     const input = await readJson(request);
     const kind = String(input.kind || "event");
     if (kind === "event") {
@@ -116,34 +80,21 @@ export default async function handler(request: any, response: any) {
       await enforceDurableRateLimit({ request, action: "omnichannel_event", subject: requestIp(request), limit: 600, windowSeconds: 300 });
       const eventType = String(input.eventType || "").trim();
       if (!eventType || eventType.length > 120) return send(response, 400, { success: false, error: { code: "EVENT_TYPE_REQUIRED", message: "A valid event type is required." } });
-      const row = await recordChannelEvent({
-        sourceChannel: String(input.sourceChannel || "website"), sourceApplication: String(input.sourceApplication || "smartcommerce-web"),
-        eventType, entityType: input.entityType ? String(input.entityType) : null, entityId: input.entityId ? String(input.entityId) : null,
-        customerId: input.customerId ? String(input.customerId) : null, branchId: input.branchId ? String(input.branchId) : null,
-        sessionId: input.sessionId ? String(input.sessionId) : null, occurredAt: input.occurredAt ? String(input.occurredAt) : undefined,
-        payload: input.payload || {}, metadata: input.metadata || {},
-      });
+      const row = await recordChannelEvent({ sourceChannel: String(input.sourceChannel || "website"), sourceApplication: String(input.sourceApplication || "smartcommerce-web"), eventType, entityType: input.entityType ? String(input.entityType) : null, entityId: input.entityId ? String(input.entityId) : null, customerId: input.customerId ? String(input.customerId) : null, branchId: input.branchId ? String(input.branchId) : null, sessionId: input.sessionId ? String(input.sessionId) : null, occurredAt: input.occurredAt ? String(input.occurredAt) : undefined, payload: input.payload || {}, metadata: input.metadata || {} });
       return send(response, 202, { success: true, data: row });
     }
-
     if (kind === "export") {
       if (!trustedIntegration(request) && !sameOrigin(request)) return send(response, 403, { success: false, error: { code: "INTEGRATION_AUTH_REQUIRED", message: "A trusted SmartCommerce integration key is required." } });
       const idempotencyKey = String(firstHeader(request.headers?.["idempotency-key"]) || input.idempotencyKey || "").trim();
-      const row = await ingestExport({
-        idempotencyKey, sourceChannel: String(input.sourceChannel || "smartcommerce"), sourceApplication: String(input.sourceApplication || "smartcommerce"),
-        externalId: input.externalId ? String(input.externalId) : null, itemType: String(input.itemType || ""), entityType: input.entityType ? String(input.entityType) : null,
-        entityId: input.entityId ? String(input.entityId) : null, customerId: input.customerId ? String(input.customerId) : null, branchId: input.branchId ? String(input.branchId) : null,
-        requiresReview: Boolean(input.requiresReview || input.decision === "manual_review" || input.status === "manual_review" || input.status === "under_review"),
-        priority: String(input.priority || "normal"), reviewReason: input.reviewReason ? String(input.reviewReason).slice(0, 1000) : null,
-        payload: input.payload || {}, metadata: input.metadata || {},
-      });
-      return send(response, 202, { success: true, data: row });
+      const itemType = String(input.itemType || "");
+      const row = await ingestExport({ idempotencyKey, sourceChannel: String(input.sourceChannel || "smartcommerce"), sourceApplication: String(input.sourceApplication || "smartcommerce"), externalId: input.externalId ? String(input.externalId) : null, itemType, entityType: input.entityType ? String(input.entityType) : null, entityId: input.entityId ? String(input.entityId) : null, customerId: input.customerId ? String(input.customerId) : null, branchId: input.branchId ? String(input.branchId) : null, requiresReview: Boolean(input.requiresReview || input.decision === "manual_review" || input.status === "manual_review" || input.status === "under_review"), priority: String(input.priority || "normal"), reviewReason: input.reviewReason ? String(input.reviewReason).slice(0, 1000) : null, payload: input.payload || {}, metadata: input.metadata || {} });
+      return send(response, 202, { success: true, data: row, destination: workflowDestinationForType(itemType) });
     }
-
     return send(response, 400, { success: false, error: { code: "OMNICHANNEL_KIND_INVALID", message: "Use kind=event or kind=export." } });
   } catch (error) {
     const err = error as Error & { status?: number };
-    const status = err.status || (err.message === "OMNICHANNEL_REVIEW_STATE_CONFLICT" ? 409 : 500);
+    const conflicts = new Set(["OMNICHANNEL_REVIEW_STATE_CONFLICT", "OMNICHANNEL_DISPATCH_STATE_CONFLICT", "OMNICHANNEL_OUTCOME_STATE_CONFLICT"]);
+    const status = err.status || (conflicts.has(err.message) ? 409 : err.message === "OMNICHANNEL_ITEM_NOT_FOUND" ? 404 : 500);
     console.error("omnichannel_api_error", { code: err.message, method });
     return send(response, status, { success: false, error: { code: err.message || "OMNICHANNEL_ERROR", message: status >= 500 ? "Omnichannel processing is temporarily unavailable." : err.message } });
   }
