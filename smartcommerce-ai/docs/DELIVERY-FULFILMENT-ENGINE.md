@@ -33,6 +33,21 @@ customer_delivery_charge_jmd = provider_cost_jmd + operations_markup_jmd
 
 Do not collapse these fields into one number in accounting records.
 
+## Authoritative product freight facts
+The delivery API no longer accepts browser-supplied weight, dimensions or parcel eligibility as trusted facts. It receives product identity and quantity, fetches the product through the configured SmartCommerce commerce-provider adapter, then maps provider `attributes` / `metadata` into the delivery engine.
+
+Recognized provider freight keys currently include aliases for:
+- `parcelEligible`
+- `shippingWeightLb` / `packageWeightLb` / `weightLb`
+- `packageLengthIn` / `lengthIn`
+- `packageWidthIn` / `widthIn`
+- `packageHeightIn` / `heightIn`
+- `oversized` / `freightOnly`
+- `hazardous` / `hazmat` / `dangerousGoods`
+- `fragileFreight` / `specialHandling`
+
+These are compatibility aliases, not permission for the browser to declare freight facts. If the connected catalogue/provider does not contain trustworthy values, SmartCommerce routes delivery to manual review.
+
 ## Parcel eligibility gate
 Automatic courier pricing is allowed only when all of the following are true:
 1. Item is a sale, not a rental.
@@ -50,11 +65,17 @@ Rental orders must be manually reviewed because the logistics cost can include b
 Large machines, generators, ladders, heavy tools, bulk electrical materials and similar freight are not to be priced through parcel courier tables. They enter a manual logistics queue where staff determine vehicle, route, delivery window, unloading requirements and final customer charge.
 
 ## Checkout behavior
-Checkout should eventually request fulfilment options from the server after inventory and freight facts are revalidated. The server returns either:
-- quoted: one or more verified courier options with provider cost, markup and customer charge; or
-- manual_review: a clear reason code and no automatic delivery price.
+Checkout now exposes two fulfilment paths:
+- Pick up in store: zero delivery charge path.
+- Deliver my order: preliminary courier/manual-review assessment.
 
-Payment must not proceed using an unverified delivery price.
+For delivery, the customer may select a preliminary area class and speed so SmartCommerce can show available courier estimates. This area selection is not authoritative final pricing. The final address/zone must be verified server-side before a delivery charge can be attached to the checkout quote.
+
+The server returns either:
+- `quoted`: one or more provider-backed courier options with provider cost, 20% markup and customer charge; or
+- `manual_review`: a clear reason code and no automatic delivery price.
+
+Payment/order creation must not proceed using an unverified delivery price. Current checkout therefore does not add a preliminary courier estimate to the authoritative merchandise total. Commercial-credit submission is blocked when delivery is selected until delivery-quote binding is implemented.
 
 ## Sales agent module
 Sales agents should know:
@@ -62,6 +83,7 @@ Sales agents should know:
 - Never promise an automated rate for large items or rentals.
 - Manual-review orders remain valid sales opportunities; logistics staff must price delivery before final payment/confirmation.
 - A courier's underlying cost is not the customer-facing charge; SmartCommerce applies the approved operational markup.
+- Preliminary checkout courier prices remain estimates until final address verification binds the delivery charge to the order.
 
 ## Bookkeeping module
 Bookkeepers should see separate values for:
@@ -89,20 +111,25 @@ The 20% markup is a policy setting and may later become configurable; this first
 ## Developer module
 Primary implementation:
 - `src/server/deliveryFulfilmentEngine.ts`
+- `src/server/deliveryProductFacts.ts`
+- `src/services/deliveryClient.ts`
 - `api/delivery-quote.ts`
+- `src/pages/CheckoutPage.tsx`
+- `src/styles/delivery-fulfilment.css`
 
 Engineering rules:
 - Provider rates belong in configuration/data structures, never scattered through checkout components.
 - Do not trust client-editable weight/dimension values as authoritative checkout facts.
+- Freight facts are resolved from the connected commerce provider at the server boundary.
 - Rates with stale or unconfirmed sources must remain disabled for automatic checkout.
 - Preserve explicit source status for every provider service.
 - Manual review is a valid successful routing decision, not an error condition.
+- Never create an order with an estimated delivery charge that has not been revalidated and persisted into the authoritative checkout quote.
 
 ## Next implementation stages
-1. Connect checkout cart SKUs to authoritative freight attributes from the commerce provider/catalogue.
-2. Add fulfilment selection UI: pickup, parcel courier, manual delivery review.
-3. Persist selected quote and revalidate it immediately before payment.
-4. Add delivery/manual-review work queue for staff.
-5. Add address/job-site records and route/zone intelligence.
-6. Add provider APIs/contracts where available.
-7. Add delivery status, dispatch and proof-of-delivery lifecycle.
+1. Persist selected fulfilment choice and verified destination/address.
+2. Bind the selected/reviewed delivery quote into the authoritative checkout quote and total.
+3. Add delivery/manual-review work queue for staff.
+4. Add customer addresses/job-site records and route/zone intelligence.
+5. Add provider APIs/contracts where available.
+6. Add delivery status, dispatch and proof-of-delivery lifecycle.
