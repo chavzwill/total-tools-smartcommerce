@@ -5,6 +5,7 @@ import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
 import { createManualDeliveryReview } from "../src/server/deliveryReviewQueue.js";
 import { getFulfilmentOrigin } from "../src/server/fulfilmentOriginStore.js";
 import { resolveJamaicaDeliveryZone } from "../src/server/jamaicaDeliveryZones.js";
+import { resolveCollectionPoint } from "../src/server/courierCollectionPoints.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
@@ -32,6 +33,7 @@ type BindInput = {
   quoteId?: string;
   mode?: "pickup" | "delivery";
   serviceId?: string;
+  collectionPointId?: string;
   requestedSpeed?: "standard" | "same_day";
   address?: AddressInput;
 };
@@ -194,22 +196,8 @@ export default async function handler(request: any, response: any) {
 
     if (mode === "pickup") {
       const totalMinor = subtotalMinor + taxMinor + serviceMinor;
-      const nextSnapshot = {
-        ...snapshot,
-        fulfilment: {
-          mode: "pickup",
-          status: "bound",
-          deliveryMinor: 0,
-          boundAt: new Date().toISOString(),
-        },
-      };
-      await sql()`
-        UPDATE checkout_quotes
-        SET delivery_minor = 0,
-            total_minor = ${totalMinor},
-            snapshot = ${JSON.stringify(nextSnapshot)}::jsonb
-        WHERE id = ${quoteId} AND customer_id = ${customerId}
-      `;
+      const nextSnapshot = { ...snapshot, fulfilment: { mode: "pickup", status: "bound", deliveryMinor: 0, boundAt: new Date().toISOString() } };
+      await sql()`UPDATE checkout_quotes SET delivery_minor = 0, total_minor = ${totalMinor}, snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
       await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "pickup", riskLevel: "info", customerId, metadata: { quoteId, mode: "pickup", totalMinor } });
       return send(response, 200, { fulfilment: nextSnapshot.fulfilment, quote: { id: quoteId, deliveryMinor: 0, totalMinor } });
     }
@@ -218,60 +206,21 @@ export default async function handler(request: any, response: any) {
     const requestedSpeed = input.requestedSpeed === "same_day" ? "same_day" : "standard";
     const serviceId = clean(input.serviceId, 100);
     const origin = await getFulfilmentOrigin();
-    const zone = resolveJamaicaDeliveryZone({
-      town: address.city,
-      parish: address.region,
-      originTown: origin.active ? origin.town : undefined,
-      originParish: origin.active ? origin.parish : undefined,
-    });
+    const zone = resolveJamaicaDeliveryZone({ town: address.city, parish: address.region, originTown: origin.active ? origin.town : undefined, originParish: origin.active ? origin.parish : undefined });
 
-    const resolvedItems = await resolveDeliveryItems(items.map((item: any) => ({
-      productId: clean(item.productId, 180),
-      quantity: Math.max(1, Math.min(999, Math.floor(Number(item.quantity || 1)))),
-      fulfilmentType: "sale" as const,
-    })));
-
+    const resolvedItems = await resolveDeliveryItems(items.map((item: any) => ({ productId: clean(item.productId, 180), quantity: Math.max(1, Math.min(999, Math.floor(Number(item.quantity || 1)))), fulfilmentType: "sale" as const })));
     const delivery = zone.status === "resolved"
-      ? quoteDelivery({
-          items: resolvedItems,
-          destinationCountryCode: address.countryCode,
-          destinationClass: zone.destinationClass,
-          requestedSpeed,
-          sameDayEligible: zone.sameDayEligible,
-        })
-      : {
-          status: "manual_review" as const,
-          reasonCode: zone.reasonCode,
-          message: zone.message,
-          options: [] as [],
-        };
+      ? quoteDelivery({ items: resolvedItems, destinationCountryCode: address.countryCode, destinationClass: zone.destinationClass, requestedSpeed, sameDayEligible: zone.sameDayEligible })
+      : { status: "manual_review" as const, reasonCode: zone.reasonCode, message: zone.message, options: [] as [] };
 
     if (delivery.status === "manual_review") {
       const destinationClass = zone.status === "resolved" ? zone.destinationClass : undefined;
-      const review = await createManualDeliveryReview({
-        quoteId,
-        customerId,
-        reasonCode: delivery.reasonCode,
-        reasonMessage: delivery.message,
-        requestedServiceId: serviceId || undefined,
-        requestedSpeed,
-        destinationClass,
-        address,
-        items,
-      });
+      const review = await createManualDeliveryReview({ quoteId, customerId, reasonCode: delivery.reasonCode, reasonMessage: delivery.message, requestedServiceId: serviceId || undefined, requestedSpeed, destinationClass, address, items });
       const manualReview = {
-        mode: "delivery",
-        status: "manual_review",
-        reviewId: review.id,
-        reasonCode: delivery.reasonCode,
-        message: delivery.message,
-        address,
-        destinationClass: destinationClass || null,
-        zone,
+        mode: "delivery", status: "manual_review", reviewId: review.id, reasonCode: delivery.reasonCode, message: delivery.message, address,
+        destinationClass: destinationClass || null, zone,
         origin: { configured: origin.active, branchId: origin.branchId || null, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
-        requestedSpeed,
-        requestedServiceId: serviceId || null,
-        requestedAt: new Date().toISOString(),
+        requestedSpeed, requestedServiceId: serviceId || null, requestedAt: new Date().toISOString(),
       };
       const nextSnapshot = { ...snapshot, fulfilment: manualReview };
       await sql()`UPDATE checkout_quotes SET snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
@@ -279,50 +228,34 @@ export default async function handler(request: any, response: any) {
       return send(response, 202, { fulfilment: manualReview, zone, origin: manualReview.origin, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
     }
 
-    if (zone.status !== "resolved") {
-      return send(response, 409, { error: { code: "DELIVERY_ZONE_CHANGED", message: "The delivery zone could not be verified. Send this shipment for logistics review." } });
-    }
+    if (zone.status !== "resolved") return send(response, 409, { error: { code: "DELIVERY_ZONE_CHANGED", message: "The delivery zone could not be verified. Send this shipment for logistics review." } });
     const resolvedZone = zone;
-
     if (!serviceId) return send(response, 400, { error: { code: "DELIVERY_SERVICE_REQUIRED", message: "Choose a delivery service before finalizing delivery." } });
     const option = delivery.options.find((candidate) => candidate.serviceId === serviceId);
     if (!option) return send(response, 409, { error: { code: "DELIVERY_SERVICE_CHANGED", message: "That delivery option is no longer available. Refresh the courier choices and try again." } });
 
+    let collectionPoint = null as ReturnType<typeof resolveCollectionPoint> | null | undefined;
     if (option.mode !== "door_to_door") {
-      return send(response, 409, { error: { code: "DELIVERY_COLLECTION_POINT_REQUIRED", message: "Choose a courier collection point before this service can be attached to the order." } });
+      const collectionPointId = clean(input.collectionPointId, 100);
+      if (!collectionPointId) return send(response, 400, { error: { code: "DELIVERY_COLLECTION_POINT_REQUIRED", message: "Choose the courier branch or collection point where you want to collect this package." } });
+      collectionPoint = resolveCollectionPoint(serviceId, collectionPointId);
+      if (!collectionPoint) return send(response, 409, { error: { code: "DELIVERY_COLLECTION_POINT_CHANGED", message: "That courier collection point is no longer available for this service. Choose another location." } });
     }
 
     const deliveryMinor = Math.round(option.customerChargeJmd * 100);
     const totalMinor = subtotalMinor + taxMinor + serviceMinor + deliveryMinor;
     const bound = {
-      mode: "delivery",
-      status: "bound",
-      provider: option.provider,
-      serviceId: option.serviceId,
-      serviceLabel: option.label,
-      serviceMode: option.mode,
-      providerCostJmd: option.providerCostJmd,
-      operationsMarkupRate: option.operationsMarkupRate,
-      operationsMarkupJmd: option.operationsMarkupJmd,
-      customerChargeJmd: option.customerChargeJmd,
-      billableWeightLb: option.billableWeightLb,
-      address,
-      destinationClass: resolvedZone.destinationClass,
-      zone: resolvedZone,
+      mode: "delivery", status: "bound", provider: option.provider, serviceId: option.serviceId, serviceLabel: option.label, serviceMode: option.mode,
+      providerCostJmd: option.providerCostJmd, operationsMarkupRate: option.operationsMarkupRate, operationsMarkupJmd: option.operationsMarkupJmd,
+      customerChargeJmd: option.customerChargeJmd, billableWeightLb: option.billableWeightLb, address,
+      collectionPoint: collectionPoint ? { id: collectionPoint.id, provider: collectionPoint.provider, name: collectionPoint.name, town: collectionPoint.town, parish: collectionPoint.parish, address: collectionPoint.address } : null,
+      destinationClass: resolvedZone.destinationClass, zone: resolvedZone,
       origin: { configured: origin.active, branchId: origin.branchId || null, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
-      requestedSpeed,
-      sourceStatus: option.sourceStatus,
-      boundAt: new Date().toISOString(),
+      requestedSpeed, sourceStatus: option.sourceStatus, boundAt: new Date().toISOString(),
     };
     const nextSnapshot = { ...snapshot, fulfilment: bound };
-    await sql()`
-      UPDATE checkout_quotes
-      SET delivery_minor = ${deliveryMinor},
-          total_minor = ${totalMinor},
-          snapshot = ${JSON.stringify(nextSnapshot)}::jsonb
-      WHERE id = ${quoteId} AND customer_id = ${customerId}
-    `;
-    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: resolvedZone.destinationClass, originTown: origin.town || null, originParish: origin.parish || null, deliveryMinor, totalMinor } });
+    await sql()`UPDATE checkout_quotes SET delivery_minor = ${deliveryMinor}, total_minor = ${totalMinor}, snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
+    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, collectionPointId: collectionPoint?.id || null, destinationClass: resolvedZone.destinationClass, originTown: origin.town || null, originParish: origin.parish || null, deliveryMinor, totalMinor } });
     return send(response, 200, { fulfilment: bound, zone: resolvedZone, origin: bound.origin, quote: { id: quoteId, deliveryMinor, totalMinor } });
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
