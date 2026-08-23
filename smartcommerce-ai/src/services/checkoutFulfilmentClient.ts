@@ -13,6 +13,15 @@ export type CheckoutDeliveryAddress = {
   notes?: string;
 };
 
+export type CheckoutCollectionPoint = {
+  id: string;
+  provider: "tara" | "knutsford";
+  name: string;
+  town: string;
+  parish: string;
+  address: string;
+};
+
 export type BoundFulfilment =
   | {
       mode: "pickup";
@@ -46,6 +55,7 @@ export type BoundFulfilment =
       customerChargeJmd: number;
       billableWeightLb: number;
       address: CheckoutDeliveryAddress;
+      collectionPoint?: CheckoutCollectionPoint | null;
       destinationClass: "metro" | "regular" | "rural" | "remote";
       zone?: any;
       requestedSpeed: "standard" | "same_day";
@@ -69,6 +79,7 @@ export async function bindCheckoutFulfilment(input: {
   quoteId: string;
   mode: "pickup" | "delivery";
   serviceId?: string;
+  collectionPointId?: string;
   requestedSpeed?: "standard" | "same_day";
   address?: CheckoutDeliveryAddress;
 }) {
