@@ -158,6 +158,12 @@ function mapOrder(context: PosAdapterContext, row: JsonRecord): PlatformOrder | 
       transactionNumber: text(row, "transaction_number") || null,
       paymentMethod: text(row, "payment_method") || null,
       fulfillmentStatus: fulfillment || null,
+      externalOrderId: text(row, "external_order_id") || null,
+      externalQuoteId: text(row, "external_quote_id") || null,
+      externalPaymentReference: text(row, "external_payment_reference") || null,
+      deliveryAmount: numberValue(row, "delivery_amount") || 0,
+      serviceAmount: numberValue(row, "service_amount") || 0,
+      handlingAmount: numberValue(row, "handling_amount") || 0,
     },
   };
 }
@@ -219,6 +225,15 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
     }
   }
 
+  async function reconcileExternalOrder(context: PosAdapterContext, externalOrderId: string) {
+    const result = await request<unknown>(context, "GET", `/api/smartcommerce-orders/${encodeURIComponent(externalOrderId)}`);
+    if (!result.success) return result as PlatformApiResult<PlatformOrder>;
+    const mapped = mapOrder(context, asRecord(result.data) || {});
+    return mapped
+      ? { ...result, data: mapped }
+      : { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_INVALID", message: "The POS returned an invalid SmartCommerce order record." }, requestId: context.requestId };
+  }
+
   return {
     ...readAdapter,
 
@@ -232,7 +247,7 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
           capabilities: {
             ...result.data.capabilities,
             customers: Boolean(options.apiKey),
-            orders: false,
+            orders: Boolean(options.apiKey),
             invoices: false,
           },
         },
@@ -299,23 +314,18 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
     },
 
     async getOrderById(context, orderId) {
-      const result = await request<unknown>(context, "GET", `/api/transactions/${encodeURIComponent(orderId)}`);
-      if (!result.success) return result;
-      const mapped = mapOrder(context, asRecord(result.data) || {});
-      return mapped
-        ? { ...result, data: mapped }
-        : { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_INVALID", message: "The POS returned an invalid transaction record." }, requestId: context.requestId };
+      const direct = await request<unknown>(context, "GET", `/api/transactions/${encodeURIComponent(orderId)}`);
+      if (direct.success) {
+        const mapped = mapOrder(context, asRecord(direct.data) || {});
+        if (mapped) return { ...direct, data: mapped };
+      }
+      return reconcileExternalOrder(context, orderId);
     },
 
     async createOrder(context, order) {
       const settlementMethod = String(order.metadata?.settlementMethod || "");
       if (settlementMethod !== "commercial_account_credit") {
         return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_SETTLEMENT_UNSUPPORTED", message: "The POS write adapter currently accepts only verified commercial-account credit orders." }, requestId: context.requestId };
-      }
-      const deliveryMinor = Number(order.metadata?.deliveryMinor || 0);
-      const merchandiseTotal = Number(order.subtotalAmount || 0) + Number(order.taxAmount || 0) - Number(order.discountAmount || 0);
-      if (deliveryMinor > 0 || Math.abs(Number(order.totalAmount || 0) - merchandiseTotal) > 0.01) {
-        return { success: false, error: { code: "TOTAL_TOOLS_POS_NON_MERCHANDISE_CHARGES_UNSUPPORTED", message: "The current POS transaction contract cannot safely represent SmartCommerce delivery or other non-merchandise charges." }, requestId: context.requestId };
       }
       if (!order.lines.length || order.lines.some((line) => !line.productId || !Number.isInteger(line.quantity) || line.quantity <= 0)) {
         return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_LINES_INVALID", message: "Every POS order line requires a valid product and positive whole-number quantity." }, requestId: context.requestId };
@@ -339,17 +349,39 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
           const mapped = mapOrder(context, asRecord(claim.row.provider_result) || {});
           if (mapped) return { success: true, data: mapped, requestId: context.requestId, syncedAt: new Date().toISOString() };
         }
-        return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_WRITE_ALREADY_CLAIMED", message: "This order write has already been attempted. Reconcile the existing operation before retrying." }, requestId: context.requestId };
+        const reconciled = await reconcileExternalOrder(context, order.id);
+        if (reconciled.success) {
+          await completeOperation(operationKey, reconciled.data.id, reconciled.data).catch(() => {});
+          return reconciled;
+        }
+        return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_WRITE_ALREADY_CLAIMED", message: "This order write has already been attempted and has not yet been reconciled." }, requestId: context.requestId };
+      }
+
+      const deliveryMinor = Number(order.metadata?.deliveryMinor || 0);
+      const serviceMinor = Number(order.metadata?.serviceMinor || 0);
+      const knownNonMerchandise = (deliveryMinor + serviceMinor) / 100;
+      const expectedRemainder = Math.max(0, Number(order.totalAmount || 0) - Number(order.subtotalAmount || 0) - Number(order.taxAmount || 0) + Number(order.discountAmount || 0));
+      const derivedService = Math.max(0, expectedRemainder - deliveryMinor / 100);
+      const serviceAmount = serviceMinor > 0 ? serviceMinor / 100 : derivedService;
+      const totalWithCharges = Number(order.subtotalAmount || 0) + Number(order.taxAmount || 0) - Number(order.discountAmount || 0) + deliveryMinor / 100 + serviceAmount;
+      if (Math.abs(totalWithCharges - Number(order.totalAmount || 0)) > 0.01 || !Number.isFinite(knownNonMerchandise + expectedRemainder)) {
+        await markOperation(operationKey, "failed", "TOTAL_TOOLS_POS_ORDER_TOTAL_MISMATCH").catch(() => {});
+        return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_TOTAL_MISMATCH", message: "The SmartCommerce order total cannot be represented safely by the POS charge contract." }, requestId: context.requestId };
       }
 
       const payload = {
+        external_order_id: order.id,
+        external_quote_id: order.metadata?.checkoutQuoteId || null,
+        external_payment_reference: order.metadata?.externalPaymentReference || null,
+        external_customer_id: order.customerAccountId || null,
         customer_id: providerCustomerId,
         employee_id: employeeId,
         branch_id: order.branchId || null,
         items: order.lines.map((line) => ({ product_id: line.productId, quantity: line.quantity })),
-        discount_amount: Number(order.discountAmount || 0),
         payment_method: "credit",
-        amount_tendered: 0,
+        delivery_amount: deliveryMinor / 100,
+        service_amount: serviceAmount,
+        handling_amount: 0,
         notes: [
           `SmartCommerce order: ${order.id}`,
           order.metadata?.purchaseOrderReference ? `PO: ${order.metadata.purchaseOrderReference}` : "",
@@ -357,10 +389,18 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
         ].filter(Boolean).join(" | "),
       };
 
-      const created = await request<unknown>(context, "POST", "/api/transactions", payload);
+      const created = await request<unknown>(context, "POST", "/api/smartcommerce-orders", payload);
       if (!created.success) {
-        const uncertain = created.error.code === "TOTAL_TOOLS_POS_WRITE_UNCERTAIN";
-        await markOperation(operationKey, uncertain ? "uncertain" : "failed", created.error.code).catch(() => {});
+        if (created.error.code === "TOTAL_TOOLS_POS_WRITE_UNCERTAIN") {
+          const reconciled = await reconcileExternalOrder(context, order.id);
+          if (reconciled.success) {
+            await completeOperation(operationKey, reconciled.data.id, reconciled.data).catch(() => {});
+            return reconciled;
+          }
+          await markOperation(operationKey, "uncertain", created.error.code).catch(() => {});
+        } else {
+          await markOperation(operationKey, "failed", created.error.code).catch(() => {});
+        }
         return created as PlatformApiResult<PlatformOrder>;
       }
       const raw = asRecord(created.data) || {};
