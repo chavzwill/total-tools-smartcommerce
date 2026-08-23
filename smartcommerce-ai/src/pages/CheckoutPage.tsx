@@ -1,6 +1,7 @@
 import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, MapPin, PackageCheck, RefreshCw, ShieldCheck, ShoppingBag, Store, Truck, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentMethodPanel from "../components/checkout/PaymentMethodPanel";
+import ReadyManualDeliveryPanel from "../components/checkout/ReadyManualDeliveryPanel";
 import Container from "../components/shared/Container";
 import { bindCheckoutFulfilment, type BoundFulfilment, type CheckoutDeliveryAddress } from "../services/checkoutFulfilmentClient";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
@@ -350,6 +351,13 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             {fulfilmentMode === "pickup" && !guest ? <div className="sc-fulfilment__status">{bindingLoading ? <Loader2 size={18} className="sc-spin" /> : <CheckCircle2 size={18} />}<span>{bindingLoading ? "Confirming pickup on this quote…" : boundFulfilment?.status === "bound" ? "Pickup is attached to the verified checkout quote at J$0 delivery." : bindingError || "Pickup will be confirmed before order submission."}</span></div> : null}
 
             {fulfilmentMode === "delivery" ? <div className="sc-fulfilment__delivery">
+              {!guest ? <ReadyManualDeliveryPanel quoteId={quote.id} currency={quote.currency} onAttached={(result) => {
+                setFulfilmentMode("delivery");
+                setBoundFulfilment(result.fulfilment as BoundFulfilment);
+                setBindingError("");
+                setQuote((current) => current ? { ...current, deliveryMinor: result.quote.deliveryMinor, totalMinor: result.quote.totalMinor } : current);
+              }} /> : null}
+
               <div className="sc-fulfilment__address">
                 <div className="sc-fulfilment__address-head"><MapPin size={18} /><div><strong>Delivery destination</strong><span>Use a home, business, or job-site address. This becomes part of the verified fulfilment record.</span></div></div>
                 <div className="sc-fulfilment__address-grid">
