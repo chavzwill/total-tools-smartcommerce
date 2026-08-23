@@ -1,11 +1,13 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
+import { recordSecurityEvent } from "./securityInfrastructure.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
 let schemaReady: Promise<void> | undefined;
 
 type Replay = { status: number; contentType: string; body: Buffer };
 export type MutationClaim = { recordKey: string; replay?: Replay; inProgress?: boolean };
+type MutationContext = { actorId: string; operation: string };
 
 function sql() {
   if (!sqlClient) {
@@ -36,9 +38,27 @@ async function ensureSchema() {
         expires_at TIMESTAMPTZ NOT NULL
       )`;
       await sql()`CREATE INDEX IF NOT EXISTS operations_mutation_idempotency_expiry_idx ON operations_mutation_idempotency(expires_at)`;
+      await sql()`CREATE INDEX IF NOT EXISTS operations_mutation_actor_created_idx ON operations_mutation_idempotency(actor_id,created_at DESC)`;
+      await sql()`CREATE INDEX IF NOT EXISTS operations_mutation_operation_created_idx ON operations_mutation_idempotency(operation,created_at DESC)`;
     })();
   }
   await schemaReady;
+}
+
+async function mutationContext(recordKey: string): Promise<MutationContext | null> {
+  const rows = await sql()`SELECT actor_id,operation FROM operations_mutation_idempotency WHERE record_key=${recordKey} LIMIT 1` as Array<{ actor_id: string; operation: string }>;
+  return rows[0] ? { actorId: String(rows[0].actor_id), operation: String(rows[0].operation) } : null;
+}
+
+async function audit(context: MutationContext | null, eventType: string, eventStatus: string, metadata: Record<string, unknown>) {
+  if (!context) return;
+  await recordSecurityEvent({
+    eventType,
+    eventStatus,
+    riskLevel: eventStatus === "blocked" || eventStatus === "failed" ? "high" : "medium",
+    subject: context.actorId,
+    metadata: { operation: context.operation, ...metadata },
+  }).catch(() => undefined);
 }
 
 export function validIdempotencyKey(value: unknown) {
@@ -68,7 +88,10 @@ export async function claimOperationsMutation(input: {
       record_key,actor_id,operation,key_hash,request_fingerprint,state,expires_at
     ) VALUES(${recordKey},${input.actorId},${input.operation},${keyHash},${requestFingerprint},'processing',${expiresAt}::timestamptz)
     ON CONFLICT(record_key) DO NOTHING RETURNING record_key` as Array<{ record_key: string }>;
-  if (inserted[0]) return { recordKey };
+  if (inserted[0]) {
+    await audit({ actorId: input.actorId, operation: input.operation }, "staff_operations_mutation_started", "processing", { recordKey: recordKey.slice(0, 16) });
+    return { recordKey };
+  }
 
   const found = await sql()`SELECT request_fingerprint,state,response_status,response_content_type,response_body_base64,expires_at
     FROM operations_mutation_idempotency WHERE record_key=${recordKey} LIMIT 1` as Array<Record<string, any>>;
@@ -77,8 +100,12 @@ export async function claimOperationsMutation(input: {
     await sql()`DELETE FROM operations_mutation_idempotency WHERE record_key=${recordKey}`;
     return claimOperationsMutation(input);
   }
-  if (String(existing.request_fingerprint) !== requestFingerprint) throw new Error("OPERATIONS_IDEMPOTENCY_KEY_REUSED");
+  if (String(existing.request_fingerprint) !== requestFingerprint) {
+    await audit({ actorId: input.actorId, operation: input.operation }, "staff_operations_idempotency_conflict", "blocked", { recordKey: recordKey.slice(0, 16) });
+    throw new Error("OPERATIONS_IDEMPOTENCY_KEY_REUSED");
+  }
   if (String(existing.state) === "completed" && existing.response_status != null) {
+    await audit({ actorId: input.actorId, operation: input.operation }, "staff_operations_mutation_replayed", "success", { recordKey: recordKey.slice(0, 16), responseStatus: Number(existing.response_status) });
     return {
       recordKey,
       replay: {
@@ -88,19 +115,25 @@ export async function claimOperationsMutation(input: {
       },
     };
   }
+  await audit({ actorId: input.actorId, operation: input.operation }, "staff_operations_duplicate_in_progress", "blocked", { recordKey: recordKey.slice(0, 16) });
   return { recordKey, inProgress: true };
 }
 
 export async function completeOperationsMutation(recordKey: string, status: number, contentType: string, body: Buffer) {
   await ensureSchema();
+  const context = await mutationContext(recordKey);
   if (status >= 500) {
+    await audit(context, "staff_operations_mutation_upstream_failed", "failed", { recordKey: recordKey.slice(0, 16), responseStatus: status });
     await sql()`DELETE FROM operations_mutation_idempotency WHERE record_key=${recordKey}`;
     return;
   }
   await sql()`UPDATE operations_mutation_idempotency SET state='completed',response_status=${status},response_content_type=${contentType},response_body_base64=${body.toString("base64")},updated_at=NOW() WHERE record_key=${recordKey}`;
+  await audit(context, "staff_operations_mutation_completed", status >= 400 ? "rejected" : "success", { recordKey: recordKey.slice(0, 16), responseStatus: status });
 }
 
 export async function abandonOperationsMutation(recordKey: string) {
   await ensureSchema();
+  const context = await mutationContext(recordKey);
+  await audit(context, "staff_operations_mutation_abandoned", "blocked", { recordKey: recordKey.slice(0, 16) });
   await sql()`DELETE FROM operations_mutation_idempotency WHERE record_key=${recordKey}`;
 }
