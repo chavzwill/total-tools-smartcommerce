@@ -105,11 +105,18 @@ export async function ensureOmnichannelSchema() {
   await db`ALTER TABLE omnichannel_intake_items ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ`;
   await db`ALTER TABLE omnichannel_intake_items ADD COLUMN IF NOT EXISTS downstream_reference TEXT`;
   await db`ALTER TABLE omnichannel_intake_items ADD COLUMN IF NOT EXISTS processing_error TEXT`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_events_occurred_idx ON omnichannel_events(occurred_at DESC)`;
   await db`CREATE INDEX IF NOT EXISTS omnichannel_events_source_date_idx ON omnichannel_events(source_channel, occurred_at DESC)`;
   await db`CREATE INDEX IF NOT EXISTS omnichannel_events_type_date_idx ON omnichannel_events(event_type, occurred_at DESC)`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_events_customer_date_idx ON omnichannel_events(customer_id, occurred_at DESC) WHERE customer_id IS NOT NULL`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_events_branch_date_idx ON omnichannel_events(branch_id, occurred_at DESC) WHERE branch_id IS NOT NULL`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_received_idx ON omnichannel_intake_items(received_at DESC)`;
   await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_status_date_idx ON omnichannel_intake_items(status, received_at DESC)`;
   await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_source_date_idx ON omnichannel_intake_items(source_channel, received_at DESC)`;
   await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_destination_idx ON omnichannel_intake_items(destination_section, status, received_at DESC)`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_customer_date_idx ON omnichannel_intake_items(customer_id, received_at DESC) WHERE customer_id IS NOT NULL`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_branch_date_idx ON omnichannel_intake_items(branch_id, received_at DESC) WHERE branch_id IS NOT NULL`;
+  await db`CREATE INDEX IF NOT EXISTS omnichannel_intake_downstream_ref_idx ON omnichannel_intake_items(destination_resource, downstream_reference) WHERE downstream_reference IS NOT NULL`;
   schemaReady = true;
 }
 
