@@ -11,6 +11,7 @@ const RESOURCE_RULES: Record<string, ResourceRule> = {
   "work-orders": { upstream: "work-orders", read: "work_orders", write: "work_orders" },
   employees: { upstream: "employees", read: "employees", write: "employees_edit" },
   inventory: { upstream: "products", read: ["inventory", "pos", "quotations"], write: "inventory_edit" },
+  warehouse: { upstream: "warehouse", read: ["warehouse", "cycle-counts", "inventory"], write: "warehouse" },
   suppliers: { upstream: "suppliers", read: "suppliers", write: "suppliers_edit" },
   "purchase-requests": { upstream: "purchase-requests", read: "purchase_requests", write: "pr_create" },
   "purchase-orders": { upstream: "purchase-orders", read: "purchasing", write: "purchasing_create" },
@@ -84,6 +85,10 @@ function requiredPermission(method: string, rule: ResourceRule, segments: string
     if (/\/tasks(?:\/|$)/.test(joined) || /\/time(?:\/|$)/.test(joined)) return "wo_technician";
     if (method === "POST" && segments.length === 1) return "wo_intake";
   }
+  if (segments[0] === "warehouse") {
+    if (segments[1] === "cycle-counts") return "cycle-counts";
+    return "warehouse";
+  }
   if (segments[0] === "purchase-requests") {
     if (/\/status(?:\/|$)/.test(joined) && method === "PATCH") return ["pr_create", "pr_approve"];
     if (/\/convert(?:\/|$)/.test(joined)) return "pr_convert";
@@ -150,11 +155,9 @@ export default async function handler(request: any, response: any) {
     const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
     const jsonBody = parseJsonBody(body, contentType);
     if (resource === "transactions" && method === "POST" && segments.length === 1 && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
-      await recordSecurityEvent({ request, eventType: "staff_pos_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
       return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
     }
     if (resource === "transactions" && method === "POST" && segments[1] === "hold" && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
-      await recordSecurityEvent({ request, eventType: "staff_pos_hold_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
       return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
     }
     if (resource === "quotations" && method === "PATCH" && segments[2] === "status") {
@@ -172,6 +175,13 @@ export default async function handler(request: any, response: any) {
       const required = nextStatus === "approved" || nextStatus === "rejected" ? "pr_approve" : "pr_create";
       if (!canStaff(staff, required)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this purchase-request status change.", details: { permission: required } } });
     }
+    if (resource === "inventory" && method === "PATCH" && segments[2] === "stock") {
+      const adjustment = Number(jsonBody?.adjustment);
+      const reason = String(jsonBody?.reason || "").trim();
+      if (!Number.isInteger(adjustment) || adjustment === 0 || !reason) {
+        return send(response, 400, { success: false, error: { code: "INVALID_STOCK_ADJUSTMENT", message: "Stock adjustments require a non-zero whole-number quantity and an audit reason." } });
+      }
+    }
 
     const baseUrl = configuredPos();
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
@@ -185,6 +195,20 @@ export default async function handler(request: any, response: any) {
     headers["X-SmartCommerce-Actor-Id"] = staff.employeeId;
     if (staff.defaultBranchId) headers["X-SmartCommerce-Branch-Id"] = staff.defaultBranchId;
     const requestFetch = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
+
+    if (resource === "inventory" && method === "PATCH" && segments[2] === "stock" && Number(jsonBody?.adjustment) < 0) {
+      const productUrl = new URL(`${baseUrl}/api/products/${encodeURIComponent(segments[1])}`);
+      const branchId = String(jsonBody?.branch_id || staff.defaultBranchId || "").trim();
+      if (branchId) productUrl.searchParams.set("branch_id", branchId);
+      const currentResponse = await requestFetch(productUrl, { method: "GET", headers: { ...headers, "Content-Type": "application/json" } });
+      if (!currentResponse.ok) return send(response, 409, { success: false, error: { code: "STOCK_STATE_UNAVAILABLE", message: "Current stock could not be verified. No adjustment was made." } });
+      const current = await currentResponse.json() as Record<string, unknown>;
+      const currentQty = Number(branchId ? current.branch_stock_qty : current.stock_qty || 0);
+      if (currentQty + Number(jsonBody?.adjustment) < 0) {
+        return send(response, 409, { success: false, error: { code: "NEGATIVE_STOCK_BLOCKED", message: `This adjustment would reduce stock below zero. Current available stock is ${currentQty}.` } });
+      }
+    }
+
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
     response.statusCode = upstream.status;
