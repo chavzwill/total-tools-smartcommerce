@@ -1,6 +1,6 @@
-import { AlertCircle, BadgeDollarSign, CheckCircle2, Download, History, LockKeyhole, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, CheckCircle2, Download, FileSearch, History, LockKeyhole, Save, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { DEFAULT_TECHNICIAN_PLAN, resolveTechnicianPayPeriod } from "../../lib/technicianCompensation";
+import { DEFAULT_TECHNICIAN_PLAN, resolveTechnicianPayPeriod, type MetricKey } from "../../lib/technicianCompensation";
 import "../../styles/technician-compensation.css";
 
 type RateRow = {
@@ -35,6 +35,29 @@ type PeriodRow = {
   finalized_at?: string | null;
 };
 
+type EvidenceMetric = {
+  key: MetricKey;
+  value: number | null;
+  numerator?: number;
+  denominator?: number;
+  sourceRefs: string[];
+  coverage: "verified" | "partial" | "unavailable";
+  reason?: string;
+};
+
+type EvidencePayload = {
+  evidence: {
+    employeeId: string;
+    period: { start: string; end: string; key?: string; label?: string };
+    metrics: Record<MetricKey, EvidenceMetric>;
+    sourceCoverage: { completedWorkOrders: number; technicianTasks: number; timedTasks: number; sourceExportGaps: string[] };
+    compensationHours: { regularHours: null; overtimeHours: null; coverage: "unavailable"; reason: string };
+    safetyEligible: null;
+    minimumSampleSatisfied: boolean;
+    incentiveReady: boolean;
+  };
+};
+
 type Payload = { plans: any[]; rates: RateRow[]; periods: PeriodRow[]; canAdminister: boolean; canReview?: boolean; currentPeriod?: { start: string; end: string; key: string } };
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -50,6 +73,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 const money = (value: unknown) => new Intl.NumberFormat("en-JM", { style: "currency", currency: "JMD", maximumFractionDigits: 2 }).format(Number(value || 0));
 const pct = (value: unknown) => `${Number(value || 0).toFixed(1)}%`;
+const metricLabel = (key: MetricKey) => DEFAULT_TECHNICIAN_PLAN.metrics.find((metric) => metric.key === key)?.label || key;
 
 export default function TechnicianCompensationPanel() {
   const [data, setData] = useState<Payload | null>(null);
@@ -62,6 +86,9 @@ export default function TechnicianCompensationPanel() {
   const [grade, setGrade] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
+  const [evidenceEmployeeId, setEvidenceEmployeeId] = useState("");
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidence, setEvidence] = useState<EvidencePayload["evidence"] | null>(null);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -98,6 +125,17 @@ export default function TechnicianCompensationPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : "The pay period could not be updated."); }
   }
 
+  async function inspectEvidence(event: FormEvent) {
+    event.preventDefault();
+    if (!evidenceEmployeeId.trim() || evidenceLoading) return;
+    setEvidenceLoading(true); setError(""); setEvidence(null);
+    try {
+      const payload = await request<EvidencePayload>(`/api/technician-performance-evidence?employeeId=${encodeURIComponent(evidenceEmployeeId.trim())}&periodRef=${encodeURIComponent(currentPeriod.start)}`);
+      setEvidence(payload.evidence);
+    } catch (e) { setError(e instanceof Error ? e.message : "Performance evidence could not be loaded."); }
+    finally { setEvidenceLoading(false); }
+  }
+
   const exportHref = `/api/technician-compensation?export=csv&periodRef=${encodeURIComponent(currentPeriod.start)}`;
 
   return (
@@ -122,6 +160,29 @@ export default function TechnicianCompensationPanel() {
       </div>
 
       {loading ? <div className="sc-tech-comp__loading">Loading compensation ledger…</div> : null}
+
+      {data?.canReview ? (
+        <section className="sc-tech-comp__evidence">
+          <div className="sc-tech-comp__section-title"><FileSearch size={17} /><strong>Source evidence audit</strong><span>Fail-closed</span></div>
+          <form onSubmit={inspectEvidence}>
+            <label>Technician employee ID<input required value={evidenceEmployeeId} onChange={(e) => setEvidenceEmployeeId(e.target.value)} placeholder="Employee ID" /></label>
+            <button type="submit" disabled={evidenceLoading || !evidenceEmployeeId.trim()}><FileSearch size={15} />{evidenceLoading ? "Checking…" : "Inspect current period evidence"}</button>
+          </form>
+          {evidence ? (
+            <div className="sc-tech-comp__evidence-result">
+              <header><div><strong>Employee {evidence.employeeId}</strong><span>{evidence.period.start} → {evidence.period.end}</span></div><em className={evidence.incentiveReady ? "is-ready" : "is-blocked"}>{evidence.incentiveReady ? "Incentive evidence ready" : "Incentive blocked: evidence incomplete"}</em></header>
+              <div className="sc-tech-comp__evidence-summary"><span>{evidence.sourceCoverage.completedWorkOrders} completed work orders</span><span>{evidence.sourceCoverage.technicianTasks} completed technician tasks</span><span>{evidence.sourceCoverage.timedTasks} timed tasks</span></div>
+              <div className="sc-tech-comp__evidence-grid">
+                {(Object.keys(evidence.metrics) as MetricKey[]).map((key) => {
+                  const item = evidence.metrics[key];
+                  return <article key={key} className={`is-${item.coverage}`}><div><strong>{metricLabel(key)}</strong><em>{item.coverage}</em></div><b>{item.value == null ? "—" : pct(item.value)}</b><small>{item.reason || `${item.sourceRefs.length} auditable source reference${item.sourceRefs.length === 1 ? "" : "s"}`}</small></article>;
+                })}
+              </div>
+              <div className="sc-tech-comp__source-gaps"><strong>POS exports still required before automated incentives can finalize</strong><ul>{evidence.sourceCoverage.sourceExportGaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {data?.canAdminister ? (
         <form className="sc-tech-comp__rate-form" onSubmit={saveRate}>
