@@ -2,40 +2,66 @@
    Loaded last so cart/checkout/account states remain readable even when older
    presentation layers carry darker legacy rules. */
 
-.sc-order-summary {
+/* Cart summary: intentionally use a light transactional surface. The extra
+   selector specificity is deliberate because older demo-cart rules use dark
+   backgrounds with !important. */
+.sc-cart-page .demo-cart-layout.sc-cart-premium > aside.sc-order-summary,
+.sc-cart-page .sc-cart-premium > aside.sc-order-summary,
+.sc-cart-page aside.sc-order-summary {
   background: #fffdf8 !important;
-  border: 1px solid #e6dfcf !important;
+  background-image: none !important;
+  border: 1px solid #e4ddcd !important;
   color: #17231b !important;
-  box-shadow: 0 16px 42px rgba(19, 35, 25, .07) !important;
+  box-shadow: 0 16px 42px rgba(19,35,25,.075) !important;
 }
 
-.sc-order-summary :where(h1,h2,h3,strong,span,p,small) {
+.sc-cart-page aside.sc-order-summary :where(h1,h2,h3,strong,span,p,small,svg) {
   color: #17231b !important;
+  opacity: 1 !important;
 }
 
-.sc-order-summary__eyebrow {
-  color: #177443 !important;
+.sc-cart-page aside.sc-order-summary .sc-order-summary__eyebrow {
+  color: #207a47 !important;
 }
 
-.sc-order-summary > div:not(.sc-order-summary__actions) {
-  border-color: rgba(23,35,27,.09) !important;
+.sc-cart-page aside.sc-order-summary > div {
+  border-color: rgba(23,35,27,.1) !important;
+  background: transparent !important;
 }
 
-.sc-order-summary p,
-.sc-order-summary small {
+.sc-cart-page aside.sc-order-summary > div > span,
+.sc-cart-page aside.sc-order-summary > p,
+.sc-cart-page aside.sc-order-summary > p svg {
   color: #667169 !important;
 }
 
-.sc-order-summary .sc-checkout-primary {
-  background: #2f7f49 !important;
-  border-color: #2f7f49 !important;
-  color: #fff !important;
-  box-shadow: 0 8px 20px rgba(47,127,73,.16) !important;
+.sc-cart-page aside.sc-order-summary > div > strong,
+.sc-cart-page aside.sc-order-summary h2 {
+  color: #17231b !important;
 }
 
-.sc-order-summary .sc-checkout-secondary {
+.sc-cart-page aside.sc-order-summary .sc-checkout-primary {
+  background: #32814d !important;
+  border: 1px solid #32814d !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(50,129,77,.16) !important;
+}
+
+.sc-cart-page aside.sc-order-summary .sc-checkout-primary:disabled {
+  background: #9bb8a4 !important;
+  border-color: #9bb8a4 !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.sc-cart-page aside.sc-order-summary .sc-checkout-secondary {
   background: #fff !important;
-  border-color: #dce2dd !important;
+  border: 1px solid #d7dfd9 !important;
+  color: #33453a !important;
+  box-shadow: none !important;
+}
+
+.sc-cart-page aside.sc-order-summary .sc-checkout-secondary svg {
   color: #33453a !important;
 }
 
@@ -156,6 +182,56 @@
   font-size: .82rem !important;
 }
 
+/* Commercial resilience: outages should feel recoverable, not catastrophic. */
+.sc-commercial-page #commercial-account > .sc-flow-status.is-error {
+  display: block !important;
+  margin-top: 18px !important;
+  padding: 14px 16px !important;
+  border: 1px solid #ead9d3 !important;
+  border-radius: 14px !important;
+  background: #fff8f6 !important;
+  color: #8c4439 !important;
+  font-size: .9rem !important;
+  line-height: 1.45 !important;
+  box-shadow: none !important;
+}
+
+.sc-commercial-page .sc-commercial-support .sc-commercial-contact,
+.sc-commercial-page #commercial-account .sc-commercial-contact {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 8px 14px !important;
+  padding: 14px 16px !important;
+  background: #fffaf0 !important;
+  border: 1px solid #e8dcae !important;
+  border-radius: 14px !important;
+  min-width: 0 !important;
+}
+
+.sc-commercial-page .sc-commercial-contact strong {
+  color: #203228 !important;
+  flex: 1 0 100% !important;
+  min-width: 0 !important;
+}
+
+.sc-commercial-page .sc-commercial-contact a {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 38px !important;
+  max-width: 100% !important;
+  padding: 0 10px !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  border: 1px solid #e1e5e1 !important;
+  color: #23683f !important;
+  font-size: .88rem !important;
+  font-weight: 800 !important;
+  text-decoration: none !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
 .sc-account-real--signed-out {
   max-width: 680px !important;
 }
@@ -216,13 +292,42 @@
 }
 
 @media (max-width: 760px) {
-  .sc-order-summary {
-    padding: 18px !important;
-    border-radius: 18px !important;
+  .sc-cart-page .demo-cart-layout.sc-cart-premium > aside.sc-order-summary,
+  .sc-cart-page .sc-cart-premium > aside.sc-order-summary,
+  .sc-cart-page aside.sc-order-summary {
+    padding: 20px !important;
+    border-radius: 20px !important;
   }
 
-  .sc-order-summary h2 {
-    font-size: 1.45rem !important;
+  .sc-cart-page aside.sc-order-summary h2 {
+    margin: 10px 0 18px !important;
+    font-size: 1.6rem !important;
+    line-height: 1.08 !important;
+  }
+
+  .sc-cart-page aside.sc-order-summary > div {
+    display: grid !important;
+    gap: 5px !important;
+    padding: 14px 0 !important;
+  }
+
+  .sc-cart-page aside.sc-order-summary > div > span {
+    font-size: .9rem !important;
+  }
+
+  .sc-cart-page aside.sc-order-summary > div > strong {
+    font-size: 1.05rem !important;
+  }
+
+  .sc-cart-page aside.sc-order-summary > button {
+    min-height: 54px !important;
+    border-radius: 15px !important;
+  }
+
+  .sc-cart-page aside.sc-order-summary > p {
+    margin-top: 16px !important;
+    font-size: .82rem !important;
+    line-height: 1.5 !important;
   }
 
   .sc-checkout-recovery {
@@ -245,6 +350,25 @@
 
   .sc-checkout-recovery__actions button {
     width: 100%;
+  }
+
+  .sc-commercial-page .sc-commercial-support .sc-commercial-contact,
+  .sc-commercial-page #commercial-account .sc-commercial-contact {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding: 12px !important;
+  }
+
+  .sc-commercial-page .sc-commercial-contact strong,
+  .sc-commercial-page .sc-commercial-contact a {
+    width: 100% !important;
+  }
+
+  .sc-commercial-page .sc-commercial-contact a {
+    justify-content: flex-start !important;
+    padding: 9px 11px !important;
+    min-height: 42px !important;
   }
 
   .sc-account-real.sc-account-real--signed-out {
