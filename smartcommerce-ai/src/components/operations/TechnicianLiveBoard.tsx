@@ -1,6 +1,7 @@
 import { AlertTriangle, Clock3, ExternalLink, Timer, UserRound, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import TechnicianCompensationPanel from "./TechnicianCompensationPanel";
+import TechnicianScheduleBoard from "./TechnicianScheduleBoard";
 import "../../styles/technician-live-board.css";
 
 type ActiveTask = {
@@ -100,6 +101,7 @@ export default function TechnicianLiveBoard({ tasks, onOpenWorkOrder }: Props) {
           </div>
         )}
       </section>
+      <TechnicianScheduleBoard onOpenWorkOrder={onOpenWorkOrder} />
       <TechnicianCompensationPanel />
     </>
   );
