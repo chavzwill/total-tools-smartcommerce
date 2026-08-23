@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { firstHeader, recordSecurityEvent } from "../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../src/server/staffSession.js";
-import { listOutcomeLinks, refreshOutcomeLink, registerOutcomeLink } from "../src/server/omnichannelOutcomeSync.js";
+import { listOutcomeLinks, refreshOutcomeLink, registerOutcomeLink, retryFailedOutcomeLinks } from "../src/server/omnichannelOutcomeSync.js";
 
 const CUSTOMER_COOKIE = "sc_session";
 let sqlClient: ReturnType<typeof neon> | undefined;
@@ -83,7 +83,13 @@ export default async function handler(req: any, res: any) {
       const intakeId = String(input.intakeId || "").trim(); if (!intakeId) return send(res, 400, { error: { code: "OUTCOME_LINK_REQUIRED", message: "Intake id is required." } });
       return send(res, 200, { success: true, data: await refreshOutcomeLink(intakeId) });
     }
-    return send(res, 400, { error: { code: "OUTCOME_ACTION_INVALID", message: "Use register or refresh." } });
+    if (action === "retry-failures") {
+      if (!canStaff(staff, "reports")) return send(res, 403, { error: { code: "STAFF_PERMISSION_DENIED", message: "Reports permission is required to retry failed status synchronization." } });
+      const result = await retryFailedOutcomeLinks({ limit: Number(input.limit || 25) });
+      await recordSecurityEvent({ request: req, eventType: "omnichannel_outcome_retry_batch", eventStatus: "success", riskLevel: "low", subject: staff.employeeId, metadata: { attempted: result.attempted, recovered: result.recovered, stillFailing: result.stillFailing } }).catch(() => undefined);
+      return send(res, 200, { success: true, data: result });
+    }
+    return send(res, 400, { error: { code: "OUTCOME_ACTION_INVALID", message: "Use register, refresh or retry-failures." } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "OMNICHANNEL_OUTCOME_ERROR";
     console.error("omnichannel_outcome_api_error", { code, method });
