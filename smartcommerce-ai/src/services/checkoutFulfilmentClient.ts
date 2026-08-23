@@ -23,12 +23,14 @@ export type BoundFulfilment =
   | {
       mode: "delivery";
       status: "manual_review";
+      reviewId?: string;
       reasonCode: string;
       message: string;
       address: CheckoutDeliveryAddress;
-      destinationClass: "metro" | "regular" | "rural" | "remote";
+      destinationClass?: "metro" | "regular" | "rural" | "remote" | null;
+      zone?: any;
       requestedSpeed: "standard" | "same_day";
-      requestedServiceId: string;
+      requestedServiceId?: string | null;
       requestedAt: string;
     }
   | {
@@ -45,6 +47,7 @@ export type BoundFulfilment =
       billableWeightLb: number;
       address: CheckoutDeliveryAddress;
       destinationClass: "metro" | "regular" | "rural" | "remote";
+      zone?: any;
       requestedSpeed: "standard" | "same_day";
       sourceStatus: string;
       boundAt: string;
@@ -52,6 +55,7 @@ export type BoundFulfilment =
 
 export type FulfilmentBindingResult = {
   fulfilment: BoundFulfilment;
+  zone?: any;
   quote: {
     id: string;
     deliveryMinor: number;
@@ -65,7 +69,6 @@ export async function bindCheckoutFulfilment(input: {
   quoteId: string;
   mode: "pickup" | "delivery";
   serviceId?: string;
-  destinationClass?: "metro" | "regular" | "rural" | "remote";
   requestedSpeed?: "standard" | "same_day";
   address?: CheckoutDeliveryAddress;
 }) {
