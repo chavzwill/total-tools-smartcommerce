@@ -1,5 +1,6 @@
 import { AlertTriangle, CalendarClock, ChevronRight, CircleDollarSign, Search, UserRound, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
+import "../../styles/work-order-board.css";
 
 export type WorkOrderRow = {
   id?: string | number;
