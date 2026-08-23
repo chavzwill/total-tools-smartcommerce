@@ -6,6 +6,7 @@ import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard"
 import IntegrationReviewCenter from "../components/operations/IntegrationReviewCenter";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import InventoryIntegrityPanel from "../components/operations/InventoryIntegrityPanel";
+import OmnichannelReportingPanel from "../components/operations/OmnichannelReportingPanel";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
 import QuotationWorkspace from "../components/operations/QuotationWorkspace";
@@ -221,7 +222,7 @@ export default function OperationsPortalPage() {
         ) : section === "reviews" ? (
           <IntegrationReviewCenter staff={staff} />
         ) : section === "reports" ? (
-          <ReportingCenter staff={staff} />
+          <><ReportingCenter staff={staff} /><OmnichannelReportingPanel /></>
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
