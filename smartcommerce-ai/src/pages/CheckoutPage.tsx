@@ -2,18 +2,20 @@ import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, MapPin, PackageCh
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentMethodPanel from "../components/checkout/PaymentMethodPanel";
 import ReadyManualDeliveryPanel from "../components/checkout/ReadyManualDeliveryPanel";
+import SavedDeliveryAddressPicker from "../components/checkout/SavedDeliveryAddressPicker";
 import Container from "../components/shared/Container";
 import { bindCheckoutFulfilment, type BoundFulfilment, type CheckoutDeliveryAddress } from "../services/checkoutFulfilmentClient";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
 import { go, routeHref } from "../lib/router";
 import { listCommercialAccounts, type CommercialAccountSummary } from "../services/commercialAccountClient";
-import { getDeliveryQuote, type DeliveryDestinationClass, type DeliveryQuoteResult, type DeliverySpeed } from "../services/deliveryClient";
+import { getDeliveryQuote, type DeliveryQuoteResult, type DeliverySpeed, type DeliveryZoneResult } from "../services/deliveryClient";
 import "../styles/payment-methods.css";
 import "../styles/delivery-fulfilment.css";
 
 type SettlementMode = "standard" | "commercial-credit";
 type RecoveryReason = "auth" | "provider" | "unknown";
 type FulfilmentMode = "pickup" | "delivery";
+type DeliveryQuoteWithZone = DeliveryQuoteResult & { zone: DeliveryZoneResult | null };
 
 type CreditCheckoutResult = {
   order: {
@@ -27,6 +29,11 @@ type CreditCheckoutResult = {
 };
 
 type ApiErrorPayload = { error?: { code?: string; message?: string } };
+
+const JAMAICA_PARISHES = [
+  "Kingston", "St. Andrew", "St. Catherine", "Clarendon", "Manchester", "St. Elizabeth", "Westmoreland",
+  "Hanover", "St. James", "Trelawny", "St. Ann", "St. Mary", "Portland", "St. Thomas",
+];
 
 function formatMinor(value: number, currency = "JMD") {
   return new Intl.NumberFormat("en-JM", { style: "currency", currency }).format(value / 100);
@@ -93,9 +100,8 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const [recoveryReason, setRecoveryReason] = useState<RecoveryReason>("unknown");
   const [settlementMode, setSettlementMode] = useState<SettlementMode>("standard");
   const [fulfilmentMode, setFulfilmentMode] = useState<FulfilmentMode>("pickup");
-  const [destinationClass, setDestinationClass] = useState<DeliveryDestinationClass>("regular");
   const [deliverySpeed, setDeliverySpeed] = useState<DeliverySpeed>("standard");
-  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteWithZone | null>(null);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState("");
   const [selectedDeliveryServiceId, setSelectedDeliveryServiceId] = useState("");
@@ -148,6 +154,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   }, [prepareCheckout]);
 
   const guest = quote?.checkoutMode === "guest";
+  const deliveryAddressComplete = Boolean(deliveryAddress.recipientName.trim() && deliveryAddress.phone.trim() && deliveryAddress.line1.trim() && deliveryAddress.city.trim() && deliveryAddress.region.trim());
 
   useEffect(() => {
     if (!quote || guest || fulfilmentMode !== "pickup") return;
@@ -166,7 +173,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   }, [quote?.id, guest, fulfilmentMode]);
 
   useEffect(() => {
-    if (!quote || fulfilmentMode !== "delivery") {
+    if (!quote || fulfilmentMode !== "delivery" || !deliveryAddress.city.trim() || !deliveryAddress.region.trim()) {
       setDeliveryQuote(null);
       setDeliveryError("");
       setSelectedDeliveryServiceId("");
@@ -178,14 +185,13 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
     setDeliveryError("");
     getDeliveryQuote({
       items: quote.items.map((item) => ({ productId: item.productId, quantity: item.quantity, fulfilmentType: "sale" as const })),
-      destinationCountryCode: "JM",
-      destinationClass,
+      address: { city: deliveryAddress.city, region: deliveryAddress.region, countryCode: "JM" },
       requestedSpeed: deliverySpeed,
     })
       .then((result) => {
         if (!active) return;
-        setDeliveryQuote(result);
-        setSelectedDeliveryServiceId(result.status === "quoted" ? result.options[0]?.serviceId || "" : "");
+        setDeliveryQuote(result as DeliveryQuoteWithZone);
+        setSelectedDeliveryServiceId(result.status === "quoted" ? result.options.find((option) => option.mode === "door_to_door")?.serviceId || result.options[0]?.serviceId || "" : "");
       })
       .catch((err: any) => {
         if (!active) return;
@@ -196,13 +202,13 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
       .finally(() => { if (active) setDeliveryLoading(false); });
 
     return () => { active = false; };
-  }, [quote?.id, fulfilmentMode, destinationClass, deliverySpeed]);
+  }, [quote?.id, fulfilmentMode, deliveryAddress.city, deliveryAddress.region, deliverySpeed]);
 
   useEffect(() => {
     if (fulfilmentMode !== "delivery") return;
     setBoundFulfilment(null);
     setBindingError("");
-  }, [fulfilmentMode, destinationClass, deliverySpeed, selectedDeliveryServiceId, deliveryAddress]);
+  }, [fulfilmentMode, deliverySpeed, selectedDeliveryServiceId, deliveryAddress]);
 
   useEffect(() => {
     if (!quote || guest) {
@@ -230,7 +236,6 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const selectedDeliveryOption = deliveryQuote?.status === "quoted"
     ? deliveryQuote.options.find((option) => option.serviceId === selectedDeliveryServiceId)
     : undefined;
-  const deliveryAddressComplete = Boolean(deliveryAddress.recipientName.trim() && deliveryAddress.phone.trim() && deliveryAddress.line1.trim() && deliveryAddress.city.trim() && deliveryAddress.region.trim());
   const fulfilmentReady = guest
     ? fulfilmentMode === "pickup"
     : boundFulfilment?.status === "bound" && boundFulfilment.mode === fulfilmentMode;
@@ -241,15 +246,15 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   }
 
   async function finalizeDelivery() {
-    if (!quote || guest || !selectedDeliveryServiceId || !deliveryAddressComplete || bindingLoading) return;
+    const quotedNeedsService = deliveryQuote?.status === "quoted" && !selectedDeliveryServiceId;
+    if (!quote || guest || !deliveryAddressComplete || bindingLoading || !deliveryQuote || quotedNeedsService) return;
     setBindingLoading(true);
     setBindingError("");
     try {
       const result = await bindCheckoutFulfilment({
         quoteId: quote.id,
         mode: "delivery",
-        serviceId: selectedDeliveryServiceId,
-        destinationClass,
+        serviceId: selectedDeliveryServiceId || undefined,
         requestedSpeed: deliverySpeed,
         address: deliveryAddress,
       });
@@ -344,7 +349,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                 <Store size={20} /><span><strong>Pick up in store</strong><small>No delivery charge. Branch readiness is confirmed before collection.</small></span>
               </button>
               <button type="button" className={fulfilmentMode === "delivery" ? "is-active" : ""} onClick={() => { setFulfilmentMode("delivery"); setBoundFulfilment(null); setBindingError(""); }}>
-                <Truck size={20} /><span><strong>Deliver my order</strong><small>Small parcels can be courier-rated; large items and rentals go to manual logistics review.</small></span>
+                <Truck size={20} /><span><strong>Deliver my order</strong><small>SmartCommerce resolves the courier zone from the destination; large items and rentals go to manual logistics review.</small></span>
               </button>
             </div>
 
@@ -358,8 +363,10 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                 setQuote((current) => current ? { ...current, deliveryMinor: result.quote.deliveryMinor, totalMinor: result.quote.totalMinor } : current);
               }} /> : null}
 
+              {!guest ? <SavedDeliveryAddressPicker value={deliveryAddress} onSelect={(address) => { setDeliveryAddress(address); setBoundFulfilment(null); setBindingError(""); }} /> : null}
+
               <div className="sc-fulfilment__address">
-                <div className="sc-fulfilment__address-head"><MapPin size={18} /><div><strong>Delivery destination</strong><span>Use a home, business, or job-site address. This becomes part of the verified fulfilment record.</span></div></div>
+                <div className="sc-fulfilment__address-head"><MapPin size={18} /><div><strong>Delivery destination</strong><span>Use a home, business, or job-site address. SmartCommerce determines the courier zone from the town and parish.</span></div></div>
                 <div className="sc-fulfilment__address-grid">
                   <label>Address type<select value={deliveryAddress.type} onChange={(event) => updateAddress("type", event.target.value as CheckoutDeliveryAddress["type"])}><option value="home">Home</option><option value="business">Business</option><option value="job_site">Job site</option></select></label>
                   {deliveryAddress.type === "job_site" ? <label>Job-site name<input value={deliveryAddress.siteName || ""} onChange={(event) => updateAddress("siteName", event.target.value)} placeholder="Eg. Half-Way Tree renovation" /></label> : null}
@@ -367,33 +374,32 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                   <label>Phone<input value={deliveryAddress.phone} onChange={(event) => updateAddress("phone", event.target.value)} inputMode="tel" autoComplete="tel" /></label>
                   <label className="is-wide">Street address<input value={deliveryAddress.line1} onChange={(event) => updateAddress("line1", event.target.value)} autoComplete="address-line1" /></label>
                   <label className="is-wide">Address line 2 <span>(optional)</span><input value={deliveryAddress.line2 || ""} onChange={(event) => updateAddress("line2", event.target.value)} autoComplete="address-line2" /></label>
-                  <label>Town / city<input value={deliveryAddress.city} onChange={(event) => updateAddress("city", event.target.value)} autoComplete="address-level2" /></label>
-                  <label>Parish / region<input value={deliveryAddress.region} onChange={(event) => updateAddress("region", event.target.value)} autoComplete="address-level1" /></label>
+                  <label>Town / city<input value={deliveryAddress.city} onChange={(event) => updateAddress("city", event.target.value)} autoComplete="address-level2" placeholder="Eg. Mandeville" /></label>
+                  <label>Parish / region<select value={deliveryAddress.region} onChange={(event) => updateAddress("region", event.target.value)} autoComplete="address-level1"><option value="">Choose parish</option>{JAMAICA_PARISHES.map((parish) => <option key={parish} value={parish}>{parish}</option>)}</select></label>
                   <label className="is-wide">Delivery notes <span>(optional)</span><textarea value={deliveryAddress.notes || ""} onChange={(event) => updateAddress("notes", event.target.value)} placeholder="Gate, landmark, site contact, access instructions…" rows={3} /></label>
                 </div>
               </div>
 
-              <div className="sc-fulfilment__controls">
-                <label><MapPin size={16} /> Delivery area
-                  <select value={destinationClass} onChange={(event) => setDestinationClass(event.target.value as DeliveryDestinationClass)}>
-                    <option value="metro">Kingston / metro area</option>
-                    <option value="regular">Standard town / urban delivery</option>
-                    <option value="rural">Rural delivery</option>
-                    <option value="remote">Remote delivery</option>
-                  </select>
-                </label>
+              <div className="sc-fulfilment__controls sc-fulfilment__controls--zone">
+                <div className="sc-fulfilment__zone">
+                  <MapPin size={17} />
+                  <div>
+                    <strong>Courier area</strong>
+                    {!deliveryAddress.city.trim() || !deliveryAddress.region.trim() ? <span>Add the town and parish to classify this destination.</span> : deliveryLoading ? <span>Resolving this destination…</span> : deliveryQuote?.zone?.status === "resolved" ? <span>{deliveryQuote.zone.town}, {deliveryQuote.zone.parish} · {deliveryQuote.zone.destinationClass.replace("_", " ")} · provider zone {deliveryQuote.zone.taraAreaClass}</span> : <span>This location needs staff zone verification before a final delivery price can be trusted.</span>}
+                  </div>
+                </div>
                 <label><Truck size={16} /> Speed
                   <select value={deliverySpeed} onChange={(event) => setDeliverySpeed(event.target.value as DeliverySpeed)}>
                     <option value="standard">Standard / next day</option>
-                    <option value="same_day">Same day where eligible</option>
+                    <option value="same_day" disabled={deliveryQuote?.zone?.status === "resolved" && !deliveryQuote.zone.sameDayEligible}>Same day where provider-verified</option>
                   </select>
                 </label>
               </div>
-              <p className="sc-fulfilment__estimate-note">The courier list is an estimate until you attach a service to the verified checkout quote. The server re-resolves product freight facts and recalculates the selected service before changing the order total.</p>
+              <p className="sc-fulfilment__estimate-note">Customers no longer choose metro, regular, rural or remote. SmartCommerce resolves that class from authoritative courier-area data, then recalculates it again when delivery is attached to the order.</p>
 
-              {deliveryLoading ? <div className="sc-fulfilment__status"><Loader2 size={18} className="sc-spin" /><span>Checking parcel facts and courier rates…</span></div> : null}
+              {deliveryLoading ? <div className="sc-fulfilment__status"><Loader2 size={18} className="sc-spin" /><span>Resolving the destination, parcel facts and courier rates…</span></div> : null}
               {deliveryError ? <div className="sc-fulfilment__manual"><strong>Delivery pricing is temporarily unavailable.</strong><span>{deliveryError}</span></div> : null}
-              {!deliveryLoading && deliveryQuote?.status === "manual_review" ? <div className="sc-fulfilment__manual"><strong>Manual delivery review required.</strong><span>{deliveryQuote.message}</span><small>Our team must confirm the vehicle, handling requirements and final delivery/collection price before the order can be completed.</small></div> : null}
+              {!deliveryLoading && deliveryQuote?.status === "manual_review" ? <div className="sc-fulfilment__manual"><strong>Manual delivery review required.</strong><span>{deliveryQuote.message}</span><small>Your completed destination can be sent directly to logistics; no courier selection is required first.</small></div> : null}
               {!deliveryLoading && deliveryQuote?.status === "quoted" ? <div className="sc-fulfilment__options">
                 <div className="sc-fulfilment__facts"><span>{deliveryQuote.billableWeightLb} lb billable weight</span><span>20% SmartCommerce operations markup included</span></div>
                 {deliveryQuote.options.map((option) => <button type="button" key={option.serviceId} className={selectedDeliveryServiceId === option.serviceId ? "is-active" : ""} onClick={() => setSelectedDeliveryServiceId(option.serviceId)}>
@@ -403,12 +409,12 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
                 <div className="sc-fulfilment__cost-note"><ShieldCheck size={16} /><span>Courier cost and our 20% operational markup are recorded separately for reconciliation.</span></div>
               </div> : null}
 
-              {guest ? <div className="sc-fulfilment__manual"><strong>Guest delivery finalization is the next checkout adapter.</strong><span>You can review courier estimates now, but SmartCommerce will not pretend an estimate is a payable delivery charge until the guest-order binding contract is implemented.</span></div> : <>
-                {boundFulfilment?.status === "manual_review" ? <div className="sc-fulfilment__manual"><strong>Sent for manual logistics review.</strong><span>{boundFulfilment.message}</span><small>Your address and delivery request were recorded with the checkout quote; payment remains blocked until staff set the final transport price.</small></div> : null}
+              {guest ? <div className="sc-fulfilment__manual"><strong>Guest delivery finalization is the next checkout adapter.</strong><span>You can review destination-aware courier estimates now, but SmartCommerce will not pretend an estimate is payable until the guest-order binding contract is implemented.</span></div> : <>
+                {boundFulfilment?.status === "manual_review" ? <div className="sc-fulfilment__manual"><strong>Sent for manual logistics review.</strong><span>{boundFulfilment.message}</span><small>Your address and delivery request were recorded; payment remains blocked until staff set the final transport price.</small></div> : null}
                 {boundFulfilment?.status === "bound" && boundFulfilment.mode === "delivery" ? <div className="sc-fulfilment__verified"><CheckCircle2 size={18} /><div><strong>Delivery verified and attached.</strong><span>{boundFulfilment.serviceLabel} · {formatJmd(boundFulfilment.customerChargeJmd)}. The verified total above now includes delivery.</span></div></div> : null}
                 {bindingError ? <div className="sc-fulfilment__manual"><strong>Delivery was not attached.</strong><span>{bindingError}</span></div> : null}
-                <button type="button" className="sc-fulfilment__bind" disabled={!deliveryAddressComplete || !selectedDeliveryServiceId || bindingLoading || deliveryLoading} onClick={() => void finalizeDelivery()}>
-                  {bindingLoading ? <><Loader2 size={17} className="sc-spin" /> Verifying delivery…</> : <><ShieldCheck size={17} /> Verify & attach delivery</>}
+                <button type="button" className="sc-fulfilment__bind" disabled={!deliveryAddressComplete || !deliveryQuote || bindingLoading || deliveryLoading || (deliveryQuote.status === "quoted" && !selectedDeliveryServiceId)} onClick={() => void finalizeDelivery()}>
+                  {bindingLoading ? <><Loader2 size={17} className="sc-spin" /> Verifying delivery…</> : deliveryQuote?.status === "manual_review" ? <><Truck size={17} /> Send for logistics review</> : <><ShieldCheck size={17} /> Verify & attach delivery</>}
                 </button>
               </>}
             </div> : null}
@@ -434,7 +440,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             <div className="sc-commercial-credit-checkout">
               <div className="sc-checkout-trust"><BriefcaseBusiness size={22} /><div><strong>Charge this purchase to an approved commercial account.</strong><span>SmartCommerce rechecks organisation verification, your purchasing authority, provider mapping, payment terms and approval thresholds on the server before the provider order is created.</span></div></div>
 
-              {!fulfilmentReady ? <div className="sc-fulfilment__manual"><strong>Fulfilment must be finalized first.</strong><span>{deliveryNeedsBinding ? "Verify and attach the selected delivery service before creating the order." : "SmartCommerce is still confirming pickup on the checkout quote."}</span></div> : null}
+              {!fulfilmentReady ? <div className="sc-fulfilment__manual"><strong>Fulfilment must be finalized first.</strong><span>{deliveryNeedsBinding ? "Verify delivery or send the shipment for logistics review before creating the order." : "SmartCommerce is still confirming pickup on the checkout quote."}</span></div> : null}
 
               {commercialLoading ? <p role="status"><Loader2 size={16} /> Checking commercial credit eligibility…</p> : eligibleCommercialAccounts.length ? <>
                 <label>Commercial account
