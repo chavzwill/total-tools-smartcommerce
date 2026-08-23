@@ -1,18 +1,19 @@
-import { ClipboardList, RefreshCw, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
+import { CheckCircle2, ClipboardList, FilePlus2, RefreshCw, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import { getStaffSession, operationsRequest, type OperationsApiError, type StaffIdentity } from "../../lib/staffOperations";
 import "../../styles/consolidated-purchase-plan.css";
 
 type Row = Record<string, any>;
 type Branch = { id: string; name: string; isWarehouse: boolean };
 type Snapshot = { branch: Branch; inventory: Row[]; recent: Map<string, number>; prior: Map<string, number> };
 type SupplierPick = { supplierId: string; supplierName: string; sku: string; score: number; avgCost: number | null; leadDays: number | null; fill: number; onTime: number };
-type BuyLine = { branchId: string; branchName: string; sku: string; name: string; quantity: number; target: number; effective: number; supplier?: SupplierPick };
-
+type BuyLine = { productId: string; branchId: string; branchName: string; sku: string; name: string; quantity: number; target: number; effective: number; supplier?: SupplierPick };
 type PlanGroup = { key: string; supplierId?: string; supplierName: string; branchId: string; branchName: string; lines: BuyLine[]; estimated: number | null };
+type DraftResult = { id: string | number; po_number?: string; status?: string };
 
 const WINDOW = 30;
 const DETAIL_LIMIT = 180;
+const CREDIBLE_PO_STATUSES = new Set(["sent", "approved", "partial"]);
 const n = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const key = (branch: unknown, sku: unknown) => `${String(branch ?? "")}::${String(sku ?? "").trim()}`;
@@ -29,6 +30,14 @@ function forecast(recent: number, prior: number) {
   const raw = prior > 0 ? (recent - prior) / prior : recent > 0 ? 1 : 0;
   const capped = Math.max(-0.5, Math.min(0.5, raw));
   return Math.max(0, (recentDaily * 0.7 + priorDaily * 0.3) * (1 + capped * 0.5));
+}
+
+function recommendedExpectedDate(group: PlanGroup) {
+  const leads = group.lines.map((line) => line.supplier?.leadDays).filter((value): value is number => value != null && Number.isFinite(value) && value > 0);
+  if (!leads.length) return undefined;
+  const date = new Date();
+  date.setDate(date.getDate() + Math.max(1, Math.ceil(Math.max(...leads))));
+  return iso(date);
 }
 
 async function loadBranches(): Promise<Branch[]> {
@@ -61,7 +70,7 @@ async function loadInbound() {
   }
   if (poResult.status === "fulfilled") {
     const now = Date.now();
-    const rows = poResult.value.filter((row) => !["received", "cancelled", "closed"].includes(String(row.status || ""))).slice(0, DETAIL_LIMIT);
+    const rows = poResult.value.filter((row) => CREDIBLE_PO_STATUSES.has(String(row.status || ""))).slice(0, DETAIL_LIMIT);
     const details = await Promise.allSettled(rows.map((row) => operationsRequest<Row>(`purchase-orders/${encodeURIComponent(String(row.id))}`)));
     for (const result of details) if (result.status === "fulfilled") {
       const po = result.value; const expected = new Date(String(po.expected_date || "")).getTime(); if (!Number.isFinite(expected) || expected < now - 86400000) continue;
@@ -141,7 +150,9 @@ function buildBuyLines(snapshots: Snapshot[], inbound: Map<string, number>, supp
     });
     if (donor) continue;
     if (inboundQty > 0 && effective >= Math.max(minimum + 1, Math.ceil(target * .8))) continue;
-    lines.push({ branchId: destination.snap.branch.id, branchName: destination.snap.branch.name, sku, name: String(destination.row.name || sku), quantity: shortfall, target, effective, supplier: supplierPicks.get(sku) });
+    const productId = String(destination.row.id ?? destination.row.product_id ?? "");
+    if (!productId) continue;
+    lines.push({ productId, branchId: destination.snap.branch.id, branchName: destination.snap.branch.name, sku, name: String(destination.row.name || sku), quantity: shortfall, target, effective, supplier: supplierPicks.get(sku) });
   }
   return lines;
 }
@@ -160,27 +171,79 @@ function groupPlan(lines: BuyLine[]): PlanGroup[] {
 }
 
 export default function ConsolidatedPurchasePlan() {
-  const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [groups, setGroups] = useState<PlanGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [groups, setGroups] = useState<PlanGroup[]>([]);
+  const [staff, setStaff] = useState<StaffIdentity | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
+  const [created, setCreated] = useState<Record<string, DraftResult>>({});
+  const [actionError, setActionError] = useState<Record<string, string>>({});
+
   async function load() {
     setLoading(true); setError("");
     try {
       const locations = await loadBranches(); const recentEnd = new Date(); const recentStart = new Date(recentEnd.getTime() - 29 * 86400000); const priorEnd = new Date(recentStart.getTime() - 86400000); const priorStart = new Date(priorEnd.getTime() - 29 * 86400000);
-      const [snapshots, inbound, supplierPicks] = await Promise.all([
+      const [snapshots, inbound, supplierPicks, session] = await Promise.all([
         Promise.all(locations.slice(0, 20).map((b) => loadSnapshot(b, iso(recentStart), iso(recentEnd), iso(priorStart), iso(priorEnd)))),
-        loadInbound(), loadSupplierPicks(),
+        loadInbound(), loadSupplierPicks(), getStaffSession(),
       ]);
+      setStaff(session.staff);
       setGroups(groupPlan(buildBuyLines(snapshots, inbound, supplierPicks)));
     } catch (cause) { const e = cause as OperationsApiError; setError(e.status === 403 ? "Inventory, Reports, Purchasing, Transfers and Supplier access are required for the consolidated purchase plan." : e.message || "Purchase plan could not be calculated."); setGroups([]); }
     finally { setLoading(false); }
   }
+
+  async function createDraft(group: PlanGroup) {
+    if (!group.supplierId || creating) return;
+    setCreating(group.key); setActionError((current) => ({ ...current, [group.key]: "" }));
+    try {
+      const expectedDate = recommendedExpectedDate(group);
+      const payload = {
+        supplier_id: group.supplierId,
+        branch_id: group.branchId,
+        employee_id: staff?.employeeId || undefined,
+        expected_date: expectedDate,
+        notes: `Draft created from SmartCommerce ERP Intelligence consolidated purchase plan. Review supplier quote, freight, currency, terms, quantity and delivery date before sending or approving.`,
+        items: group.lines.map((line) => ({
+          product_id: line.productId,
+          product_name: line.name,
+          sku: line.sku,
+          quantity_ordered: line.quantity,
+          ...(line.supplier?.avgCost != null ? { unit_cost: Number(line.supplier.avgCost.toFixed(2)) } : {}),
+        })),
+      };
+      const result = await operationsRequest<DraftResult>("purchase-orders", { method: "POST", body: JSON.stringify(payload) });
+      setCreated((current) => ({ ...current, [group.key]: result }));
+    } catch (cause) {
+      const e = cause as OperationsApiError;
+      setActionError((current) => ({ ...current, [group.key]: e.status === 403 ? "Your security group does not allow purchase-order creation." : e.message || "Draft purchase order could not be created." }));
+    } finally { setCreating(null); }
+  }
+
   useEffect(() => { void load(); }, []);
-  const totalLines = groups.reduce((sum, g) => sum + g.lines.length, 0); const readyGroups = groups.filter((g) => g.supplierId).length; const estimated = groups.every((g) => g.estimated != null) ? groups.reduce((sum, g) => sum + Number(g.estimated || 0), 0) : null;
+  const totalLines = groups.reduce((sum, g) => sum + g.lines.length, 0);
+  const readyGroups = groups.filter((g) => g.supplierId).length;
+  const estimated = groups.every((g) => g.estimated != null) ? groups.reduce((sum, g) => sum + Number(g.estimated || 0), 0) : null;
+  const canCreate = Boolean(staff?.permissions?.purchasing_create);
+
   return <section className="sc-purchase-plan" data-guide-id="consolidated-purchase-plan">
     <div className="sc-purchase-plan__heading"><div><ClipboardList size={19}/><div><span>Consolidated Purchase Plan</span><strong>Turn BUY signals into supplier-ready order groups</strong><p>Groups unresolved replenishment shortfalls by branch and evidence-backed preferred supplier. Learning-only SKUs remain in manual supplier review.</p></div></div><button type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15}/>{loading ? "Planning…" : "Recalculate"}</button></div>
     <div className="sc-purchase-plan__metrics"><article><ShoppingCart size={17}/><span>Purchase lines</span><strong>{loading ? "—" : totalLines}</strong><small>After inbound and transfer checks</small></article><article><ShieldCheck size={17}/><span>Supplier-ready groups</span><strong>{loading ? "—" : readyGroups}</strong><small>Usable SKU supplier evidence</small></article><article><Truck size={17}/><span>Estimated cost</span><strong>{loading || estimated == null ? "—" : money(estimated)}</strong><small>{estimated == null ? "Some lines require supplier/cost review" : "Historical weighted unit cost"}</small></article></div>
     {error ? <div className="sc-ops-empty is-error"><strong>Purchase plan unavailable</strong><p>{error}</p></div> : null}
     {!error && !loading && !groups.length ? <div className="sc-ops-empty"><strong>No purchase plan required</strong><p>Current forward needs are covered by stock, credible inbound, or safe internal transfers.</p></div> : null}
-    {groups.length ? <div className="sc-purchase-plan__groups">{groups.map((group) => <article key={group.key} className={group.supplierId ? "is-ready" : "is-review"}><header><div><em>{group.supplierId ? "Supplier ready" : "Review supplier"}</em><strong>{group.supplierName}</strong><span>{group.branchName} · {group.lines.length} line{group.lines.length === 1 ? "" : "s"}</span></div><div><small>Estimated group value</small><strong>{group.estimated == null ? "Pending cost review" : money(group.estimated)}</strong></div></header><div className="sc-purchase-plan__lines">{group.lines.map((line) => <div key={`${group.key}-${line.sku}`}><div><strong>{line.name}</strong><span>{line.sku}</span></div><div><small>Buy qty</small><strong>{line.quantity}</strong></div><div><small>Effective / target</small><strong>{line.effective} / {line.target}</strong></div><div><small>Supplier evidence</small><strong>{line.supplier ? `${Math.round(line.supplier.score)}/100` : "Learning"}</strong><span>{line.supplier ? `${Math.round(line.supplier.fill)}% fill · ${Math.round(line.supplier.onTime)}% on-time${line.supplier.leadDays == null ? "" : ` · ${line.supplier.leadDays.toFixed(1)}d lead`}` : "Purchasing review required"}</span></div></div>)}</div></article>)}</div> : null}
-    <p className="sc-purchase-plan__footnote">This is an advisory planning surface only. It never creates a purchase order automatically. Purchasing must review quantities, supplier choice, current quotes/currency/freight, terms and expected delivery before using the POS purchase-order workflow.</p>
+    {groups.length ? <div className="sc-purchase-plan__groups">{groups.map((group) => {
+      const draft = created[group.key];
+      const expectedDate = recommendedExpectedDate(group);
+      return <article key={group.key} className={group.supplierId ? "is-ready" : "is-review"}>
+        <header><div><em>{group.supplierId ? "Supplier ready" : "Review supplier"}</em><strong>{group.supplierName}</strong><span>{group.branchName} · {group.lines.length} line{group.lines.length === 1 ? "" : "s"}</span></div><div><small>Estimated group value</small><strong>{group.estimated == null ? "Pending cost review" : money(group.estimated)}</strong></div></header>
+        <div className="sc-purchase-plan__lines">{group.lines.map((line) => <div key={`${group.key}-${line.sku}`}><div><strong>{line.name}</strong><span>{line.sku}</span></div><div><small>Buy qty</small><strong>{line.quantity}</strong></div><div><small>Effective / target</small><strong>{line.effective} / {line.target}</strong></div><div><small>Supplier evidence</small><strong>{line.supplier ? `${Math.round(line.supplier.score)}/100` : "Learning"}</strong><span>{line.supplier ? `${Math.round(line.supplier.fill)}% fill · ${Math.round(line.supplier.onTime)}% on-time${line.supplier.leadDays == null ? "" : ` · ${line.supplier.leadDays.toFixed(1)}d lead`}` : "Purchasing review required"}</span></div></div>)}</div>
+        {group.supplierId ? <div className="sc-purchase-plan__draft-action">
+          <div><FilePlus2 size={16}/><p><strong>Draft PO preparation</strong><span>{expectedDate ? `Historical lead-time target: ${expectedDate}. ` : "Delivery date needs Purchasing review. "}Draft creation does not send or approve the order.</span></p></div>
+          {draft ? <span className="sc-purchase-plan__created"><CheckCircle2 size={15}/>Draft {draft.po_number || `#${draft.id}`} created</span> : <button type="button" data-guide-id="purchase-plan-create-draft" disabled={!canCreate || creating === group.key} onClick={() => void createDraft(group)}>{creating === group.key ? "Creating draft…" : canCreate ? "Create draft PO" : "Requires PO create permission"}</button>}
+        </div> : null}
+        {actionError[group.key] ? <p className="sc-purchase-plan__action-error">{actionError[group.key]}</p> : null}
+      </article>;
+    })}</div> : null}
+    <p className="sc-purchase-plan__footnote">Creating a draft writes a real draft PO into the source POS with the real product, supplier and branch IDs. Draft POs are intentionally excluded from credible inbound until they are sent or approved. Purchasing still reviews current supplier quote, freight, currency, terms, quantities and delivery before progressing the order.</p>
   </section>;
 }
