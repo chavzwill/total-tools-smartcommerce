@@ -42,6 +42,8 @@ async function ensureSchema() {
   )`;
   await sql()`CREATE INDEX IF NOT EXISTS omnichannel_exception_state_idx ON omnichannel_exception_notifications(state,severity,updated_at DESC)`;
   await sql()`CREATE INDEX IF NOT EXISTS omnichannel_exception_owner_idx ON omnichannel_exception_notifications(owner_employee_id,state,updated_at DESC)`;
+  await sql()`CREATE INDEX IF NOT EXISTS omnichannel_exception_active_detected_idx ON omnichannel_exception_notifications(last_detected_at DESC) WHERE state <> 'resolved'`;
+  await sql()`CREATE INDEX IF NOT EXISTS omnichannel_exception_resolved_idx ON omnichannel_exception_notifications(resolved_at DESC) WHERE state = 'resolved'`;
   await sql()`CREATE TABLE IF NOT EXISTS omnichannel_exception_notification_history (
     id BIGSERIAL PRIMARY KEY,
     exception_id TEXT NOT NULL,
@@ -73,7 +75,10 @@ async function history(exceptionId: string, action: string, employeeId?: string 
 export async function synchronizeExceptionNotifications(input: { refresh?: boolean; limit?: number } = {}) {
   await ensureSchema();
   const report = await buildOmnichannelExceptions(input);
-  const existing = await sql()`SELECT * FROM omnichannel_exception_notifications` as Row[];
+  // Only active notifications can participate in automatic clear/reopen/escalation.
+  // Historical resolved records remain queryable through the final bounded result
+  // set but are not loaded wholesale on every synchronization pass.
+  const existing = await sql()`SELECT * FROM omnichannel_exception_notifications WHERE state <> 'resolved'` as Row[];
   const byId = new Map(existing.map((row) => [String(row.exception_id), row]));
   const activeIds = new Set<string>();
 
@@ -99,8 +104,8 @@ export async function synchronizeExceptionNotifications(input: { refresh?: boole
 
   for (const row of existing) {
     const id = String(row.exception_id);
-    if (activeIds.has(id) || String(row.state) === "resolved") continue;
-    await sql()`UPDATE omnichannel_exception_notifications SET state='resolved',resolved_at=NOW(),resolution_note=COALESCE(resolution_note,'Exception cleared automatically after authoritative evidence no longer met the rule.'),updated_at=NOW() WHERE exception_id=${id}`;
+    if (activeIds.has(id)) continue;
+    await sql()`UPDATE omnichannel_exception_notifications SET state='resolved',resolved_at=NOW(),resolution_note=COALESCE(resolution_note,'Exception cleared automatically after authoritative evidence no longer met the rule.'),updated_at=NOW() WHERE exception_id=${id} AND state <> 'resolved'`;
     await history(id, "auto_resolved", null, "Exception cleared automatically after authoritative evidence no longer met the rule.");
   }
 
