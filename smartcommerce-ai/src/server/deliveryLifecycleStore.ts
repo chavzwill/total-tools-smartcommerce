@@ -23,7 +23,21 @@ export type DeliveryLifecycleStatus =
   | "collected"
   | "exception";
 
+export type DeliveryProofMethod =
+  | "recipient_acknowledgement"
+  | "signed_docket"
+  | "photo_evidence"
+  | "courier_confirmation"
+  | "collection_receipt";
+
 const TERMINAL = new Set<DeliveryLifecycleStatus>(["delivered", "collected"]);
+const PROOF_METHODS = new Set<DeliveryProofMethod>([
+  "recipient_acknowledgement",
+  "signed_docket",
+  "photo_evidence",
+  "courier_confirmation",
+  "collection_receipt",
+]);
 
 const TRANSITIONS: Record<DeliveryLifecycleStatus, DeliveryLifecycleStatus[]> = {
   order_received: ["preparing", "ready_for_collection", "dispatched", "exception"],
@@ -57,6 +71,7 @@ export async function ensureDeliveryLifecycleSchema() {
       exception_message TEXT,
       completed_at TIMESTAMPTZ,
       proof_recipient_name TEXT,
+      proof_method TEXT,
       proof_reference TEXT,
       proof_notes TEXT,
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -64,6 +79,7 @@ export async function ensureDeliveryLifecycleSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await db`ALTER TABLE delivery_lifecycles ADD COLUMN IF NOT EXISTS proof_method TEXT`;
   await db`
     CREATE TABLE IF NOT EXISTS delivery_lifecycle_events (
       id TEXT PRIMARY KEY,
@@ -193,6 +209,7 @@ export async function updateDeliveryLifecycle(input: {
   scheduledFor?: string | null;
   exceptionMessage?: string | null;
   proofRecipientName?: string;
+  proofMethod?: DeliveryProofMethod;
   proofReference?: string;
   proofNotes?: string;
 }) {
@@ -200,9 +217,16 @@ export async function updateDeliveryLifecycle(input: {
   if (!lifecycle) throw new Error("DELIVERY_ORDER_NOT_FOUND");
   const current = lifecycle.status as DeliveryLifecycleStatus;
   if (current !== input.status && !TRANSITIONS[current]?.includes(input.status)) throw new Error("DELIVERY_STATUS_TRANSITION_INVALID");
-  if (TERMINAL.has(input.status) && !text(input.proofRecipientName, 120)) throw new Error("DELIVERY_PROOF_RECIPIENT_REQUIRED");
 
-  const completedAt = TERMINAL.has(input.status) ? new Date().toISOString() : null;
+  const terminal = TERMINAL.has(input.status);
+  const recipient = text(input.proofRecipientName, 120);
+  const proofMethod = text(input.proofMethod, 40) as DeliveryProofMethod;
+  const proofReference = text(input.proofReference, 180);
+  if (terminal && !recipient) throw new Error("DELIVERY_PROOF_RECIPIENT_REQUIRED");
+  if (terminal && !PROOF_METHODS.has(proofMethod)) throw new Error("DELIVERY_PROOF_METHOD_REQUIRED");
+  if (terminal && proofMethod !== "recipient_acknowledgement" && !proofReference) throw new Error("DELIVERY_PROOF_REFERENCE_REQUIRED");
+
+  const completedAt = terminal ? new Date().toISOString() : null;
   const rows = await sql()`
     UPDATE delivery_lifecycles
     SET status = ${input.status},
@@ -212,9 +236,10 @@ export async function updateDeliveryLifecycle(input: {
         scheduled_for = ${input.scheduledFor || null},
         exception_message = ${input.status === "exception" ? text(input.exceptionMessage, 500) || "Delivery requires staff attention." : null},
         completed_at = ${completedAt},
-        proof_recipient_name = ${TERMINAL.has(input.status) ? text(input.proofRecipientName, 120) : null},
-        proof_reference = ${TERMINAL.has(input.status) ? text(input.proofReference, 180) || null : null},
-        proof_notes = ${TERMINAL.has(input.status) ? text(input.proofNotes, 500) || null : null},
+        proof_recipient_name = ${terminal ? recipient : null},
+        proof_method = ${terminal ? proofMethod : null},
+        proof_reference = ${terminal ? proofReference || null : null},
+        proof_notes = ${terminal ? text(input.proofNotes, 500) || null : null},
         updated_at = NOW()
     WHERE id = ${lifecycle.id}
     RETURNING *
