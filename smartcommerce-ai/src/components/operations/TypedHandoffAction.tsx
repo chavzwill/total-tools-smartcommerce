@@ -1,4 +1,4 @@
-import { AlertCircle, FilePlus2, Wrench } from "lucide-react";
+import { AlertCircle, FilePlus2, PackagePlus, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { normalizeOmnichannelHandoff } from "../../lib/omnichannelContracts";
 import { getStaffSession, operationsRequest, type StaffIdentity } from "../../lib/staffOperations";
@@ -75,13 +75,46 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
     finally { setWorking(false); }
   }
 
-  if (!["quote", "repair"].includes(handoff.kind)) return null;
+  async function createPurchaseRequest() {
+    if (working) return;
+    setWorking(true); setError("");
+    try {
+      const staff = await currentStaff();
+      if (!handoff.items.length) throw new Error("The approved export does not contain purchase-request lines.");
+      const branchId = handoff.branchId || staff.defaultBranchId;
+      const items = handoff.items.map((item) => ({
+        product_id: item.productId ?? null,
+        product_name: item.name || item.description || item.sku || "Approved SmartCommerce item",
+        sku: item.sku || null,
+        quantity: item.quantity,
+        unit_cost: Math.max(0, item.unitPrice || 0),
+        item_type: "sale",
+        notes: handoff.externalReference ? `SmartCommerce source ${handoff.externalReference}` : null,
+      }));
+      const pr = await operationsRequest<Row>("purchase-requests", { method: "POST", body: JSON.stringify({
+        branch_id: branchId || null,
+        employee_id: staff.employeeId,
+        notes: [handoff.externalReference ? `SmartCommerce source: ${handoff.externalReference}` : "SmartCommerce approved handoff", handoff.notes].filter(Boolean).join("\n"),
+        required_date: handoff.fields.dueDate || null,
+        request_type: "sale_items",
+        supplier_id: handoff.fields.supplierId || null,
+        currency: "JMD",
+        items,
+      }) });
+      const reference = String(pr.pr_number || pr.id || "purchase request");
+      onApplied(await acknowledge(String(row.id), String(row.item_type), reference));
+    } catch (e) { setError((e as Error).message); }
+    finally { setWorking(false); }
+  }
+
+  if (!["quote", "repair", "purchase_request"].includes(handoff.kind)) return null;
   const blocked = handoff.missing.length > 0 || (handoff.kind === "repair" && !handoff.customerId);
 
   return <div className="sc-ops-handoff__typed">
     <div><strong>Approved-data draft</strong><span>{handoff.warnings.length ? handoff.warnings.join(" ") : "Typed SmartCommerce fields are ready for destination validation."}</span>{handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}</div>
     {handoff.kind === "quote" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createQuote()}><FilePlus2 size={15}/>{working ? "Creating…" : "Create draft quotation"}</button> : null}
     {handoff.kind === "repair" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRepair()}><Wrench size={15}/>{working ? "Creating…" : "Create repair intake"}</button> : null}
+    {handoff.kind === "purchase_request" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createPurchaseRequest()}><PackagePlus size={15}/>{working ? "Creating…" : "Create draft purchase request"}</button> : null}
     {error ? <p className="sc-ops-handoff__error" role="alert"><AlertCircle size={15}/>{error}</p> : null}
   </div>;
 }
