@@ -25,6 +25,7 @@ const RepairPage = lazy(() => import("./pages/RepairPage"));
 const ProductMatchPage = lazy(() => import("./pages/ProductMatchPage"));
 const RentalsPage = lazy(() => import("./pages/RentalPages").then((module) => ({ default: module.RentalsPage })));
 const OperationalRentalDetailPage = lazy(() => import("./pages/OperationalRentalDetailPage"));
+const OperationsPortalPage = lazy(() => import("./pages/OperationsPortalPage"));
 const AccountPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.AccountPage })));
 const CartPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CartPage })));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
@@ -161,6 +162,10 @@ export default function App() {
   }), [wishlist, compared]);
 
   const path = route.path;
+  if (path === "/operations" || path.startsWith("/operations/")) {
+    return <Suspense fallback={<RouteFallback />}><OperationsPortalPage /></Suspense>;
+  }
+
   const branchRouteKey = route.query.get("branch") || "Online";
   let page = <HomePageV3 {...actions} />;
   if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;
