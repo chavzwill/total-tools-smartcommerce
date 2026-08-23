@@ -1,6 +1,6 @@
-import { AlertCircle, BadgeDollarSign, History, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, CheckCircle2, Download, History, LockKeyhole, Save, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { DEFAULT_TECHNICIAN_PLAN } from "../../lib/technicianCompensation";
+import { DEFAULT_TECHNICIAN_PLAN, resolveTechnicianPayPeriod } from "../../lib/technicianCompensation";
 import "../../styles/technician-compensation.css";
 
 type RateRow = {
@@ -15,7 +15,27 @@ type RateRow = {
   changed_by?: string;
 };
 
-type Payload = { plans: any[]; rates: RateRow[]; periods: any[]; canAdminister: boolean };
+type PeriodRow = {
+  id: string;
+  employee_id: string;
+  period_start: string;
+  period_end: string;
+  status: "draft" | "review" | "approved" | "finalized" | "adjusted";
+  result_json?: {
+    performanceScore?: number;
+    incentivePercent?: number;
+    incentiveAmount?: number;
+    totalPay?: number;
+    incentiveEligible?: boolean;
+    gateFailures?: string[];
+  };
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  finalized_by?: string | null;
+  finalized_at?: string | null;
+};
+
+type Payload = { plans: any[]; rates: RateRow[]; periods: PeriodRow[]; canAdminister: boolean; canReview?: boolean; currentPeriod?: { start: string; end: string; key: string } };
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -29,6 +49,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 const money = (value: unknown) => new Intl.NumberFormat("en-JM", { style: "currency", currency: "JMD", maximumFractionDigits: 2 }).format(Number(value || 0));
+const pct = (value: unknown) => `${Number(value || 0).toFixed(1)}%`;
 
 export default function TechnicianCompensationPanel() {
   const [data, setData] = useState<Payload | null>(null);
@@ -52,6 +73,7 @@ export default function TechnicianCompensationPanel() {
   useEffect(() => { void load(); }, []);
 
   const activeRates = useMemo(() => (data?.rates || []).filter((rate) => !rate.effective_to), [data]);
+  const currentPeriod = data?.currentPeriod || resolveTechnicianPayPeriod(new Date().toISOString().slice(0, 10));
 
   async function saveRate(event: FormEvent) {
     event.preventDefault();
@@ -68,11 +90,26 @@ export default function TechnicianCompensationPanel() {
     finally { setSaving(false); }
   }
 
+  async function periodAction(action: "approve_period" | "finalize_period", periodId: string) {
+    setError("");
+    try {
+      await request("/api/technician-compensation", { method: "POST", body: JSON.stringify({ action, periodId }) });
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "The pay period could not be updated."); }
+  }
+
+  const exportHref = `/api/technician-compensation?export=csv&periodRef=${encodeURIComponent(currentPeriod.start)}`;
+
   return (
     <section className="sc-tech-comp" aria-label="Technician compensation and standards">
       <header><div><BadgeDollarSign size={21} /><span>Performance & compensation</span><strong>Technician standards ledger</strong></div><small>Plan v{DEFAULT_TECHNICIAN_PLAN.version} · {DEFAULT_TECHNICIAN_PLAN.currency}</small></header>
 
       {error ? <div className="sc-tech-comp__error"><AlertCircle size={17} />{error}</div> : null}
+
+      <div className="sc-tech-comp__period-banner">
+        <div><span>Current pay period</span><strong>{currentPeriod.start} → {currentPeriod.end}</strong><small>Total Tools cycle: 29th–13th / 14th–28th</small></div>
+        {data?.canAdminister ? <a href={exportHref} className="sc-button sc-button--secondary"><Download size={15} />Export payroll CSV</a> : null}
+      </div>
 
       <div className="sc-tech-comp__standards">
         {DEFAULT_TECHNICIAN_PLAN.metrics.map((metric) => (
@@ -98,6 +135,26 @@ export default function TechnicianCompensationPanel() {
           <button type="submit" disabled={saving || !employeeId || !hourlyRate || reason.trim().length < 5}><Save size={16} />{saving ? "Saving…" : "Save rate version"}</button>
         </form>
       ) : null}
+
+      <div className="sc-tech-comp__periods">
+        <div className="sc-tech-comp__section-title"><CheckCircle2 size={17} /><strong>Pay-period scorecards</strong><span>{data?.periods?.length || 0}</span></div>
+        {!data?.periods?.length ? <p>No technician performance periods have been calculated yet.</p> : data.periods.map((period) => {
+          const result = period.result_json || {};
+          const failures = Array.isArray(result.gateFailures) ? result.gateFailures : [];
+          return (
+            <article key={period.id} className={`is-${period.status}`}>
+              <div className="sc-tech-comp__period-head"><div><strong>Employee {period.employee_id}</strong><span>{String(period.period_start).slice(0,10)} → {String(period.period_end).slice(0,10)}</span></div><em>{period.status}</em></div>
+              <div className="sc-tech-comp__period-metrics"><div><small>Score</small><strong>{pct(result.performanceScore)}</strong></div><div><small>Incentive</small><strong>{pct(result.incentivePercent)}</strong></div><div><small>Incentive pay</small><strong>{money(result.incentiveAmount)}</strong></div><div><small>Total</small><strong>{money(result.totalPay)}</strong></div></div>
+              {failures.length ? <div className="sc-tech-comp__gates"><AlertCircle size={14} /><span>Quality gate: {failures.join(", ")}</span></div> : <div className="sc-tech-comp__gates is-clear"><ShieldCheck size={14} /><span>Quality gates passed</span></div>}
+              <div className="sc-tech-comp__period-actions">
+                {data.canReview && period.status === "review" ? <button type="button" onClick={() => void periodAction("approve_period", period.id)}><CheckCircle2 size={15} />Approve</button> : null}
+                {data.canAdminister && period.status === "approved" ? <button type="button" onClick={() => void periodAction("finalize_period", period.id)}><LockKeyhole size={15} />Finalize payroll</button> : null}
+                {period.status === "finalized" ? <span><LockKeyhole size={14} />Finalized and immutable</span> : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
 
       <div className="sc-tech-comp__history">
         <div><History size={17} /><strong>Active rate versions</strong><span>{activeRates.length}</span></div>
