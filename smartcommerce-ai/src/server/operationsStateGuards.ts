@@ -76,6 +76,22 @@ export async function validateOperationsState(input: GuardInput): Promise<GuardR
     }
   }
 
+  if (resource === "quotations" && method === "PATCH" && segments[2] === "status" && segments[1]) {
+    const current = await readEntity(input, "quotations", segments[1]);
+    if (!current) return { code: "QUOTATION_STATE_UNAVAILABLE", message: "The quotation state could not be verified. No change was sent." };
+    const next = String(jsonBody?.status || "");
+    const allowed: Record<string, string[]> = {
+      draft: ["sent", "accepted", "declined"],
+      sent: ["draft", "accepted", "declined"],
+      accepted: [],
+      declined: ["draft"],
+      converted: [],
+    };
+    if (!transitionAllowed(String(current.status), next, allowed)) {
+      return { code: "INVALID_QUOTATION_STATE_TRANSITION", message: `Quotation ${current.quote_number || segments[1]} cannot move from ${current.status} to ${next}. Accepted quotations must be copied/reissued for material revisions so procurement side effects are not replayed.` };
+    }
+  }
+
   if (resource === "transfers" && segments[1]) {
     const current = await readEntity(input, "transfers", segments[1]);
     if (!current) return { code: "TRANSFER_STATE_UNAVAILABLE", message: "The transfer state could not be verified. No change was sent." };
