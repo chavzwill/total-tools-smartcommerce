@@ -11,6 +11,7 @@ type Decision = { sku: string; name: string; branch: string; action: "wait" | "t
 
 const WINDOW = 30;
 const DETAIL_LIMIT = 80;
+const CREDIBLE_PO_STATUSES = new Set(["sent", "approved", "partial"]);
 const n = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const key = (branch: unknown, sku: unknown) => `${String(branch ?? "")}::${String(sku ?? "").trim()}`;
@@ -58,7 +59,7 @@ async function loadInbound(): Promise<InboundMap> {
   }
   if (pos.status === "fulfilled") {
     const now = Date.now();
-    const rows = pos.value.filter((row) => !["received", "cancelled", "closed"].includes(String(row.status || ""))).slice(0, DETAIL_LIMIT);
+    const rows = pos.value.filter((row) => CREDIBLE_PO_STATUSES.has(String(row.status || ""))).slice(0, DETAIL_LIMIT);
     const details = await Promise.allSettled(rows.map((row) => operationsRequest<Row>(`purchase-orders/${encodeURIComponent(String(row.id))}`)));
     for (const result of details) if (result.status === "fulfilled") {
       const po = result.value; const expected = new Date(String(po.expected_date || "")).getTime();
@@ -122,6 +123,6 @@ export default function ReplenishmentDecisionBoard() {
     {error ? <div className="sc-ops-empty is-error"><strong>Replenishment decisions unavailable</strong><p>{error}</p></div> : null}
     {!error && !loading && !rows.length ? <div className="sc-ops-empty"><strong>No replenishment actions required</strong><p>Current effective stock and credible inbound cover the analyzed forward demand targets.</p></div> : null}
     {rows.length ? <div className="sc-replenishment__list">{rows.slice(0, 100).map((row) => <article key={`${row.branch}-${row.sku}`} className={`is-${row.action}`}><div><em>{row.action === "wait" ? "WAIT" : row.action === "transfer" ? "TRANSFER" : "BUY"}</em><strong>{row.name}</strong><span>{row.sku} · {row.branch}</span></div><div><small>Effective / target</small><strong>{row.effective} / {row.target}</strong><span>{row.inbound} inbound</span></div><div><small>Recommended quantity</small><strong>{row.quantity}</strong><span>{row.donor ? `From ${row.donor}` : `${row.forecastDaily.toFixed(2)} forecast/day`}</span></div><p>{row.rationale}</p></article>)}</div> : null}
-    <p className="sc-replenishment__footnote">Decisions remain advisory. “Wait” requires credible, non-overdue inbound evidence; “Transfer” protects donor safety stock; “Buy” is used only when internal supply and credible inbound do not cover the forward target.</p>
+    <p className="sc-replenishment__footnote">Decisions remain advisory. “Wait” requires a sent, approved, or partially received non-overdue purchase order (or an in-flight transfer); draft POs do not count as inbound. “Transfer” protects donor safety stock; “Buy” is used only when internal supply and credible inbound do not cover the forward target.</p>
   </section>;
 }
