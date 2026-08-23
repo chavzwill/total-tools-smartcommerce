@@ -1,6 +1,18 @@
-import { quoteDelivery, type DeliveryQuoteRequest } from "../src/server/deliveryFulfilmentEngine";
+import { quoteDelivery, type DeliveryQuoteRequest } from "../src/server/deliveryFulfilmentEngine.js";
+import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
 
 const MAX_BODY_BYTES = 32_000;
+
+type DeliveryQuoteApiInput = {
+  items: Array<{
+    productId: string;
+    quantity: number;
+    fulfilmentType?: "sale" | "rental";
+  }>;
+  destinationCountryCode?: string;
+  destinationClass?: DeliveryQuoteRequest["destinationClass"];
+  requestedSpeed?: DeliveryQuoteRequest["requestedSpeed"];
+};
 
 function send(response: any, status: number, payload: unknown) {
   response.statusCode = status;
@@ -23,6 +35,18 @@ async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as T;
 }
 
+function validItems(input: unknown): input is DeliveryQuoteApiInput["items"] {
+  return Array.isArray(input) && input.length > 0 && input.length <= 100 && input.every((item: any) =>
+    typeof item?.productId === "string" &&
+    item.productId.trim().length > 0 &&
+    item.productId.length <= 180 &&
+    Number.isInteger(Number(item.quantity)) &&
+    Number(item.quantity) > 0 &&
+    Number(item.quantity) <= 999 &&
+    (item.fulfilmentType === undefined || item.fulfilmentType === "sale" || item.fulfilmentType === "rental")
+  );
+}
+
 export default async function handler(request: any, response: any) {
   if (String(request.method || "GET").toUpperCase() !== "POST") {
     response.setHeader("Allow", "POST");
@@ -30,15 +54,28 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const input = await readJsonBody<DeliveryQuoteRequest>(request);
-    if (!Array.isArray(input.items)) {
-      return send(response, 400, { error: { code: "INVALID_DELIVERY_REQUEST", message: "Delivery items are required." } });
+    const input = await readJsonBody<DeliveryQuoteApiInput>(request);
+    if (!validItems(input.items)) {
+      return send(response, 400, { error: { code: "INVALID_DELIVERY_REQUEST", message: "Valid delivery items are required." } });
     }
 
-    // This endpoint only prices supplied trusted freight facts. Checkout must source
-    // weight, dimensions and parcel eligibility from authoritative product/provider data,
-    // never from customer-editable values.
-    return send(response, 200, { delivery: quoteDelivery(input) });
+    const items = await resolveDeliveryItems(input.items.map((item) => ({
+      productId: item.productId.trim(),
+      quantity: Number(item.quantity),
+      fulfilmentType: item.fulfilmentType || "sale",
+    })));
+
+    // Product freight facts are resolved server-side from the connected commerce provider.
+    // The browser supplies only product identity, quantity and destination preference; it
+    // cannot declare its own weight, dimensions or parcel eligibility.
+    const delivery = quoteDelivery({
+      items,
+      destinationCountryCode: String(input.destinationCountryCode || "JM").toUpperCase().slice(0, 2),
+      destinationClass: input.destinationClass,
+      requestedSpeed: input.requestedSpeed,
+    });
+
+    return send(response, 200, { delivery });
   } catch (error: any) {
     const status = Number(error?.status || 500);
     if (status === 413) {
