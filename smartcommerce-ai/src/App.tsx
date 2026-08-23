@@ -32,6 +32,7 @@ const DeliveryNotificationHealthPage = lazy(() => import("./pages/DeliveryNotifi
 const PosReadinessPage = lazy(() => import("./pages/PosReadinessPage"));
 const ReturnsPage = lazy(() => import("./pages/ReturnsPage"));
 const ReturnOperationsPage = lazy(() => import("./pages/ReturnOperationsPage"));
+const CustomerOrdersPage = lazy(() => import("./pages/CustomerOrdersPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -133,6 +134,7 @@ export default function App() {
   else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
+  else if (path === "/account/orders") page = <CustomerOrdersPage />;
   else if (path === "/account/notifications") page = <DeliveryNotificationPreferencesPage />;
   else if (path === "/account/returns") page = <ReturnsPage />;
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
