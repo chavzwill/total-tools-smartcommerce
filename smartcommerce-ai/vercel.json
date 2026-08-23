@@ -39,5 +39,5 @@
       ]
     }
   ],
-  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in main|preview/smartcommerce|frontend-consolidation|feature/pos-modernization-guided-mode) exit 1;; *) exit 0;; esac"
+  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in main|preview/smartcommerce|frontend-consolidation|feature/pos-modernization-guided-mode|feature/pos-operations-upgrades-v2) exit 1;; *) exit 0;; esac"
 }
