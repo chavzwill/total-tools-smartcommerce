@@ -104,7 +104,9 @@ function requiredPermission(method: string, rule: ResourceRule, segments: string
   }
   if (segments[0] === "transactions") {
     if (/\/hold(?:\/|$)/.test(joined)) return "pos_hold";
-    if (/\/refund(?:\/|$)|\/void(?:\/|$)/.test(joined)) return "transactions_refund";
+    if (/\/return(?:\/|$)/.test(joined) && method === "POST") return "transactions_returns";
+    if (/\/refund(?:\/|$)/.test(joined)) return "transactions_refund";
+    if (/\/void(?:\/|$)/.test(joined) && method === "PATCH") return "pos";
     if (method === "POST" && segments.length === 1) return "pos";
   }
   if (segments[0] === "drawers") {
