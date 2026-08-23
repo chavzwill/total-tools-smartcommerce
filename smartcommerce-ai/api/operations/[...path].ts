@@ -1,4 +1,5 @@
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../../src/server/hardenedOutboundFetch.js";
+import { abandonOperationsMutation, claimOperationsMutation, completeOperationsMutation, validIdempotencyKey } from "../../src/server/operationsMutationIdempotency.js";
 import { firstHeader, recordSecurityEvent } from "../../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../../src/server/staffSession.js";
 
@@ -130,11 +131,16 @@ function parseJsonBody(body: Buffer | undefined, contentType: string | undefined
   try { return JSON.parse(body.toString("utf8")) as Record<string, unknown>; } catch { return null; }
 }
 
+function isMutation(method: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes(method);
+}
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const segments = requestedSegments(request);
   const resource = segments[0] || "";
   const rule = RESOURCE_RULES[resource];
+  let mutationRecordKey = "";
   if (!rule) return send(response, 404, { success: false, error: { code: "OPERATIONS_ROUTE_NOT_FOUND", message: "That operations resource is not exposed." } });
   if (!["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(method)) return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "That method is not allowed." } });
   if (!sameOrigin(request)) {
@@ -183,6 +189,29 @@ export default async function handler(request: any, response: any) {
       }
     }
 
+    if (isMutation(method)) {
+      const key = validIdempotencyKey(firstHeader(request.headers?.["idempotency-key"]));
+      if (!key) return send(response, 400, { success: false, error: { code: "IDEMPOTENCY_KEY_REQUIRED", message: "A valid Idempotency-Key is required for Operations changes." } });
+      const claim = await claimOperationsMutation({
+        actorId: staff.employeeId,
+        operation: `${method}:${segments.join("/")}`,
+        idempotencyKey: key,
+        method,
+        pathname: String(request.url || `/api/operations/${segments.join("/")}`),
+        body,
+      });
+      if (claim.replay) {
+        response.statusCode = claim.replay.status;
+        response.setHeader("Content-Type", claim.replay.contentType);
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("X-Idempotency-Replayed", "true");
+        return response.end(claim.replay.body);
+      }
+      if (claim.inProgress) return send(response, 409, { success: false, error: { code: "IDEMPOTENCY_REQUEST_IN_PROGRESS", message: "This operation is already processing. Wait for the current request to finish before retrying." } });
+      mutationRecordKey = claim.recordKey;
+    }
+
     const baseUrl = configuredPos();
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
     const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
@@ -201,25 +230,37 @@ export default async function handler(request: any, response: any) {
       const branchId = String(jsonBody?.branch_id || staff.defaultBranchId || "").trim();
       if (branchId) productUrl.searchParams.set("branch_id", branchId);
       const currentResponse = await requestFetch(productUrl, { method: "GET", headers: { ...headers, "Content-Type": "application/json" } });
-      if (!currentResponse.ok) return send(response, 409, { success: false, error: { code: "STOCK_STATE_UNAVAILABLE", message: "Current stock could not be verified. No adjustment was made." } });
+      if (!currentResponse.ok) {
+        if (mutationRecordKey) await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
+        mutationRecordKey = "";
+        return send(response, 409, { success: false, error: { code: "STOCK_STATE_UNAVAILABLE", message: "Current stock could not be verified. No adjustment was made." } });
+      }
       const current = await currentResponse.json() as Record<string, unknown>;
       const currentQty = Number(branchId ? current.branch_stock_qty : current.stock_qty || 0);
       if (currentQty + Number(jsonBody?.adjustment) < 0) {
+        if (mutationRecordKey) await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
+        mutationRecordKey = "";
         return send(response, 409, { success: false, error: { code: "NEGATIVE_STOCK_BLOCKED", message: `This adjustment would reduce stock below zero. Current available stock is ${currentQty}.` } });
       }
     }
 
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
+    const responseContentType = upstream.headers.get("content-type") || "application/json";
+    if (mutationRecordKey) await completeOperationsMutation(mutationRecordKey, upstream.status, responseContentType, bytes);
     response.statusCode = upstream.status;
-    response.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
+    response.setHeader("Content-Type", responseContentType);
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
+    if (mutationRecordKey) response.setHeader("X-Idempotency-Key-Accepted", "true");
     response.end(bytes);
   } catch (error) {
+    if (mutationRecordKey) await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
     const status = Number((error as any)?.status || 500);
     if (status === 413) return send(response, 413, { success: false, error: { code: "REQUEST_TOO_LARGE", message: "The operations request is too large." } });
     const code = error instanceof Error ? error.message : "OPERATIONS_GATEWAY_ERROR";
+    if (code === "OPERATIONS_IDEMPOTENCY_KEY_REUSED") return send(response, 409, { success: false, error: { code, message: "That idempotency key was already used for a different Operations request." } });
+    if (code === "OPERATIONS_IDEMPOTENCY_DATABASE_NOT_CONFIGURED") return send(response, 503, { success: false, error: { code, message: "Duplicate-submit protection is not configured, so this write was blocked rather than sent unsafely.", retryable: true } });
     console.error("staff_operations_gateway_error", { code, resource, method });
     return send(response, 503, { success: false, error: { code: code === "POS_NOT_CONFIGURED" ? code : "OPERATIONS_GATEWAY_UNAVAILABLE", message: "The Total Tools operations service is temporarily unavailable.", retryable: true } });
   }
