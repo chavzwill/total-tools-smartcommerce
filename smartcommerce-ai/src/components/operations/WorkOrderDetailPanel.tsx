@@ -1,6 +1,7 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, PackageSearch, Play, RefreshCw, Square, UserRound, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import QualityCompletionPanel from "./QualityCompletionPanel";
 import ServiceAdvisorPanel from "./ServiceAdvisorPanel";
 import "../../styles/work-order-detail.css";
 
@@ -11,6 +12,8 @@ type Props = {
   canManageTasks?: boolean;
   canAssess?: boolean;
   canAssignParts?: boolean;
+  canSignOff?: boolean;
+  canNotify?: boolean;
 };
 
 type Detail = Record<string, any> & {
@@ -27,7 +30,7 @@ const minutes = (value: unknown) => {
   return h ? `${h}h ${m}m` : `${m}m`;
 };
 
-export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmployeeId, canManageTasks = false, canAssess = false, canAssignParts = false }: Props) {
+export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmployeeId, canManageTasks = false, canAssess = false, canAssignParts = false, canSignOff = false, canNotify = false }: Props) {
   const [state, setState] = useState<{ loading: boolean; data?: Detail; error?: string }>({ loading: true });
   const [action, setAction] = useState<{ taskId?: string; type?: "clock-in" | "clock-out" | "complete"; error?: string }>({});
 
@@ -121,6 +124,8 @@ export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmploy
               </article>;
             })}</div> : <div className="sc-ops-empty"><strong>No technician tasks yet</strong><p>Tasks will appear when the work order has been broken into repair work.</p></div>}
           </section>
+
+          <QualityCompletionPanel workOrder={data} staffEmployeeId={staffEmployeeId} canSignOff={canSignOff} canNotify={canNotify} onUpdated={load} />
 
           <section className="sc-wo-detail__section">
             <div className="sc-wo-detail__section-title"><PackageSearch size={18} /><div><strong>Parts & sourcing</strong><span>Inventory, customer-supplied parts, transfers and purchase requests</span></div></div>
