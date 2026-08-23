@@ -14,6 +14,7 @@ import ReportingCenter from "../components/operations/ReportingCenter";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import TransactionServicePanel from "../components/operations/TransactionServicePanel";
+import WorkflowHandoffBanner from "../components/operations/WorkflowHandoffBanner";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
 import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
 import {
@@ -31,6 +32,7 @@ import "../styles/operations-workspace.css";
 
 type ResourceState = { loading: boolean; data?: unknown; error?: string };
 type DashboardState = { activeWorkOrders: any[]; awaitingPayment: any[]; activeTasks: any[] };
+type IntakeRow = Record<string, any>;
 
 const emptyDashboard: DashboardState = { activeWorkOrders: [], awaitingPayment: [], activeTasks: [] };
 const sectionResource: Partial<Record<OperationsSection, string>> = {
@@ -81,6 +83,7 @@ export default function OperationsPortalPage() {
   const [dashboard, setDashboard] = useState<DashboardState>(emptyDashboard);
   const [dashboardError, setDashboardError] = useState("");
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<string | null>(null);
+  const [activeHandoff, setActiveHandoff] = useState<IntakeRow | null>(null);
 
   const employeeLabel = useMemo(() => !staff ? "" : [staff.firstName, staff.lastName].filter(Boolean).join(" ") || staff.username, [staff]);
   const allowedSections = useMemo(() => {
@@ -115,11 +118,16 @@ export default function OperationsPortalPage() {
 
   async function login(event: FormEvent) {
     event.preventDefault(); if (submitting) return; setSubmitting(true); setAuthError("");
-    try { const state = await loginStaff({ username: username.trim(), ...(password ? { password } : { pin }) }); if (!state.staff) throw new Error("Staff sign-in failed."); setStaff(state.staff); setPassword(""); setPin(""); setSection("overview"); }
+    try { const state = await loginStaff({ username: username.trim(), ...(password ? { password } : { pin }) }); if (!state.staff) throw new Error("Staff sign-in failed."); setStaff(state.staff); setPassword(""); setPin(""); setSection("overview"); setActiveHandoff(null); }
     catch (error) { setAuthError((error as OperationsApiError).message || "Staff sign-in failed."); }
     finally { setSubmitting(false); }
   }
-  async function logout() { await logoutStaff().catch(() => undefined); setStaff(null); setSection("overview"); setResource({ loading: false }); setDashboard(emptyDashboard); setSelectedWorkOrder(null); }
+  async function logout() { await logoutStaff().catch(() => undefined); setStaff(null); setSection("overview"); setResource({ loading: false }); setDashboard(emptyDashboard); setSelectedWorkOrder(null); setActiveHandoff(null); }
+
+  function routeHandoff(nextSection: OperationsSection, row: IntakeRow) {
+    setActiveHandoff(row);
+    setSection(nextSection);
+  }
 
   if (checking) return <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={26} /><strong>Checking staff access…</strong></div>;
   if (!staff) return <div className="sc-ops-login-page"><section className="sc-ops-login-card" aria-labelledby="staff-login-title"><div className="sc-ops-login-brand"><span>Total Tools Jamaica</span><strong>Operations</strong></div><ShieldCheck size={28} aria-hidden="true" /><h1 id="staff-login-title">Staff sign in</h1><p>Use your existing POS employee credentials. Access follows your assigned Total Tools security group.</p><form onSubmit={login}><label>Username<input data-guide-id="staff-username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>Password<input data-guide-id="staff-password" type="password" autoComplete="current-password" value={password} onChange={(event) => { setPassword(event.target.value); if (event.target.value) setPin(""); }} placeholder="Use password or PIN" /></label><div className="sc-ops-login-or"><span>or</span></div><label>PIN<input data-guide-id="staff-pin" inputMode="numeric" value={pin} onChange={(event) => { setPin(event.target.value.replace(/\D/g, "").slice(0, 20)); if (event.target.value) setPassword(""); }} placeholder="Employee PIN" /></label>{authError ? <p className="sc-ops-login-error" role="alert"><AlertCircle size={16} />{authError}</p> : null}<button data-guide-id="staff-sign-in" className="sc-button sc-button--primary" type="submit" disabled={submitting || !username || (!password && !pin)}><LogIn size={17} />{submitting ? "Signing in…" : "Sign in to Operations"}</button></form></section><GuidedMode /></div>;
@@ -129,16 +137,18 @@ export default function OperationsPortalPage() {
     overview: "Operations command center", intelligence: "ERP Intelligence", pos: "Point of sale", repairs: "Repair work orders", technicians: "Technician workspace", rentals: "Rental operations", inventory: "Inventory control", purchasing: "Purchasing", quotes: "Quotations", reviews: "Omnichannel Review & Approvals", reports: "Reporting & Audit Center",
   };
   const overdue = dashboard.activeWorkOrders.filter((row) => Number(row?.days_past_pickup_due || 0) > 0).length;
+  const showHandoff = activeHandoff && section === activeHandoff.destination_section && section !== "reviews";
 
   return <><OperationsWorkspace section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
     description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "rentals" ? "Live rental agreements and post-approval rental workflow destination" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : section === "reviews" ? "Review, authorize and route website, app and SmartCommerce exports into their operational destinations" : section === "reports" ? "Report every operational event across POS, website, apps and connected systems, with controlled exports and print-ready views" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
-    branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"} employeeLabel={employeeLabel} allowedSections={allowedSections} onNavigate={setSection}
+    branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"} employeeLabel={employeeLabel} allowedSections={allowedSections} onNavigate={(next) => { setSection(next); if (next === "reviews") setActiveHandoff(null); }}
     actions={<button type="button" className="sc-ops-signout" onClick={logout}><LogOut size={16} />Sign out</button>}>
+    {showHandoff ? <WorkflowHandoffBanner row={activeHandoff!} onReturn={() => { setActiveHandoff(null); setSection("reviews"); }} onResolved={() => { setActiveHandoff(null); setSection("reviews"); }} /> : null}
     {section === "overview" ? <><div className="sc-ops-metrics"><article><span>Active work orders</span><strong>{dashboard.activeWorkOrders.length}</strong><small>Live service workflow</small></article><article><span>Awaiting payment</span><strong>{dashboard.awaitingPayment.length}</strong><small>Assessment, deposit or pickup</small></article><article><span>Technicians working</span><strong>{dashboard.activeTasks.length}</strong><small>Open task timers</small></article><article><span>Past pickup due</span><strong>{overdue}</strong><small>Needs attention</small></article></div>{dashboardError ? <div className="sc-ops-empty is-error"><AlertCircle size={20} /><strong>Live dashboard partially unavailable</strong><p>{dashboardError}</p><button className="sc-button sc-button--secondary" onClick={loadDashboard}><RefreshCw size={16} />Retry</button></div> : null}<div className="sc-ops-dashboard-grid"><article><Wrench size={20} /><span>Repair operations</span><strong>{can(staff, "repairs") ? "Connected" : "Restricted"}</strong><p>Work orders, technician tasks, payment holds and overdue pickup state are read from the POS.</p></article><article><ShieldCheck size={20} /><span>Security group</span><strong>{staff.securityGroupName || staff.role || "Staff"}</strong><p>Both navigation and API operations enforce your POS permissions.</p></article></div></> :
     section === "intelligence" ? <ERPIntelligenceBoard /> :
     section === "pos" ? <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /><TransactionServicePanel staff={staff} /></> :
     section === "quotes" ? <QuotationWorkspace staff={staff} /> :
-    section === "reviews" ? <IntegrationReviewCenter staff={staff} onNavigate={setSection} /> :
+    section === "reviews" ? <IntegrationReviewCenter staff={staff} onNavigate={setSection} onRoute={routeHandoff} /> :
     section === "reports" ? <><ReportingCenter staff={staff} /><OmnichannelReportingPanel /></> :
     selectedWorkOrder && section === "repairs" ? <WorkOrderDetailPanel workOrderId={selectedWorkOrder} onClose={() => setSelectedWorkOrder(null)} staffEmployeeId={staff.employeeId} canManageTasks={hasPermission(staff, "wo_technician", "work_orders")} canAssess={hasPermission(staff, "wo_assess", "work_orders")} canAssignParts={hasPermission(staff, "wo_assign_parts", "work_orders")} /> :
     resource.loading ? <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={22} /><strong>Loading live POS data…</strong></div> :
