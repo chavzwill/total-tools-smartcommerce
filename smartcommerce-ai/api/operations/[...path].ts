@@ -4,6 +4,8 @@ import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../.
 
 const MAX_BODY_BYTES = 128 * 1024;
 
+type PermissionRequirement = string | string[];
+
 const RESOURCE_RULES: Record<string, { upstream: string; read: string; write?: string }> = {
   "work-orders": { upstream: "work-orders", read: "work_orders", write: "work_orders" },
   employees: { upstream: "employees", read: "employees", write: "employees_edit" },
@@ -69,12 +71,13 @@ function requestedSegments(request: any) {
   return pathname.replace(/^\/api\/operations\/?/, "").split("/").filter(Boolean);
 }
 
-function requiredPermission(method: string, rule: { read: string; write?: string }, segments: string[]) {
+function requiredPermission(method: string, rule: { read: string; write?: string }, segments: string[]): PermissionRequirement {
   if (method === "GET" || method === "HEAD") return rule.read;
   if (segments[0] === "work-orders") {
     const joined = segments.join("/");
-    if (/\/parts(?:\/|$)/.test(joined)) return "wo_assign_parts";
-    if (/\/assessment(?:\/|$)/.test(joined)) return "wo_assess";
+    if (/\/confirm-parts(?:\/|$)/.test(joined) || /\/parts(?:\/|$)/.test(joined)) return "wo_assign_parts";
+    if (/\/assessment-paid(?:\/|$)/.test(joined) || /\/deposit-paid(?:\/|$)/.test(joined) || /\/final-payment(?:\/|$)/.test(joined)) return ["wo_assess", "pos"];
+    if (/\/estimate(?:\/|$)/.test(joined) || /\/assessment(?:\/|$)/.test(joined)) return "wo_assess";
     if (/\/signoff(?:\/|$)/.test(joined)) return "wo_signoff";
     if (/\/tasks(?:\/|$)/.test(joined) || /\/time(?:\/|$)/.test(joined)) return "wo_technician";
     if (method === "POST" && segments.length === 1) return "wo_intake";
@@ -103,6 +106,12 @@ function requiredPermission(method: string, rule: { read: string; write?: string
   return rule.write || rule.read;
 }
 
+function hasRequiredPermission(staff: NonNullable<ReturnType<typeof readStaffSession>>, requirement: PermissionRequirement) {
+  return Array.isArray(requirement)
+    ? requirement.some((permission) => canStaff(staff, permission))
+    : canStaff(staff, requirement);
+}
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const segments = requestedSegments(request);
@@ -127,9 +136,10 @@ export default async function handler(request: any, response: any) {
   }
 
   const permission = requiredPermission(method, rule, segments);
-  if (!canStaff(staff, permission)) {
-    await recordSecurityEvent({ request, eventType: "staff_operations_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { permission, resource, method } }).catch(() => undefined);
-    return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this operation.", details: { permission } } });
+  if (!hasRequiredPermission(staff, permission)) {
+    const permissionLabel = Array.isArray(permission) ? permission.join(" OR ") : permission;
+    await recordSecurityEvent({ request, eventType: "staff_operations_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { permission: permissionLabel, resource, method } }).catch(() => undefined);
+    return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this operation.", details: { permission: permissionLabel } } });
   }
 
   try {
