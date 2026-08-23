@@ -1,6 +1,7 @@
 import { AlertTriangle, BrainCircuit, Clock3, PackageSearch, RefreshCw, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import SmartTransferRecommendations from "./SmartTransferRecommendations";
 import "../../styles/erp-intelligence.css";
 
 type Row = Record<string, any>;
@@ -171,6 +172,8 @@ export default function ERPIntelligenceBoard() {
         <div className="sc-erp-intelligence__coverage">{coverage.map(([name, dataset]) => <div key={name}><span>{name}</span><strong className={dataset.available ? "is-verified" : "is-unavailable"}>{dataset.available ? `${dataset.rows.length} records` : "Unavailable"}</strong><small>{dataset.available ? "Live POS evidence" : dataset.reason || "Not exposed"}</small></div>)}</div>
       </section>
     </div>
+
+    <SmartTransferRecommendations />
 
     <section className="sc-erp-intelligence__panel">
       <div className="sc-erp-intelligence__title"><Truck size={18}/><div><strong>Supplier intelligence</strong><span>Lead-time reliability, cycle time and spend derived from purchase-order history</span></div></div>
