@@ -1,6 +1,7 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, PackageSearch, Play, RefreshCw, Square, UserRound, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import ServiceAdvisorPanel from "./ServiceAdvisorPanel";
 import "../../styles/work-order-detail.css";
 
 type Props = {
@@ -8,6 +9,8 @@ type Props = {
   onClose: () => void;
   staffEmployeeId?: string;
   canManageTasks?: boolean;
+  canAssess?: boolean;
+  canAssignParts?: boolean;
 };
 
 type Detail = Record<string, any> & {
@@ -24,7 +27,7 @@ const minutes = (value: unknown) => {
   return h ? `${h}h ${m}m` : `${m}m`;
 };
 
-export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmployeeId, canManageTasks = false }: Props) {
+export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmployeeId, canManageTasks = false, canAssess = false, canAssignParts = false }: Props) {
   const [state, setState] = useState<{ loading: boolean; data?: Detail; error?: string }>({ loading: true });
   const [action, setAction] = useState<{ taskId?: string; type?: "clock-in" | "clock-out" | "complete"; error?: string }>({});
 
@@ -85,15 +88,17 @@ export default function WorkOrderDetailPanel({ workOrderId, onClose, staffEmploy
             <article><span>Pickup</span><strong>{data.pickup_due_date || "Not set"}</strong><small>{Number(data.days_past_pickup_due || 0) > 0 ? `${Math.ceil(Number(data.days_past_pickup_due))} days overdue` : "Current"}</small></article>
           </div>
 
+          <ServiceAdvisorPanel workOrder={data} staffEmployeeId={staffEmployeeId} canAssess={canAssess} canAssignParts={canAssignParts} onUpdated={load} />
+
           <div className="sc-wo-detail__grid">
             <section className="sc-wo-detail__card">
               <div className="sc-wo-detail__card-title"><UserRound size={18} /><div><span>Customer & intake</span><strong>{data.customer_name || "Customer not named"}</strong></div></div>
-              <dl><div><dt>Phone</dt><dd>{data.customer_phone || "—"}</dd></div><div><dt>Email</dt><dd>{data.customer_email || "—"}</dd></div><div><dt>Equipment</dt><dd>{data.equipment_name || data.item_description || "—"}</dd></div><div><dt>Issue</dt><dd>{data.problem_description || data.issue_description || data.description || "—"}</dd></div></dl>
+              <dl><div><dt>Phone</dt><dd>{data.customer_phone || "—"}</dd></div><div><dt>Email</dt><dd>{data.customer_email || "—"}</dd></div><div><dt>Equipment</dt><dd>{data.equipment_name || data.item_label || data.item_description || "—"}</dd></div><div><dt>Issue</dt><dd>{data.problem_description || data.issue_description || data.description || "—"}</dd></div></dl>
             </section>
 
             <section className="sc-wo-detail__card">
               <div className="sc-wo-detail__card-title"><Wrench size={18} /><div><span>Service ownership</span><strong>{data.employee_name || "Unassigned"}</strong></div></div>
-              <dl><div><dt>Status</dt><dd>{label(data.status)}</dd></div><div><dt>Created</dt><dd>{data.created_at || "—"}</dd></div><div><dt>Assessment</dt><dd>{data.assessment_notes || data.diagnosis || "—"}</dd></div><div><dt>Customer approval</dt><dd>{label(data.approval_status || data.customer_approval_status)}</dd></div></dl>
+              <dl><div><dt>Status</dt><dd>{label(data.status)}</dd></div><div><dt>Created</dt><dd>{data.created_at || "—"}</dd></div><div><dt>Assessment</dt><dd>{data.assessment_notes || data.diagnosis || data.estimate_notes || "—"}</dd></div><div><dt>Deposit</dt><dd>{data.deposit_transaction_id ? "Received" : data.deposit_amount ? "Required" : "Not set"}</dd></div></dl>
             </section>
           </div>
 
