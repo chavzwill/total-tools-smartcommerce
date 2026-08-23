@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import GuidedMode from "../components/guidance/GuidedMode";
+import ERPIntelligenceBoard from "../components/operations/ERPIntelligenceBoard";
 import InventoryControlBoard from "../components/operations/InventoryControlBoard";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
@@ -37,14 +38,18 @@ function hasPermission(staff: StaffIdentity, key: string, parent?: string) {
   return parent ? staff.permissions[parent] === true : staff.permissions[key] === true;
 }
 
+function hasPermissionFamily(staff: StaffIdentity, key: string) {
+  return staff.permissions[key] === true || Object.entries(staff.permissions).some(([permission, enabled]) => enabled && permission.startsWith(`${key}_`));
+}
+
 function can(staff: StaffIdentity, section: OperationsSection) {
   if (section === "overview") return true;
-  const key: Record<Exclude<OperationsSection, "overview">, string> = {
+  if (section === "intelligence") return ["reports", "inventory", "purchasing", "purchase_requests", "work_orders"].some((key) => hasPermissionFamily(staff, key));
+  const key: Record<Exclude<OperationsSection, "overview" | "intelligence">, string> = {
     pos: "pos", repairs: "work_orders", technicians: "work_orders", inventory: "inventory",
     purchasing: "purchasing", quotes: "quotations", reports: "reports",
   };
-  const expected = key[section];
-  return staff.permissions[expected] === true || Object.entries(staff.permissions).some(([permission, enabled]) => enabled && permission.startsWith(`${expected}_`));
+  return hasPermissionFamily(staff, key[section]);
 }
 
 function listFromPayload(value: unknown): unknown[] {
@@ -78,7 +83,7 @@ export default function OperationsPortalPage() {
 
   const allowedSections = useMemo(() => {
     if (!staff) return ["overview"] as OperationsSection[];
-    return (["overview", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reports"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
+    return (["overview", "intelligence", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reports"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
   }, [staff]);
 
   const loadSession = useCallback(async () => {
@@ -166,7 +171,7 @@ export default function OperationsPortalPage() {
 
   const items = listFromPayload(resource.data);
   const title: Record<OperationsSection, string> = {
-    overview: "Operations command center", pos: "Point of sale", repairs: "Repair work orders",
+    overview: "Operations command center", intelligence: "ERP Intelligence", pos: "Point of sale", repairs: "Repair work orders",
     technicians: "Technician workspace", inventory: "Inventory control", purchasing: "Purchasing",
     quotes: "Quotations", reports: "Reports & transactions",
   };
@@ -176,7 +181,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -196,6 +201,8 @@ export default function OperationsPortalPage() {
               <article><ShieldCheck size={20} /><span>Security group</span><strong>{staff.securityGroupName || staff.role || "Staff"}</strong><p>Both navigation and API operations enforce your POS permissions.</p></article>
             </div>
           </>
+        ) : section === "intelligence" ? (
+          <ERPIntelligenceBoard />
         ) : section === "pos" ? (
           <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>The protected operations gateway is ready for the existing checkout, drawer and transaction workflows. No duplicate payment engine is being created.</p></div>
         ) : selectedWorkOrder && section === "repairs" ? (
