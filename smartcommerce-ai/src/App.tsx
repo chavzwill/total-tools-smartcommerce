@@ -28,6 +28,7 @@ const DeliveryReviewPage = lazy(() => import("./pages/DeliveryReviewPage"));
 const DeliveryOperationsPage = lazy(() => import("./pages/DeliveryOperationsPage"));
 const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
 const DeliveryNotificationPreferencesPage = lazy(() => import("./pages/DeliveryNotificationPreferencesPage"));
+const DeliveryNotificationHealthPage = lazy(() => import("./pages/DeliveryNotificationHealthPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -76,23 +77,12 @@ export default function App() {
 
   useEffect(() => {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
-
-    const update = () => {
-      setRoute(getRoute());
-      window.requestAnimationFrame(() => {
-        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      });
-    };
-
+    const update = () => { setRoute(getRoute()); window.requestAnimationFrame(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }); };
     window.addEventListener("hashchange", update);
-    return () => window.removeEventListener("hashchange", update);
+    return () => { window.removeEventListener("hashchange", update); };
   }, []);
 
-  useEffect(() => {
-    window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
-    window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED_EVENT, { detail: { count: cart.reduce((sum, item) => sum + item.quantity, 0) } }));
-  }, [cart]);
-
+  useEffect(() => { window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart)); window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED_EVENT, { detail: { count: cart.reduce((sum, item) => sum + item.quantity, 0) } })); }, [cart]);
   useEffect(() => { window.localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist)); }, [wishlist]);
   useEffect(() => { window.localStorage.setItem(COMPARE_KEY, JSON.stringify(compared)); }, [compared]);
 
@@ -144,6 +134,7 @@ export default function App() {
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
   else if (path === "/operations/delivery-reviews") page = <DeliveryReviewPage />;
   else if (path === "/operations/delivery-dispatch") page = <DeliveryOperationsPage />;
+  else if (path === "/operations/notification-health") page = <DeliveryNotificationHealthPage />;
   else if (path === "/track-order") page = <OrderTrackingPage orderId={route.query.get("ref") || ""} />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
