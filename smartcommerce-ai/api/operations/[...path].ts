@@ -99,6 +99,7 @@ function requiredPermission(method: string, rule: ResourceRule, segments: string
     if (/\/dropoff|\/receive/.test(joined)) return "transfers_dropoff";
   }
   if (segments[0] === "quotations") {
+    if (/\/status(?:\/|$)/.test(joined) && method === "PATCH") return ["quotations_create", "quotations_approve"];
     if (/\/approve(?:\/|$)/.test(joined)) return "quotations_approve";
     if (/\/convert(?:\/|$)/.test(joined)) return "quotations_convert";
   }
@@ -163,6 +164,14 @@ export default async function handler(request: any, response: any) {
     if (resource === "transactions" && method === "POST" && segments[1] === "hold" && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
       await recordSecurityEvent({ request, eventType: "staff_pos_hold_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
       return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
+    }
+    if (resource === "quotations" && method === "PATCH" && segments[2] === "status") {
+      const nextStatus = String(jsonBody?.status || "");
+      const required = nextStatus === "accepted" || nextStatus === "declined" ? "quotations_approve" : "quotations_create";
+      if (!canStaff(staff, required)) {
+        await recordSecurityEvent({ request, eventType: "staff_quotation_status_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { status: nextStatus, permission: required } }).catch(() => undefined);
+        return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this quotation status change.", details: { permission: required } } });
+      }
     }
 
     const baseUrl = configuredPos();
