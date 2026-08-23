@@ -34,6 +34,7 @@ export type TechnicianEvidenceSnapshot = {
 };
 
 type Row = Record<string, any>;
+type EnrichedTask = Row & { __wo: Row };
 
 function configuredPos() {
   const raw = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
@@ -81,8 +82,12 @@ export async function collectTechnicianPerformanceEvidence(employeeId: string, p
     catch { /* coverage is reported below; never invent missing source data */ }
   }
 
-  const tasks = details.flatMap((wo) => (Array.isArray(wo.tasks) ? wo.tasks.map((task: Row) => ({ ...task, __wo: wo })) : []))
-    .filter((task) => String(task.technician_id ?? "") === employeeId && String(task.status || "") === "complete");
+  const allTasks: EnrichedTask[] = details.flatMap((wo): EnrichedTask[] =>
+    Array.isArray(wo.tasks)
+      ? wo.tasks.map((task: Row) => ({ ...task, __wo: wo } as EnrichedTask))
+      : [],
+  );
+  const tasks = allTasks.filter((task) => String(task.technician_id ?? "") === employeeId && String(task.status || "") === "complete");
   const timedTasks = tasks.filter((task) => Number(task.actual_minutes || 0) > 0 && Number(task.allotted_minutes || 0) > 0);
   const actualMinutes = timedTasks.reduce((sum, task) => sum + Number(task.actual_minutes || 0), 0);
   const allottedMinutes = timedTasks.reduce((sum, task) => sum + Number(task.allotted_minutes || 0), 0);
@@ -125,7 +130,9 @@ export async function collectTechnicianPerformanceEvidence(employeeId: string, p
     "Safety/compliance eligibility events",
   ];
   const hardRequired: MetricKey[] = ["firstTimeFix", "qcFirstPass", "documentationCompleteness"];
-  const incentiveReady = hardRequired.every((key) => metrics[key].coverage === "verified") && false; // safety evidence is also currently unavailable
+  const hardMetricsReady = hardRequired.every((key) => metrics[key].coverage === "verified");
+  const safetyReady = false;
+  const incentiveReady = hardMetricsReady && safetyReady;
 
   return {
     employeeId,
