@@ -1,6 +1,8 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { StaffIdentity } from "../../lib/staffOperations";
 import ManagementExceptionPanel from "./ManagementExceptionPanel";
+import TechnicianCompensationReportingPanel from "./TechnicianCompensationReportingPanel";
 import "../../styles/omnichannel-reporting.css";
 
 type Row = Record<string, any>;
@@ -15,7 +17,7 @@ async function load(start: string, end: string) {
   return payload?.data || {};
 }
 
-export default function OmnichannelReportingPanel() {
+export default function OmnichannelReportingPanel({ staff }: { staff: StaffIdentity }) {
   const today = new Date();
   const [start, setStart] = useState(dateOnly(new Date(today.getTime() - 29 * 86400000)));
   const [end, setEnd] = useState(dateOnly(today));
@@ -53,5 +55,6 @@ export default function OmnichannelReportingPanel() {
       <section><h3>Intake status by channel</h3>{intakeByStatus.length ? <table><thead><tr><th>Status</th><th>Channel</th><th>Records</th></tr></thead><tbody>{intakeByStatus.map((row, i) => <tr key={i}><td>{label(row.status)}</td><td>{label(row.source_channel)}</td><td>{Number(row.records || 0).toLocaleString()}</td></tr>)}</tbody></table> : <p>No intake records in this period.</p>}</section>
     </div>
     <ManagementExceptionPanel />
+    <TechnicianCompensationReportingPanel staff={staff} />
   </section>;
 }
