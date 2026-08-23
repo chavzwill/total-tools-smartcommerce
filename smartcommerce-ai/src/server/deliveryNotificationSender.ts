@@ -13,7 +13,6 @@ function sql(){if(!sqlClient){const url=process.env.SMARTCOMMERCE_DATABASE_URL||
 function clean(value:unknown,max=500){return String(value||"").trim().slice(0,max);}
 function base64(value:string){return Buffer.from(value,"utf8").toString("base64");}
 function normalizePhone(value:string){const raw=value.replace(/[^\d+]/g,"");if(raw.startsWith("+"))return raw;if(raw.startsWith("1"))return `+${raw}`;if(raw.length===10)return `+1${raw}`;return raw?`+${raw}`:"";}
-
 async function customerContact(customerId:string){const rows=await sql()`SELECT email,phone,email_verified FROM customer_accounts WHERE id=${customerId} LIMIT 1` as unknown as Array<{email:string;phone:string|null;email_verified:boolean}>;return rows[0]||null;}
 
 async function sendResend(row:DeliveryNotificationOutboxRow,email:string){
@@ -55,7 +54,7 @@ async function sendOne(row:DeliveryNotificationOutboxRow){
     return sendResend(row,contact.email);
   }
   if(row.channel==="sms"||row.channel==="whatsapp"){
-    if(!(await notificationChannelAllowed(row.customer_id,row.channel)))throw Object.assign(new Error(row.channel==="sms"?"CUSTOMER_SMS_NOTIFICATIONS_DISABLED":"CUSTOMER_WHATSAPP_NOTIFICATIONS_DISABLED"),{retryable:false});
+    if(!(await notificationChannelAllowed(row.customer_id,row.channel,contact.phone)))throw Object.assign(new Error(row.channel==="sms"?"CUSTOMER_SMS_NOTIFICATIONS_DISABLED_OR_PHONE_UNVERIFIED":"CUSTOMER_WHATSAPP_NOTIFICATIONS_DISABLED_OR_PHONE_UNVERIFIED"),{retryable:false});
     return sendTwilio(row,contact.phone||"");
   }
   throw Object.assign(new Error("UNSUPPORTED_NOTIFICATION_CHANNEL"),{retryable:false});
