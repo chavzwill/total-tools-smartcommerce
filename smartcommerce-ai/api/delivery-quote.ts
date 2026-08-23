@@ -1,5 +1,6 @@
-import { quoteDelivery, type DeliveryQuoteRequest } from "../src/server/deliveryFulfilmentEngine.js";
+import { quoteDelivery } from "../src/server/deliveryFulfilmentEngine.js";
 import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
+import { resolveJamaicaDeliveryZone } from "../src/server/jamaicaDeliveryZones.js";
 
 const MAX_BODY_BYTES = 32_000;
 
@@ -10,8 +11,12 @@ type DeliveryQuoteApiInput = {
     fulfilmentType?: "sale" | "rental";
   }>;
   destinationCountryCode?: string;
-  destinationClass?: DeliveryQuoteRequest["destinationClass"];
-  requestedSpeed?: DeliveryQuoteRequest["requestedSpeed"];
+  requestedSpeed?: "standard" | "same_day";
+  address?: {
+    city?: string;
+    region?: string;
+    countryCode?: string;
+  };
 };
 
 function send(response: any, status: number, payload: unknown) {
@@ -59,23 +64,40 @@ export default async function handler(request: any, response: any) {
       return send(response, 400, { error: { code: "INVALID_DELIVERY_REQUEST", message: "Valid delivery items are required." } });
     }
 
+    const countryCode = String(input.address?.countryCode || input.destinationCountryCode || "JM").toUpperCase().slice(0, 2);
     const items = await resolveDeliveryItems(input.items.map((item) => ({
       productId: item.productId.trim(),
       quantity: Number(item.quantity),
       fulfilmentType: item.fulfilmentType || "sale",
     })));
 
-    // Product freight facts are resolved server-side from the connected commerce provider.
-    // The browser supplies only product identity, quantity and destination preference; it
-    // cannot declare its own weight, dimensions or parcel eligibility.
+    if (countryCode !== "JM") {
+      const delivery = quoteDelivery({ items, destinationCountryCode: countryCode, requestedSpeed: input.requestedSpeed });
+      return send(response, 200, { delivery, zone: null });
+    }
+
+    const zone = resolveJamaicaDeliveryZone({ town: input.address?.city, parish: input.address?.region });
+    if (zone.status === "unresolved") {
+      return send(response, 200, {
+        zone,
+        delivery: {
+          status: "manual_review",
+          reasonCode: "DELIVERY_ZONE_UNRESOLVED",
+          message: zone.message,
+          options: [],
+        },
+      });
+    }
+
     const delivery = quoteDelivery({
       items,
-      destinationCountryCode: String(input.destinationCountryCode || "JM").toUpperCase().slice(0, 2),
-      destinationClass: input.destinationClass,
+      destinationCountryCode: "JM",
+      destinationClass: zone.destinationClass,
       requestedSpeed: input.requestedSpeed,
+      sameDayEligible: zone.sameDayEligible,
     });
 
-    return send(response, 200, { delivery });
+    return send(response, 200, { delivery, zone });
   } catch (error: any) {
     const status = Number(error?.status || 500);
     if (status === 413) {
