@@ -1,6 +1,7 @@
 import { Loader2, MapPin, Store } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCourierCollectionPoints, type CourierCollectionPoint } from "../../services/courierCollectionPointClient";
+import "../../styles/courier-collection-points.css";
 
 export default function CourierCollectionPointPicker({
   serviceId,
