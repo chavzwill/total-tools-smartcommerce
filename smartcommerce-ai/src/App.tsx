@@ -30,6 +30,8 @@ const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
 const DeliveryNotificationPreferencesPage = lazy(() => import("./pages/DeliveryNotificationPreferencesPage"));
 const DeliveryNotificationHealthPage = lazy(() => import("./pages/DeliveryNotificationHealthPage"));
 const PosReadinessPage = lazy(() => import("./pages/PosReadinessPage"));
+const ReturnsPage = lazy(() => import("./pages/ReturnsPage"));
+const ReturnOperationsPage = lazy(() => import("./pages/ReturnOperationsPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -132,11 +134,13 @@ export default function App() {
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
   else if (path === "/account/notifications") page = <DeliveryNotificationPreferencesPage />;
+  else if (path === "/account/returns") page = <ReturnsPage />;
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
   else if (path === "/operations/delivery-reviews") page = <DeliveryReviewPage />;
   else if (path === "/operations/delivery-dispatch") page = <DeliveryOperationsPage />;
   else if (path === "/operations/notification-health") page = <DeliveryNotificationHealthPage />;
   else if (path === "/operations/pos-readiness") page = <PosReadinessPage />;
+  else if (path === "/operations/returns") page = <ReturnOperationsPage />;
   else if (path === "/track-order") page = <OrderTrackingPage orderId={route.query.get("ref") || ""} />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
