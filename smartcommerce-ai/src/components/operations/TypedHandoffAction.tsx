@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRightLeft, CalendarPlus2, FilePlus2, PackagePlus, SlidersHorizontal, UserRoundPen, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CalendarPlus2, FilePlus2, PackagePlus, ShoppingCart, SlidersHorizontal, UserRoundPen, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { normalizeOmnichannelHandoff } from "../../lib/omnichannelContracts";
 import { getStaffSession, operationsRequest, type StaffIdentity } from "../../lib/staffOperations";
@@ -25,6 +25,7 @@ async function currentStaff(): Promise<StaffIdentity> {
 const number = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const stockOf = (row: Row) => number(row.stock_qty ?? row.stock);
 const stringValue = (value: unknown) => value === undefined || value === null ? "" : String(value).trim();
+const money = (value: number) => new Intl.NumberFormat("en-JM", { style: "currency", currency: "JMD" }).format(value || 0);
 
 async function liveBranchInventory(branchId: string) {
   const rows = await operationsRequest<Row[]>(`inventory?branch_id=${encodeURIComponent(branchId)}&active=1&is_service=0&is_rental=0&is_non_inventory=0`);
@@ -145,6 +146,81 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
     finally { setWorking(false); }
   }
 
+  async function createSaleHold() {
+    if (working) return;
+    setWorking(true); setError("");
+    try {
+      const staff = await currentStaff();
+      const branch = String(handoff.branchId || staff.defaultBranchId || "");
+      if (!branch) throw new Error("An authoritative branch is required before preparing this sale.");
+      if (!handoff.items.length || handoff.items.some((item) => item.productId === undefined)) throw new Error("Every sale line must be linked to an authoritative POS product ID.");
+
+      const live = await liveBranchInventory(branch);
+      const byProduct = new Map(live.map((item) => [String(item.id), item]));
+      const [customer, ...details] = await Promise.all([
+        handoff.customerId ? operationsRequest<Row>(`customers/${encodeURIComponent(String(handoff.customerId))}`) : Promise.resolve(null),
+        ...handoff.items.map((item) => operationsRequest<Row>(`inventory/${encodeURIComponent(String(item.productId))}`)),
+      ]);
+      if (handoff.customerId && (!customer || String(customer.id || "") !== String(handoff.customerId))) throw new Error("The linked customer could not be verified in the POS.");
+      const taxExempt = Boolean(customer && Number(customer.tax_exempt || 0) === 1);
+
+      const items = handoff.items.map((item, index) => {
+        const branchProduct = byProduct.get(String(item.productId));
+        const product = details[index];
+        if (!branchProduct || !product) throw new Error(`${item.name || item.sku || `Product ${item.productId}`} is not available in the live branch catalogue.`);
+        const quantity = Math.max(1, Math.trunc(item.quantity));
+        const available = stockOf(branchProduct);
+        if (quantity > available) throw new Error(`${item.name || product.name || item.sku || `Product ${item.productId}`} requires ${quantity}; only ${available} is currently available at this branch.`);
+
+        let unitPrice = number(product.price);
+        let variationName = item.variationName || "";
+        if (item.variationId !== undefined) {
+          const variations = Array.isArray(product.variations) ? product.variations : [];
+          const variation = variations.find((candidate: Row) => String(candidate.id) === String(item.variationId));
+          if (!variation) throw new Error(`${item.name || product.name || `Product ${item.productId}`} references a variation that cannot be authoritatively verified. Select the variation in POS checkout instead.`);
+          unitPrice = variation.price != null ? number(variation.price) : number(product.price) + number(variation.price_modifier);
+          variationName = variation.name || variationName;
+        } else if (number(branchProduct.has_variations) > 0) {
+          throw new Error(`${product.name || item.name || `Product ${item.productId}`} has required variations. Select the exact variation in POS checkout before payment.`);
+        }
+        const taxRate = taxExempt ? 0 : number(product.tax_rate);
+        const lineSubtotal = unitPrice * quantity;
+        const lineTax = lineSubtotal * taxRate / 100;
+        return {
+          product_id: item.productId,
+          product_name: product.name || item.name || item.sku || `Product ${item.productId}`,
+          sku: product.sku || item.sku || "",
+          quantity,
+          unit_price: Number(unitPrice.toFixed(2)),
+          tax_rate: taxRate,
+          variation_id: item.variationId ?? null,
+          variation_name: variationName || null,
+          available,
+          lineSubtotal,
+          lineTax,
+        };
+      });
+
+      const subtotal = items.reduce((sum, item) => sum + item.lineSubtotal, 0);
+      const tax = items.reduce((sum, item) => sum + item.lineTax, 0);
+      const total = subtotal + tax;
+      const customerLabel = customer ? (customer.name || [customer.first_name, customer.last_name].filter(Boolean).join(" ") || `Customer ${handoff.customerId}`) : "Walk-in customer";
+      const summary = items.map((item) => `${item.product_name}${item.variation_name ? ` — ${item.variation_name}` : ""}: ${item.quantity} × ${money(item.unit_price)}`).join("\n");
+      if (!window.confirm(`Prepare this SmartCommerce order as a POS hold?\n\nCustomer: ${customerLabel}\nBranch: ${branch}\n\n${summary}\n\nSubtotal: ${money(subtotal)}\nTax: ${money(tax)}\nPrepared total: ${money(total)}\n\nNo payment will be captured and no stock will be deducted. Final price, tax status, promotions, credit rules and tender are revalidated by the cashier at checkout.`)) return;
+
+      const held = await operationsRequest<Row>("transactions/hold", { method: "POST", body: JSON.stringify({
+        customer_id: handoff.customerId || null,
+        employee_id: staff.employeeId,
+        branch_id: branch,
+        items: items.map(({ available, lineSubtotal, lineTax, ...item }) => item),
+        discount_amount: 0,
+        notes: [handoff.externalReference ? `SmartCommerce approved order: ${handoff.externalReference}` : "SmartCommerce approved order", "Prepared as hold only; final checkout remains authoritative.", handoff.notes].filter(Boolean).join("\n"),
+      }) });
+      onApplied(await acknowledge(String(row.id), String(row.item_type), String(held.transaction_number || held.id || "held sale")));
+    } catch (e) { setError((e as Error).message); }
+    finally { setWorking(false); }
+  }
+
   async function createTransfer() {
     if (working) return;
     setWorking(true); setError("");
@@ -245,14 +321,15 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
     finally { setWorking(false); }
   }
 
-  if (!["quote", "repair", "purchase_request", "rental", "transfer", "inventory", "customer"].includes(handoff.kind)) return null;
+  if (!["quote", "repair", "purchase_request", "rental", "sale", "transfer", "inventory", "customer"].includes(handoff.kind)) return null;
   const hasAuthoritativeProducts = handoff.items.length > 0 && handoff.items.every((item) => item.productId !== undefined);
   const blocked = handoff.missing.length > 0 || (handoff.kind === "repair" && !handoff.customerId)
     || (handoff.kind === "rental" && (!handoff.customerId || !hasAuthoritativeProducts))
+    || (handoff.kind === "sale" && !hasAuthoritativeProducts)
     || (handoff.kind === "transfer" && !hasAuthoritativeProducts)
     || (handoff.kind === "inventory" && (handoff.items.length !== 1 || !hasAuthoritativeProducts))
     || (handoff.kind === "customer" && !handoff.customerId);
-  const controlled = ["rental", "transfer", "inventory", "customer"].includes(handoff.kind);
+  const controlled = ["rental", "sale", "transfer", "inventory", "customer"].includes(handoff.kind);
 
   return <div className="sc-ops-handoff__typed">
     <div><strong>{controlled ? "Approved-data controlled action" : "Approved-data draft"}</strong><span>{handoff.warnings.length ? handoff.warnings.join(" ") : controlled ? "Authoritative destination data will be revalidated immediately before this action." : "Typed SmartCommerce fields are ready for destination validation."}</span>{handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}</div>
@@ -260,6 +337,7 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
     {handoff.kind === "repair" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRepair()}><Wrench size={15}/>{working ? "Creating…" : "Create repair intake"}</button> : null}
     {handoff.kind === "purchase_request" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createPurchaseRequest()}><PackagePlus size={15}/>{working ? "Creating…" : "Create draft purchase request"}</button> : null}
     {handoff.kind === "rental" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRentalRequest()}><CalendarPlus2 size={15}/>{working ? "Validating rental…" : "Review & create rental request"}</button> : null}
+    {handoff.kind === "sale" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createSaleHold()}><ShoppingCart size={15}/>{working ? "Revalidating checkout…" : "Review & prepare POS hold"}</button> : null}
     {handoff.kind === "transfer" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createTransfer()}><ArrowRightLeft size={15}/>{working ? "Checking live stock…" : "Review & create transfer"}</button> : null}
     {handoff.kind === "inventory" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void applyInventoryAdjustment()}><SlidersHorizontal size={15}/>{working ? "Checking live stock…" : "Review & post adjustment"}</button> : null}
     {handoff.kind === "customer" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void applyCustomerUpdate()}><UserRoundPen size={15}/>{working ? "Comparing customer…" : "Review & update customer"}</button> : null}
