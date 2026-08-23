@@ -42,6 +42,7 @@ export type DeliveryQuoteRequest = {
   destinationCountryCode?: string;
   destinationClass?: "metro" | "regular" | "rural" | "remote";
   requestedSpeed?: "standard" | "same_day";
+  sameDayEligible?: boolean;
 };
 
 export type AutomatedDeliveryOption = {
@@ -66,7 +67,8 @@ export type DeliveryQuoteResult =
         | "LARGE_OR_SPECIAL_ITEM_REQUIRES_MANUAL_PRICING"
         | "MISSING_TRUSTED_FREIGHT_DATA"
         | "NO_AUTOMATED_PROVIDER_AVAILABLE"
-        | "INTERNATIONAL_PROVIDER_QUOTE_REQUIRED";
+        | "INTERNATIONAL_PROVIDER_QUOTE_REQUIRED"
+        | "SAME_DAY_ROUTE_NOT_VERIFIED";
       message: string;
       options: [];
     }
@@ -85,7 +87,7 @@ export const DELIVERY_SERVICES: DeliveryService[] = [
   {
     provider: "tara",
     serviceId: "tara_next_day_metro",
-    label: "TARA Next Day - Metro",
+    label: "TARA Next Day - Round Town",
     mode: "door_to_door",
     domestic: true,
     enabledForAutomaticQuote: true,
@@ -93,6 +95,7 @@ export const DELIVERY_SERVICES: DeliveryService[] = [
     baseRateJmd: 640,
     includedWeightLb: 10,
     additionalWeightRateJmdPerLb: 95,
+    notes: "Round Town is only valid when pickup and delivery are within the same city/town.",
   },
   {
     provider: "tara",
@@ -133,7 +136,7 @@ export const DELIVERY_SERVICES: DeliveryService[] = [
   {
     provider: "tara",
     serviceId: "tara_same_day_metro",
-    label: "TARA Same Day - Metro",
+    label: "TARA Same Day - Round Town",
     mode: "door_to_door",
     domestic: true,
     enabledForAutomaticQuote: true,
@@ -285,6 +288,15 @@ function manualReviewReason(request: DeliveryQuoteRequest): DeliveryQuoteResult 
       status: "manual_review",
       reasonCode: "MISSING_TRUSTED_FREIGHT_DATA",
       message: "Automatic courier pricing is only available when every item has trusted parcel eligibility and freight measurements.",
+      options: [],
+    };
+  }
+
+  if (request.requestedSpeed === "same_day" && request.sameDayEligible !== true) {
+    return {
+      status: "manual_review",
+      reasonCode: "SAME_DAY_ROUTE_NOT_VERIFIED",
+      message: "Same-day service is only offered when the configured fulfilment origin and destination match a provider-published same-day route.",
       options: [],
     };
   }
