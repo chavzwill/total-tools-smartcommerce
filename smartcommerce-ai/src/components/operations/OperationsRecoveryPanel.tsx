@@ -10,6 +10,7 @@ async function recoveryRequest(init?: RequestInit) {
   const response = await fetch("/api/operations-recovery", { credentials: "same-origin", ...init, headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(init?.headers || {}) } });
   const payload = await response.json().catch(() => null) as ApiPayload | null;
   if (!response.ok) throw new Error(payload?.error?.message || "Operations recovery is unavailable.");
+  if (!payload) throw new Error("Operations recovery returned an empty response.");
   return payload;
 }
 
