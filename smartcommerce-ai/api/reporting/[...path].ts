@@ -19,6 +19,12 @@ const ALLOWED_RESOURCES: Record<string, string> = {
   "work-orders": "work-orders",
   commissions: "commissions",
   layaway: "layaway",
+  accounts: "accounts",
+  crm: "crm",
+  promotions: "promotions",
+  "discount-cards": "discount-cards",
+  "cash-back-cards": "cash-back-cards",
+  woocommerce: "woocommerce",
 };
 
 function send(response: any, status: number, payload: unknown) {
@@ -44,6 +50,38 @@ function requestedSegments(request: any) {
   return pathname.replace(/^\/api\/reporting\/?/, "").split("/").filter(Boolean);
 }
 
+function pathAllowed(resource: string, segments: string[]) {
+  const subpath = segments.slice(1).join("/");
+  if (resource === "woocommerce") return subpath === "logs";
+  if (resource === "accounts") return ["aging", "stats", "payments"].includes(subpath);
+  if (resource === "crm") return ["dashboard", "opportunities"].includes(subpath);
+  if (resource === "customers") return segments.length === 1;
+  if (resource === "promotions") return segments.length === 1 || subpath === "product-assignments";
+  if (resource === "discount-cards" || resource === "cash-back-cards") return segments.length === 1;
+  return true;
+}
+
+function safeCustomerRows(payload: unknown) {
+  if (!Array.isArray(payload)) return [];
+  return payload.map((row: any) => ({
+    id: row?.id,
+    customer_number: row?.customer_number,
+    customer_name: [row?.first_name, row?.last_name].filter(Boolean).join(" ") || undefined,
+    active: row?.active,
+    customer_type: row?.customer_type,
+    credit_terms_days: row?.credit_terms_days,
+    credit_limit: row?.credit_limit,
+    account_balance: row?.account_balance,
+    account_blocked: row?.account_blocked,
+    credit_enabled: row?.credit_enabled,
+    tax_exempt: row?.tax_exempt,
+    is_rental_customer: row?.is_rental_customer,
+    loyalty_points: row?.loyalty_points,
+    cash_back_points: row?.cash_back_points,
+    created_at: row?.created_at,
+  }));
+}
+
 export default async function handler(request: any, response: any) {
   if (String(request.method || "GET").toUpperCase() !== "GET") {
     response.setHeader("Allow", "GET");
@@ -61,7 +99,12 @@ export default async function handler(request: any, response: any) {
   const segments = requestedSegments(request);
   const resource = segments[0] || "";
   const upstreamRoot = ALLOWED_RESOURCES[resource];
-  if (!upstreamRoot) return send(response, 404, { success: false, error: { code: "REPORTING_RESOURCE_NOT_FOUND", message: "That reporting resource is not exposed." } });
+  if (!upstreamRoot || !pathAllowed(resource, segments)) {
+    return send(response, 404, { success: false, error: { code: "REPORTING_RESOURCE_NOT_FOUND", message: "That reporting resource is not exposed." } });
+  }
+  if (resource === "accounts" && !canStaff(staff, "reports_financial")) {
+    return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Financial-report access is required for accounts receivable reports." } });
+  }
 
   try {
     const baseUrl = configuredPos();
@@ -78,6 +121,11 @@ export default async function handler(request: any, response: any) {
 
     const requestFetch = createHardenedServerFetch({ timeoutMs: 12_000, maxResponseBytes: 6_000_000 });
     const upstream = await requestFetch(upstreamUrl, { method: "GET", headers });
+    if (resource === "customers" && upstream.ok) {
+      const payload = await upstream.json().catch(() => []);
+      return send(response, 200, safeCustomerRows(payload));
+    }
+
     const bytes = Buffer.from(await upstream.arrayBuffer());
     response.statusCode = upstream.status;
     response.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
