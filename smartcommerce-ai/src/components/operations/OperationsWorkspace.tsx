@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Boxes,
   BrainCircuit,
   ClipboardList,
@@ -21,6 +22,7 @@ export type OperationsSection =
   | "inventory"
   | "purchasing"
   | "quotes"
+  | "reviews"
   | "reports";
 
 type OperationsWorkspaceProps = {
@@ -48,6 +50,7 @@ const sections: Array<{
   { id: "inventory", label: "Inventory", icon: Boxes },
   { id: "purchasing", label: "Purchasing", icon: PackageSearch },
   { id: "quotes", label: "Quotes", icon: ClipboardList },
+  { id: "reviews", label: "Reviews & approvals", icon: BadgeCheck },
   { id: "reports", label: "Reports", icon: ReceiptText },
 ];
 
