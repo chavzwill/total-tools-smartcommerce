@@ -112,6 +112,31 @@ A method becomes genuinely selectable only after provider onboarding plus its pa
 
 ---
 
+## 2026-08-22 — Small-parcel delivery is automated; large items and rentals require manual pricing
+
+### Decision
+SmartCommerce will use a central Delivery & Fulfilment Engine. Verified small parcels may receive automated domestic courier quotes. Large/heavy/oversized/special-handling items and every rental shipment are routed to manual logistics review and pricing.
+
+### Courier pricing policy
+- TARA and Knutsford Express are the first enabled domestic automatic rate adapters based on published rate structures.
+- Jamaica Post Zip Mail remains configured as a reference only until Total Tools confirms a current business rate card.
+- Doorway Express requires an authoritative contracted/live quote source before automatic pricing.
+- DHL and FedEx are treated as international provider-quote adapters rather than hard-coded domestic parcel rates.
+- Customer delivery charge = provider courier cost + 20% SmartCommerce operational markup.
+
+### Accounting rule
+Provider cost, 20% markup and customer delivery charge must remain separate values. This allows bookkeeping to reconcile courier invoices and management to measure delivery margin.
+
+### Integrity rule
+SmartCommerce must never invent freight measurements or courier eligibility. If trusted weight/dimensions/parcel eligibility are incomplete, the order routes to manual review instead of receiving a guessed shipping charge.
+
+### Implementation
+- `src/server/deliveryFulfilmentEngine.ts`
+- `api/delivery-quote.ts`
+- `docs/DELIVERY-FULFILMENT-ENGINE.md`
+
+---
+
 ## Documentation policy adopted 2026-08-22
 
 For every material production feature, keep role-specific documentation for:
