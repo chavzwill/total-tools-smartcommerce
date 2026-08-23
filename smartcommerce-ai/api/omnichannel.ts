@@ -52,6 +52,13 @@ function staffSession(request: any) {
   return readStaffSession(parseCookie(firstHeader(request.headers?.cookie))[STAFF_COOKIE_NAME]);
 }
 
+function mayViewQueue(staff: StaffSession) {
+  return [
+    "reports", "quotations_approve", "pr_approve", "purchasing_approve", "inventory_edit",
+    "rentals_manage_items", "wo_assess", "customers_edit",
+  ].some((permission) => canStaff(staff, permission));
+}
+
 function mayApprove(staff: StaffSession, itemType: string) {
   const type = itemType.toLowerCase();
   if (/quote|commercial/.test(type)) return canStaff(staff, "quotations_approve");
@@ -70,13 +77,14 @@ export default async function handler(request: any, response: any) {
     if (method === "GET") {
       const staff = staffSession(request);
       if (!staff) return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
-      if (!canStaff(staff, "reports")) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow omnichannel reporting." } });
       const view = String(request.query?.view || "queue");
       if (view === "report") {
+        if (!canStaff(staff, "reports")) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow omnichannel reporting." } });
         const start = String(request.query?.start || new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10));
         const end = String(request.query?.end || new Date().toISOString().slice(0, 10));
         return send(response, 200, { success: true, data: await channelReport({ start, end }) });
       }
+      if (!mayViewQueue(staff)) return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow integration review queues." } });
       const items = await listIntakeItems({ status: request.query?.status ? String(request.query.status) : undefined, sourceChannel: request.query?.source ? String(request.query.source) : undefined, limit: Number(request.query?.limit || 200) });
       return send(response, 200, { success: true, data: items });
     }
