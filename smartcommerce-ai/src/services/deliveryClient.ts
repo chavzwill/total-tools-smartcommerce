@@ -7,6 +7,30 @@ export type DeliveryQuoteInputItem = {
   fulfilmentType?: "sale" | "rental";
 };
 
+export type DeliveryZoneResult =
+  | {
+      status: "resolved";
+      countryCode: "JM";
+      parish: string;
+      town: string;
+      taraAreaClass: "REG" | "RUR" | "REM";
+      destinationClass: DeliveryDestinationClass;
+      sameTownAsOrigin: boolean;
+      sameDayEligible: boolean;
+      source: string;
+      sourceStatus: string;
+    }
+  | {
+      status: "unresolved";
+      countryCode: "JM";
+      parish: string;
+      town: string;
+      reasonCode: string;
+      message: string;
+      source: string;
+      sourceStatus: string;
+    };
+
 export type DeliveryOption = {
   provider: "tara" | "knutsford" | "jamaica_post" | "doorway" | "dhl" | "fedex";
   serviceId: string;
@@ -39,8 +63,7 @@ type ApiError = Error & { code?: string; status?: number };
 
 export async function getDeliveryQuote(input: {
   items: DeliveryQuoteInputItem[];
-  destinationCountryCode?: string;
-  destinationClass?: DeliveryDestinationClass;
+  address: { city: string; region: string; countryCode?: string };
   requestedSpeed?: DeliverySpeed;
 }) {
   const response = await fetch("/api/delivery-quote", {
@@ -49,12 +72,12 @@ export async function getDeliveryQuote(input: {
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const payload = await response.json().catch(() => ({})) as { delivery?: DeliveryQuoteResult; error?: { code?: string; message?: string } };
+  const payload = await response.json().catch(() => ({})) as { delivery?: DeliveryQuoteResult; zone?: DeliveryZoneResult | null; error?: { code?: string; message?: string } };
   if (!response.ok || !payload.delivery) {
     const error = new Error(payload.error?.message || "Delivery pricing could not be prepared.") as ApiError;
     error.code = payload.error?.code;
     error.status = response.status;
     throw error;
   }
-  return payload.delivery;
+  return { ...payload.delivery, zone: payload.zone || null } as DeliveryQuoteResult & { zone: DeliveryZoneResult | null };
 }
