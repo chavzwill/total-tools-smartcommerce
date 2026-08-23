@@ -24,6 +24,7 @@ const CartPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ d
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const ConfirmationPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.ConfirmationPage })));
 const WishlistPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.WishlistPage })));
+const DeliveryReviewPage = lazy(() => import("./pages/DeliveryReviewPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -142,6 +143,7 @@ export default function App() {
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
+  else if (path === "/operations/delivery-reviews") page = <DeliveryReviewPage />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/repair-confirmation") page = <ConfirmationPage type="repair" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
