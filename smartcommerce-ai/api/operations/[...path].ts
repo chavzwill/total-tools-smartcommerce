@@ -119,6 +119,11 @@ function hasRequiredPermission(staff: NonNullable<ReturnType<typeof readStaffSes
     : canStaff(staff, requirement);
 }
 
+function parseJsonBody(body: Buffer | undefined, contentType: string | undefined) {
+  if (!body?.length || !contentType?.toLowerCase().includes("application/json")) return null;
+  try { return JSON.parse(body.toString("utf8")) as Record<string, unknown>; } catch { return null; }
+}
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const segments = requestedSegments(request);
@@ -144,6 +149,19 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
+    const contentType = firstHeader(request.headers?.["content-type"]);
+    const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
+    const jsonBody = parseJsonBody(body, contentType);
+
+    if (resource === "transactions" && method === "POST" && segments.length === 1 && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
+      await recordSecurityEvent({ request, eventType: "staff_pos_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
+      return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
+    }
+    if (resource === "transactions" && method === "POST" && segments[1] === "hold" && Number(jsonBody?.discount_amount || 0) > 0 && !canStaff(staff, "pos_discounts")) {
+      await recordSecurityEvent({ request, eventType: "staff_pos_hold_discount_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { discountAmount: Number(jsonBody?.discount_amount || 0) } }).catch(() => undefined);
+      return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow POS discounts.", details: { permission: "pos_discounts" } } });
+    }
+
     const baseUrl = configuredPos();
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
     const incoming = new URL(String(request.url || "/"), "https://smartcommerce.local");
@@ -151,14 +169,12 @@ export default async function handler(request: any, response: any) {
     incoming.searchParams.forEach((value, key) => { if (key !== "path") upstreamUrl.searchParams.append(key, value); });
 
     const headers: Record<string, string> = { Accept: "application/json" };
-    const contentType = firstHeader(request.headers?.["content-type"]);
     if (contentType) headers["Content-Type"] = contentType;
     const apiKey = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim();
     if (apiKey) headers["X-API-Key"] = apiKey;
     headers["X-SmartCommerce-Actor-Id"] = staff.employeeId;
     if (staff.defaultBranchId) headers["X-SmartCommerce-Branch-Id"] = staff.defaultBranchId;
 
-    const body = method === "GET" || method === "HEAD" ? undefined : await readBody(request);
     const requestFetch = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
