@@ -4,6 +4,7 @@ import { operationsRequest, type OperationsApiError } from "../../lib/staffOpera
 import InventoryCapitalIntelligence from "./InventoryCapitalIntelligence";
 import ReplenishmentDecisionBoard from "./ReplenishmentDecisionBoard";
 import SmartTransferRecommendations from "./SmartTransferRecommendations";
+import SupplierPurchaseIntelligence from "./SupplierPurchaseIntelligence";
 import "../../styles/erp-intelligence.css";
 
 type Row = Record<string, any>;
@@ -26,12 +27,6 @@ function asRows(value: unknown): Row[] {
   const row = value as Record<string, unknown>;
   for (const key of ["rows", "items", "data", "products", "work_orders"]) if (Array.isArray(row[key])) return row[key] as Row[];
   return [];
-}
-
-function daysBetween(start: unknown, end: unknown) {
-  const a = new Date(String(start || "")); const b = new Date(String(end || ""));
-  if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime())) return null;
-  return Math.max(0, (b.getTime() - a.getTime()) / 86400000);
 }
 
 function money(value: number) { return new Intl.NumberFormat("en-JM", { style: "currency", currency: "JMD", maximumFractionDigits: 0 }).format(value || 0); }
@@ -64,26 +59,13 @@ export default function ERPIntelligenceBoard() {
     const overdueRepairs = workOrders.filter((row) => Number(row.days_past_pickup_due || 0) > 0).length;
     const laborOverruns = activeTasks.filter((row) => Number(row.allotted_minutes || 0) > 0 && Number(row.elapsed_minutes || 0) > Number(row.allotted_minutes || 0)).length;
 
-    const supplierMap = new Map<string, { name: string; orders: number; received: number; onTime: number; dated: number; spend: number; leadDays: number[] }>();
-    purchaseOrders.forEach((po) => {
-      const id = String(po.supplier_id ?? po.supplier_name ?? "unknown"); if (id === "unknown") return;
-      const current = supplierMap.get(id) || { name: String(po.supplier_name || `Supplier ${id}`), orders: 0, received: 0, onTime: 0, dated: 0, spend: 0, leadDays: [] };
-      current.orders += 1; current.spend += Math.max(0, Number(po.total || 0));
-      if (po.received_at) {
-        current.received += 1; const lead = daysBetween(po.created_at, po.received_at); if (lead != null) current.leadDays.push(lead);
-        if (po.expected_date) { current.dated += 1; const received = new Date(String(po.received_at)), expected = new Date(String(po.expected_date)); if (Number.isFinite(received.getTime()) && Number.isFinite(expected.getTime()) && received.getTime() <= expected.getTime() + 86400000) current.onTime += 1; }
-      }
-      supplierMap.set(id, current);
-    });
-    const suppliers = [...supplierMap.values()].map((supplier) => ({ ...supplier, reliability: supplier.dated ? (supplier.onTime / supplier.dated) * 100 : null, averageLead: supplier.leadDays.length ? supplier.leadDays.reduce((a, b) => a + b, 0) / supplier.leadDays.length : null, sampleReady: supplier.received >= 3 && supplier.dated >= 2 })).sort((a, b) => a.sampleReady !== b.sampleReady ? (a.sampleReady ? -1 : 1) : (b.reliability ?? -1) - (a.reliability ?? -1) || b.orders - a.orders);
-
     const insights: Array<{ severity: "high" | "medium" | "good"; title: string; detail: string }> = [];
     if (outOfStock > 0) insights.push({ severity: "high", title: `${outOfStock} products are out of stock`, detail: "Resolve through credible inbound, transfer-before-purchase, or replenishment buying based on forward demand." });
     if (overduePOs.length > 0) insights.push({ severity: "high", title: `${overduePOs.length} purchase orders are past expected delivery`, detail: "Overdue supply is not trusted as guaranteed inbound by the replenishment intelligence layer." });
     if (overdueRepairs > 0) insights.push({ severity: "high", title: `${overdueRepairs} active repairs are past pickup due`, detail: "Check parts, technician capacity and customer authorization blockers before promising new completion dates." });
     if (laborOverruns > 0) insights.push({ severity: "medium", title: `${laborOverruns} active technician tasks are over allotted time`, detail: "Supervisor review may reveal diagnostic complexity, skills mismatch or unrealistic standard labor allowances." });
     if (!insights.length && [state.inventory, state.purchaseOrders, state.workOrders, state.activeTasks].some((source) => source.available)) insights.push({ severity: "good", title: "No immediate operational exceptions detected", detail: "Continue monitoring stock, supplier delivery, repair deadlines and technician load as new POS events arrive." });
-    return { outOfStock, lowStock, openPOs: openPOs.length, overduePOs: overduePOs.length, purchasingExposure, overdueRepairs, laborOverruns, suppliers, insights };
+    return { outOfStock, lowStock, openPOs: openPOs.length, overduePOs: overduePOs.length, purchasingExposure, overdueRepairs, laborOverruns, insights };
   }, [state]);
 
   const coverage = [["Inventory", state.inventory], ["Purchasing", state.purchaseOrders], ["Repairs", state.workOrders], ["Technician load", state.activeTasks], ["Suppliers", state.suppliers]] as const;
@@ -102,9 +84,8 @@ export default function ERPIntelligenceBoard() {
     </div>
 
     <ReplenishmentDecisionBoard />
+    <SupplierPurchaseIntelligence />
     <SmartTransferRecommendations />
     <InventoryCapitalIntelligence />
-
-    <section className="sc-erp-intelligence__panel"><div className="sc-erp-intelligence__title"><Truck size={18}/><div><strong>Supplier intelligence</strong><span>Lead-time reliability, cycle time and spend derived from purchase-order history</span></div></div>{!state.purchaseOrders.available ? <div className="sc-ops-empty"><strong>Supplier performance unavailable</strong><p>Purchase-order evidence is required before supplier performance can be ranked.</p></div> : !intelligence.suppliers.length ? <div className="sc-ops-empty"><strong>No supplier history yet</strong><p>Supplier scores will appear after purchase orders establish a measurable history.</p></div> : <div className="sc-erp-intelligence__suppliers"><div className="sc-erp-intelligence__supplier-head"><span>Supplier</span><span>Orders</span><span>On-time</span><span>Avg lead</span><span>Spend</span><span>Confidence</span></div>{intelligence.suppliers.slice(0, 25).map((supplier) => <article key={supplier.name}><div><strong>{supplier.name}</strong><small>{supplier.received} received orders</small></div><span>{supplier.orders}</span><strong>{supplier.reliability == null ? "—" : `${Math.round(supplier.reliability)}%`}</strong><span>{supplier.averageLead == null ? "—" : `${supplier.averageLead.toFixed(1)}d`}</span><span>{money(supplier.spend)}</span><em className={supplier.sampleReady ? "is-ready" : "is-learning"}>{supplier.sampleReady ? "Usable" : "Learning"}</em></article>)}</div>}<p className="sc-erp-intelligence__footnote">Fill-rate and item-level price-performance scoring remain excluded until sufficient line-level receiving history is exposed; the system does not infer them from incomplete data.</p></section>
   </section>;
 }
