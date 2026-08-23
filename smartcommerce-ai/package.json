@@ -25,6 +25,7 @@
     "test:security-operations-hardening": "node tests/security-operations-hardening-regression.mjs",
     "test:operations-state-transitions": "node tests/operations-state-transition-regression.mjs",
     "test:operations-permission-matrix": "node tests/operations-permission-matrix-regression.mjs",
+    "test:omnichannel-sync-recovery": "node tests/omnichannel-sync-recovery-regression.mjs",
     "test:security-client-surface": "node tests/security-client-surface-regression.mjs",
     "test:security-secret-hygiene": "node tests/security-secret-hygiene-regression.mjs",
     "test:security-log-hygiene": "node tests/security-log-hygiene-regression.mjs",
@@ -33,7 +34,7 @@
     "test:stability": "node tests/storefront-stability-regression.mjs",
     "test:stability-generated-artifacts": "node tests/stability-generated-artifacts-regression.mjs",
     "test:dependency-audit": "npm audit --audit-level=high --omit=dev",
-    "test:release-gate": "npm run test:security-authz && npm run test:security-session && npm run test:security-session-management && npm run test:security-account-recovery && npm run test:security-authenticated-commerce && npm run test:security-platform-gateway && npm run test:security-assistant-gateway && npm run test:security-integrity-endpoint && npm run test:security-monitor-endpoint && npm run test:security-guest-checkout && npm run test:security-step-up && npm run test:security-commercial-financial-policy && npm run test:security-commercial-account && npm run test:security-mfa && npm run test:security-passkey && npm run test:security-supply-chain && npm run test:security-operations-hardening && npm run test:operations-state-transitions && npm run test:operations-permission-matrix && npm run test:security-client-surface && npm run test:security-secret-hygiene && npm run test:security-log-hygiene && npm run test:security-api-error-exposure && npm run test:intelligence-grounding && npm run test:stability && npm run test:stability-generated-artifacts && npm run test:dependency-audit",
+    "test:release-gate": "npm run test:security-authz && npm run test:security-session && npm run test:security-session-management && npm run test:security-account-recovery && npm run test:security-authenticated-commerce && npm run test:security-platform-gateway && npm run test:security-assistant-gateway && npm run test:security-integrity-endpoint && npm run test:security-monitor-endpoint && npm run test:security-guest-checkout && npm run test:security-step-up && npm run test:security-commercial-financial-policy && npm run test:security-commercial-account && npm run test:security-mfa && npm run test:security-passkey && npm run test:security-supply-chain && npm run test:security-operations-hardening && npm run test:operations-state-transitions && npm run test:operations-permission-matrix && npm run test:omnichannel-sync-recovery && npm run test:security-client-surface && npm run test:security-secret-hygiene && npm run test:security-log-hygiene && npm run test:security-api-error-exposure && npm run test:intelligence-grounding && npm run test:stability && npm run test:stability-generated-artifacts && npm run test:dependency-audit",
     "preview": "vite preview"
   },
   "dependencies": {
