@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 import { recordCommercialLedgerEntry } from "../src/server/commercialAccountingLedger.js";
+import {
+  acquireCommercialCreditReservation,
+  commitCommercialCreditReservation,
+  releaseCommercialCreditReservation,
+} from "../src/server/commercialCreditReservations.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
@@ -212,7 +217,7 @@ export default async function handler(request: any, response: any) {
     const creditLimitMinor = Number(control?.credit_limit_minor || 0);
     const currencyMatches = !control?.credit_currency || String(control.credit_currency).toUpperCase() === quoteCurrency;
 
-    if (!control || control.control_status !== "approved" || !control.credit_enabled || !termsCode || !Number.isFinite(creditLimitMinor) || creditLimitMinor <= 0 || totalMinor > creditLimitMinor || !currencyMatches) {
+    if (!control || control.control_status !== "approved" || !control.credit_enabled || !termsCode || !Number.isFinite(creditLimitMinor) || creditLimitMinor <= 0 || !currencyMatches) {
       await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "financial_control_blocked", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, totalMinor, quoteCurrency, controlId: control?.id || null } });
       return send(response, 403, { error: { code: "COMMERCIAL_CREDIT_LIMIT_OR_TERMS", message: "This order is not within the organisation's currently approved credit controls. Contact the commercial team or request a financial override." } });
     }
@@ -225,54 +230,92 @@ export default async function handler(request: any, response: any) {
     const providerId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
     if (!businessAccountId || !providerId) return send(response, 503, { error: { code: "COMMERCIAL_CREDIT_UNAVAILABLE", message: "Commercial credit checkout is temporarily unavailable because the provider connection is not configured." } });
 
+    const reservation = await acquireCommercialCreditReservation({
+      commercialAccountId,
+      customerId: session.customer_id,
+      quoteId,
+      currency: quoteCurrency,
+      amountMinor: totalMinor,
+      creditLimitMinor,
+    });
+    if (!reservation.acquired) {
+      if (reservation.reason === "already_committed") {
+        return send(response, 409, { error: { code: "COMMERCIAL_CREDIT_ALREADY_SUBMITTED", message: "This verified quote has already been submitted on commercial credit." }, orderId: reservation.orderId || null });
+      }
+      if (reservation.reason === "already_in_progress") {
+        return send(response, 409, { error: { code: "COMMERCIAL_CREDIT_IN_PROGRESS", message: "This commercial-credit order is already being processed. Please wait before trying again." } });
+      }
+      await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "insufficient_available_credit", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, totalMinor, quoteCurrency, creditLimitMinor, availableMinor: "availableMinor" in reservation ? reservation.availableMinor : null } });
+      return send(response, 409, {
+        error: { code: "COMMERCIAL_CREDIT_INSUFFICIENT_AVAILABLE", message: "This order is above the organisation's currently available credit. Existing outstanding invoices and in-progress credit orders are included in the calculation." },
+        credit: "availableMinor" in reservation ? {
+          limitMinor: reservation.creditLimitMinor,
+          outstandingMinor: reservation.outstandingMinor,
+          reservedMinor: reservation.reservedMinor,
+          availableMinor: reservation.availableMinor,
+          currency: reservation.currency,
+        } : undefined,
+      });
+    }
+
     const headers = new Headers({ Accept: "application/json" });
     headers.set("x-business-account-id", businessAccountId);
     headers.set("x-provider-id", providerId);
     const platformRequest = new Request("https://smartcommerce.internal/api/platform/orders", { method: "POST", headers });
     const orderId = `ord_cc_${stableHash({ customerId: session.customer_id, quoteId, commercialAccountId, purchaseOrderReference }).slice(0, 28)}`;
 
-    const orderResult = await platformService.createOrder(platformRequest, {
-      id: orderId,
-      businessAccountId,
-      customerAccountId: session.customer_id,
-      status: "submitted",
-      currency: quoteCurrency,
-      lines: items.map((item: any, index: number) => ({
-        id: `${orderId}_line_${index + 1}`,
-        productId: String(item.productId || "") || undefined,
-        description: String(item.name || item.sku || item.productId || `Item ${index + 1}`),
-        quantity: Math.max(1, Number(item.quantity || 1)),
-        unitPrice: Number(item.unitPrice || 0),
-        totalAmount: Number(item.unitPrice || 0) * Math.max(1, Number(item.quantity || 1)),
-      })),
-      subtotalAmount: Number(quote.subtotal_minor || 0) / 100,
-      taxAmount: Number(quote.tax_minor || 0) / 100,
-      totalAmount: totalMinor / 100,
-      metadata: {
-        source: "smartcommerce_commercial_credit_checkout",
-        settlementMethod: "commercial_account_credit",
-        commercialAccountId,
-        commercialAccountName: trust.display_name,
-        providerCommercialAccountId: trust.provider_account_id,
-        paymentTermsCode: termsCode,
-        purchaseOrderReference: purchaseOrderReference || null,
-        checkoutQuoteId: quoteId,
-        approvedCreditLimitMinor: String(control.credit_limit_minor || ""),
-        creditCurrency: control.credit_currency || quoteCurrency,
-        fulfilmentMode: String(fulfilment.mode),
-        deliveryMinor: String(quote.delivery_minor || 0),
-        deliveryProvider: fulfilment.provider || null,
-        deliveryServiceId: fulfilment.serviceId || null,
-        deliveryServiceLabel: fulfilment.serviceLabel || null,
-        deliveryAddress: fulfilment.address ? JSON.stringify(fulfilment.address) : null,
-      },
-    });
+    let orderResult: Awaited<ReturnType<typeof platformService.createOrder>>;
+    try {
+      orderResult = await platformService.createOrder(platformRequest, {
+        id: orderId,
+        businessAccountId,
+        customerAccountId: session.customer_id,
+        status: "submitted",
+        currency: quoteCurrency,
+        lines: items.map((item: any, index: number) => ({
+          id: `${orderId}_line_${index + 1}`,
+          productId: String(item.productId || "") || undefined,
+          description: String(item.name || item.sku || item.productId || `Item ${index + 1}`),
+          quantity: Math.max(1, Number(item.quantity || 1)),
+          unitPrice: Number(item.unitPrice || 0),
+          totalAmount: Number(item.unitPrice || 0) * Math.max(1, Number(item.quantity || 1)),
+        })),
+        subtotalAmount: Number(quote.subtotal_minor || 0) / 100,
+        taxAmount: Number(quote.tax_minor || 0) / 100,
+        totalAmount: totalMinor / 100,
+        metadata: {
+          source: "smartcommerce_commercial_credit_checkout",
+          settlementMethod: "commercial_account_credit",
+          commercialAccountId,
+          commercialAccountName: trust.display_name,
+          providerCommercialAccountId: trust.provider_account_id,
+          paymentTermsCode: termsCode,
+          purchaseOrderReference: purchaseOrderReference || null,
+          checkoutQuoteId: quoteId,
+          approvedCreditLimitMinor: String(control.credit_limit_minor || ""),
+          availableCreditBeforeMinor: String(reservation.availableBeforeMinor),
+          reservedCreditMinor: String(totalMinor),
+          creditCurrency: control.credit_currency || quoteCurrency,
+          fulfilmentMode: String(fulfilment.mode),
+          deliveryMinor: String(quote.delivery_minor || 0),
+          deliveryProvider: fulfilment.provider || null,
+          deliveryServiceId: fulfilment.serviceId || null,
+          deliveryServiceLabel: fulfilment.serviceLabel || null,
+          deliveryAddress: fulfilment.address ? JSON.stringify(fulfilment.address) : null,
+        },
+      });
+    } catch (providerError) {
+      await releaseCommercialCreditReservation(reservation.reservationId).catch(() => undefined);
+      throw providerError;
+    }
 
     if (!orderResult.success) {
+      await releaseCommercialCreditReservation(reservation.reservationId).catch(() => undefined);
       await recordSecurityEvent({ request, eventType: "commercial_credit_provider_rejected", eventStatus: "provider_rejected", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, providerCode: orderResult.error.code } });
       return send(response, 409, { error: { code: "COMMERCIAL_CREDIT_PROVIDER_REJECTED", message: "The connected provider did not accept this account-credit order. Your cart remains unchanged." } });
     }
 
+    await commitCommercialCreditReservation(reservation.reservationId, orderResult.data.id);
     await sql()`UPDATE customer_carts SET status = 'submitted', updated_at = NOW() WHERE id = ${quote.cart_id} AND customer_id = ${session.customer_id}`;
     try {
       await recordCommercialLedgerEntry({
@@ -297,13 +340,15 @@ export default async function handler(request: any, response: any) {
           deliveryMinor: String(quote.delivery_minor || 0),
           deliveryProvider: fulfilment.provider || null,
           deliveryServiceId: fulfilment.serviceId || null,
+          creditReservationId: reservation.reservationId,
+          availableCreditBeforeMinor: String(reservation.availableBeforeMinor),
         },
       });
     } catch (ledgerError) {
       console.error("commercial_credit_ledger_record_failed", { orderId: orderResult.data.id, commercialAccountId, code: ledgerError instanceof Error ? ledgerError.message : "record_failed" });
       await recordSecurityEvent({ request, eventType: "commercial_credit_ledger_record_failed", eventStatus: "reconciliation_required", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id } });
     }
-    await recordSecurityEvent({ request, eventType: "commercial_credit_order_created", eventStatus: "provider_accepted", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id, paymentTermsCode: termsCode, fulfilmentMode: fulfilment.mode, deliveryMinor: Number(quote.delivery_minor || 0) } });
+    await recordSecurityEvent({ request, eventType: "commercial_credit_order_created", eventStatus: "provider_accepted", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id, paymentTermsCode: termsCode, fulfilmentMode: fulfilment.mode, deliveryMinor: Number(quote.delivery_minor || 0), creditReservationId: reservation.reservationId } });
 
     return send(response, 201, {
       order: {
@@ -313,6 +358,13 @@ export default async function handler(request: any, response: any) {
         commercialAccountName: trust.display_name,
         paymentTermsCode: termsCode,
         purchaseOrderReference: purchaseOrderReference || null,
+      },
+      credit: {
+        limitMinor: creditLimitMinor,
+        availableBeforeMinor: reservation.availableBeforeMinor,
+        reservedMinor: totalMinor,
+        availableAfterMinor: Math.max(0, reservation.availableBeforeMinor - totalMinor),
+        currency: quoteCurrency,
       },
     });
   } catch (error) {
