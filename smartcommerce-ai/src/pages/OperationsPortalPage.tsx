@@ -8,6 +8,7 @@ import InventoryIntegrityPanel from "../components/operations/InventoryIntegrity
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
 import QuotationWorkspace from "../components/operations/QuotationWorkspace";
+import ReportingCenter from "../components/operations/ReportingCenter";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import TransactionServicePanel from "../components/operations/TransactionServicePanel";
@@ -34,7 +35,6 @@ const sectionResource: Partial<Record<OperationsSection, string>> = {
   repairs: "work-orders?view=active",
   technicians: "work-orders/active-tasks",
   inventory: "inventory",
-  reports: "transactions",
 };
 
 function hasPermission(staff: StaffIdentity, key: string, parent?: string) {
@@ -177,7 +177,7 @@ export default function OperationsPortalPage() {
   const title: Record<OperationsSection, string> = {
     overview: "Operations command center", intelligence: "ERP Intelligence", pos: "Point of sale", repairs: "Repair work orders",
     technicians: "Technician workspace", inventory: "Inventory control", purchasing: "Purchasing",
-    quotes: "Quotations", reports: "Reports & transactions",
+    quotes: "Quotations", reports: "Reporting & Audit Center",
   };
   const overdue = dashboard.activeWorkOrders.filter((row) => Number(row?.days_past_pickup_due || 0) > 0).length;
 
@@ -185,7 +185,7 @@ export default function OperationsPortalPage() {
     <>
       <OperationsWorkspace
         section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
-        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
+        description={section === "intelligence" ? "Evidence-driven operational intelligence across Total Tools" : section === "pos" ? "Fast, stock-aware checkout using the live Total Tools POS" : section === "quotes" ? "Commercial quoting, sourcing and conversion using live POS inventory" : section === "inventory" ? "Stock health, physical counts, bin evidence and controlled inventory adjustments" : section === "reports" ? "Report every operational event the POS records, with controlled exports and print-ready views" : staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
         onNavigate={setSection}
@@ -211,6 +211,8 @@ export default function OperationsPortalPage() {
           <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /><TransactionServicePanel staff={staff} /></>
         ) : section === "quotes" ? (
           <QuotationWorkspace staff={staff} />
+        ) : section === "reports" ? (
+          <ReportingCenter staff={staff} />
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
