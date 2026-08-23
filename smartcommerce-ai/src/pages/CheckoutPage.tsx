@@ -1,5 +1,5 @@
-import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, PackageCheck, ShieldCheck, UserRound } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, PackageCheck, RefreshCw, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentMethodPanel from "../components/checkout/PaymentMethodPanel";
 import Container from "../components/shared/Container";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
@@ -8,6 +8,7 @@ import { listCommercialAccounts, type CommercialAccountSummary } from "../servic
 import "../styles/payment-methods.css";
 
 type SettlementMode = "standard" | "commercial-credit";
+type RecoveryReason = "auth" | "provider" | "unknown";
 
 type CreditCheckoutResult = {
   order: {
@@ -24,6 +25,13 @@ type ApiErrorPayload = { error?: { code?: string; message?: string } };
 
 function formatMinor(value: number, currency = "JMD") {
   return new Intl.NumberFormat("en-JM", { style: "currency", currency }).format(value / 100);
+}
+
+function isProviderValidationFailure(error: any) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return code.includes("provider") || code.includes("validation") || code.includes("unavailable") ||
+    message.includes("provider") || message.includes("revalid") || message.includes("unavailable") || message.includes("inventory");
 }
 
 async function submitCommercialCreditCheckout(input: {
@@ -59,7 +67,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [authRequired, setAuthRequired] = useState(false);
+  const [recoveryReason, setRecoveryReason] = useState<RecoveryReason>("unknown");
   const [settlementMode, setSettlementMode] = useState<SettlementMode>("standard");
   const [commercialAccounts, setCommercialAccounts] = useState<CommercialAccountSummary[]>([]);
   const [commercialLoading, setCommercialLoading] = useState(false);
@@ -68,31 +76,41 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   const [creditSubmitting, setCreditSubmitting] = useState(false);
   const [creditError, setCreditError] = useState("");
 
+  const prepareCheckout = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setRecoveryReason("unknown");
+    setQuote(null);
+    try {
+      const value = await createCheckoutQuote();
+      setQuote(value);
+    } catch (err: any) {
+      if (err?.status === 401 && guestCart.length) {
+        try {
+          const guestQuote = await createGuestCheckoutQuote(guestCart);
+          setQuote(guestQuote);
+          return;
+        } catch (guestError: any) {
+          setRecoveryReason(isProviderValidationFailure(guestError) ? "provider" : "unknown");
+          setError(guestError?.message || "Guest checkout could not be prepared.");
+          return;
+        }
+      }
+      setRecoveryReason(err?.status === 401 ? "auth" : isProviderValidationFailure(err) ? "provider" : "unknown");
+      setError(err?.message || "Checkout could not be prepared.");
+    } finally {
+      setLoading(false);
+    }
+  }, [guestCart]);
+
   useEffect(() => {
     let active = true;
-    async function prepareCheckout() {
-      try {
-        const value = await createCheckoutQuote();
-        if (active) setQuote(value);
-      } catch (err: any) {
-        if (err?.status === 401 && guestCart.length) {
-          try {
-            const guestQuote = await createGuestCheckoutQuote(guestCart);
-            if (active) { setQuote(guestQuote); setAuthRequired(false); }
-            return;
-          } catch (guestError: any) {
-            if (active) setError(guestError?.message || "Guest checkout could not be prepared.");
-            return;
-          }
-        }
-        if (active) { setError(err?.message || "Checkout could not be prepared."); setAuthRequired(err?.status === 401); }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void prepareCheckout();
+    void (async () => {
+      if (!active) return;
+      await prepareCheckout();
+    })();
     return () => { active = false; };
-  }, [guestCart]);
+  }, [prepareCheckout]);
 
   const guest = quote?.checkoutMode === "guest";
 
@@ -138,9 +156,35 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
     }
   }
 
-  if (loading) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Secure checkout</span><h1>Verifying every line.</h1><p>SmartCommerce is checking current provider pricing, product status and tax before showing your order.</p></section></Container></div>;
+  if (loading) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Secure checkout</span><h1>Checking this order.</h1><p>SmartCommerce is confirming current provider pricing and availability before you can continue. Nothing is charged during this check.</p></section></Container></div>;
 
-  if (!quote) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Checkout unavailable</span><h1>We couldn’t prepare this order.</h1><p>{authRequired ? "Sign in to continue with your saved cart. Your cart will still be here when you return." : error}</p>{authRequired ? <><button onClick={() => go("/account?intent=checkout")}>Sign in or create account</button><button onClick={() => go("/cart")}>Return to cart</button></> : <button onClick={() => go("/cart")}>Return to cart</button>}</section></Container></div>;
+  if (!quote) {
+    const providerIssue = recoveryReason === "provider";
+    const authIssue = recoveryReason === "auth";
+    return (
+      <div className="demo-page sc-checkout-page">
+        <Container className="demo-checkout sc-checkout-recovery">
+          <section className="sc-checkout-intro">
+            <span>{providerIssue ? "Order needs a recheck" : authIssue ? "Sign in required" : "Checkout paused"}</span>
+            <h1>{providerIssue ? "We can’t verify this cart just yet." : authIssue ? "Sign in to continue." : "We couldn’t prepare checkout."}</h1>
+            <p>{providerIssue
+              ? "One or more items could not be confirmed against the live commerce provider. Your cart is still saved, and no payment was attempted or charged."
+              : authIssue
+                ? "Sign in to continue with your saved cart. Your items will still be here when you return."
+                : error || "Checkout is temporarily unavailable. Your cart is safe and no payment was attempted."}</p>
+            {providerIssue ? <div className="sc-checkout-recovery__notice"><ShieldCheck size={20} /><div><strong>No money has moved.</strong><span>SmartCommerce blocks payment until every item, price and availability check succeeds server-side.</span></div></div> : null}
+            <div className="sc-checkout-recovery__actions">
+              {providerIssue ? <button type="button" className="sc-checkout-recovery__primary" onClick={() => void prepareCheckout()}><RefreshCw size={17} /> Check again</button> : null}
+              {authIssue ? <button type="button" className="sc-checkout-recovery__primary" onClick={() => go("/account?intent=checkout")}><UserRound size={17} /> Sign in or create account</button> : null}
+              <button type="button" onClick={() => go("/cart")}><PackageCheck size={17} /> Review cart</button>
+              <button type="button" onClick={() => go("/products")}><ShoppingBag size={17} /> Continue shopping</button>
+            </div>
+            {!providerIssue && !authIssue && error ? <p className="sc-checkout-recovery__detail">{error}</p> : null}
+          </section>
+        </Container>
+      </div>
+    );
+  }
 
   return (
     <div className="demo-page sc-checkout-page">
