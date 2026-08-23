@@ -9,6 +9,11 @@ type Row = Record<string, any>;
 const ALLOWED_RESOURCES = new Set([
   "transactions", "quotations", "work-orders", "rentals", "purchase-requests", "purchase-orders", "transfers",
 ]);
+const REFERENCE_FIELDS: Record<string, string[]> = {
+  transactions: ["transaction_number"], quotations: ["quote_number"], "work-orders": ["wo_number"],
+  rentals: ["reservation_number", "rental_number", "agreement_number"], "purchase-requests": ["pr_number"],
+  "purchase-orders": ["po_number"], transfers: ["transfer_number"],
+};
 
 function sql() {
   if (!sqlClient) {
@@ -23,6 +28,13 @@ function configuredPos() {
   const raw = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL?.trim();
   if (!raw) throw new Error("POS_NOT_CONFIGURED");
   return validateServerIntegrationBaseUrl(raw).toString().replace(/\/$/, "");
+}
+
+function posHeaders() {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const key = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim();
+  if (key) headers["X-API-Key"] = key;
+  return headers;
 }
 
 async function ensureSchema() {
@@ -86,14 +98,31 @@ function safeStatus(resource: string, row: Row) {
 async function posGet(resource: string, entityId: string) {
   if (!ALLOWED_RESOURCES.has(resource)) throw new Error("OMNICHANNEL_OUTCOME_RESOURCE_UNSUPPORTED");
   const url = new URL(`${configuredPos()}/api/${resource}/${encodeURIComponent(entityId)}`);
-  const headers: Record<string, string> = { Accept: "application/json" };
-  const key = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim();
-  if (key) headers["X-API-Key"] = key;
   const fetcher = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 1_500_000 });
-  const response = await fetcher(url, { headers });
+  const response = await fetcher(url, { headers: posHeaders() });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`POS_OUTCOME_SYNC_${response.status}`);
   return await response.json() as Row;
+}
+
+async function resolveEntityId(resource: string, reference: string) {
+  const trimmed = String(reference || "").trim();
+  if (!trimmed || !ALLOWED_RESOURCES.has(resource)) return null;
+  if (/^\d+$/.test(trimmed)) {
+    const direct = await posGet(resource, trimmed).catch(() => null);
+    if (direct) return String(direct.id || trimmed);
+  }
+  const url = new URL(`${configuredPos()}/api/${resource}`);
+  if (resource === "transactions") url.searchParams.set("transaction_number", trimmed);
+  url.searchParams.set("limit", "500");
+  const fetcher = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
+  const response = await fetcher(url, { headers: posHeaders() });
+  if (!response.ok) return null;
+  const payload = await response.json() as any;
+  const rows: Row[] = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
+  const fields = REFERENCE_FIELDS[resource] || [];
+  const exact = rows.find((row) => fields.some((field) => String(row[field] || "").trim() === trimmed));
+  return exact?.id !== undefined ? String(exact.id) : null;
 }
 
 export async function registerOutcomeLink(input: { intakeId: string; itemType: string; resource: string; entityId: string; reference?: string | null }) {
@@ -110,6 +139,23 @@ export async function registerOutcomeLink(input: { intakeId: string; itemType: s
     RETURNING *` as Row[];
   await recordChannelEvent({ sourceChannel: String(row.source_channel || "smartcommerce"), sourceApplication: "operations", eventType: "downstream_link_registered", entityType: input.resource, entityId: input.entityId, customerId: row.customer_id || null, branchId: row.branch_id || null, payload: { intakeId: input.intakeId, reference: input.reference || null } });
   return links[0];
+}
+
+async function bootstrapMissingLinks(customerIds?: string[]) {
+  await ensureSchema();
+  let candidates: Row[];
+  if (customerIds?.length) {
+    candidates = await sql()`SELECT i.* FROM omnichannel_intake_items i LEFT JOIN omnichannel_outcome_links o ON o.intake_id=i.id WHERE o.intake_id IS NULL AND i.status='applied' AND i.downstream_reference IS NOT NULL AND i.destination_resource = ANY(${Array.from(ALLOWED_RESOURCES)}::text[]) AND i.customer_id = ANY(${customerIds}::text[]) ORDER BY i.updated_at DESC LIMIT 50` as Row[];
+  } else {
+    candidates = await sql()`SELECT i.* FROM omnichannel_intake_items i LEFT JOIN omnichannel_outcome_links o ON o.intake_id=i.id WHERE o.intake_id IS NULL AND i.status='applied' AND i.downstream_reference IS NOT NULL AND i.destination_resource = ANY(${Array.from(ALLOWED_RESOURCES)}::text[]) ORDER BY i.updated_at DESC LIMIT 50` as Row[];
+  }
+  for (const item of candidates) {
+    const resource = String(item.destination_resource || "");
+    const reference = String(item.downstream_reference || "");
+    const entityId = await resolveEntityId(resource, reference).catch(() => null);
+    if (!entityId) continue;
+    await registerOutcomeLink({ intakeId: String(item.id), itemType: String(item.item_type || ""), resource, entityId, reference }).catch(() => undefined);
+  }
 }
 
 export async function refreshOutcomeLink(intakeId: string) {
@@ -140,6 +186,7 @@ export async function refreshOutcomeLink(intakeId: string) {
 export async function listOutcomeLinks(input: { customerIds?: string[]; limit?: number; refresh?: boolean } = {}) {
   await ensureSchema();
   const limit = Math.max(1, Math.min(200, Number(input.limit || 100)));
+  await bootstrapMissingLinks(input.customerIds);
   let rows: Row[];
   if (input.customerIds?.length) {
     const ids = input.customerIds.map(String).filter(Boolean);
