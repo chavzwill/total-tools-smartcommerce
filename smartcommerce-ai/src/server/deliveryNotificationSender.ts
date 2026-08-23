@@ -6,19 +6,15 @@ import {
   markExternalNotificationUncertain,
   type DeliveryNotificationOutboxRow,
 } from "./deliveryNotificationOutbox.js";
+import { notificationChannelAllowed } from "./deliveryNotificationPreferences.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
-function sql(){
-  if(!sqlClient){const url=process.env.SMARTCOMMERCE_DATABASE_URL||process.env.DATABASE_URL;if(!url)throw new Error("DELIVERY_NOTIFICATION_DATABASE_NOT_CONFIGURED");sqlClient=neon(url);}return sqlClient;
-}
+function sql(){if(!sqlClient){const url=process.env.SMARTCOMMERCE_DATABASE_URL||process.env.DATABASE_URL;if(!url)throw new Error("DELIVERY_NOTIFICATION_DATABASE_NOT_CONFIGURED");sqlClient=neon(url);}return sqlClient;}
 function clean(value:unknown,max=500){return String(value||"").trim().slice(0,max);}
 function base64(value:string){return Buffer.from(value,"utf8").toString("base64");}
 function normalizePhone(value:string){const raw=value.replace(/[^\d+]/g,"");if(raw.startsWith("+"))return raw;if(raw.startsWith("1"))return `+${raw}`;if(raw.length===10)return `+1${raw}`;return raw?`+${raw}`:"";}
 
-async function customerContact(customerId:string){
-  const rows=await sql()`SELECT email,phone,email_verified FROM customer_accounts WHERE id=${customerId} LIMIT 1` as unknown as Array<{email:string;phone:string|null;email_verified:boolean}>;
-  return rows[0]||null;
-}
+async function customerContact(customerId:string){const rows=await sql()`SELECT email,phone,email_verified FROM customer_accounts WHERE id=${customerId} LIMIT 1` as unknown as Array<{email:string;phone:string|null;email_verified:boolean}>;return rows[0]||null;}
 
 async function sendResend(row:DeliveryNotificationOutboxRow,email:string){
   const apiKey=clean(process.env.RESEND_API_KEY,300);const from=clean(process.env.SMARTCOMMERCE_NOTIFICATION_EMAIL_FROM,250);
@@ -34,9 +30,7 @@ async function sendTwilio(row:DeliveryNotificationOutboxRow,phone:string){
   const sid=clean(process.env.TWILIO_ACCOUNT_SID,120);const token=clean(process.env.TWILIO_AUTH_TOKEN,250);
   if(!sid||!token)throw Object.assign(new Error("TWILIO_NOT_CONFIGURED"),{retryable:false});
   const normalized=normalizePhone(phone);if(!normalized)throw Object.assign(new Error("CUSTOMER_PHONE_MISSING"),{retryable:false});
-  const form=new URLSearchParams();
-  const statusCallback=clean(process.env.SMARTCOMMERCE_TWILIO_STATUS_CALLBACK_URL,500);
-  if(statusCallback)form.set("StatusCallback",statusCallback);
+  const form=new URLSearchParams();const statusCallback=clean(process.env.SMARTCOMMERCE_TWILIO_STATUS_CALLBACK_URL,500);if(statusCallback)form.set("StatusCallback",statusCallback);
   if(row.channel==="whatsapp"){
     const from=clean(process.env.SMARTCOMMERCE_TWILIO_WHATSAPP_FROM,80);const contentSid=clean(process.env.SMARTCOMMERCE_TWILIO_WHATSAPP_CONTENT_SID,100);
     if(!from||!contentSid)throw Object.assign(new Error("WHATSAPP_PROVIDER_NOT_CONFIGURED"),{retryable:false});
@@ -56,24 +50,22 @@ async function sendTwilio(row:DeliveryNotificationOutboxRow,phone:string){
 async function sendOne(row:DeliveryNotificationOutboxRow){
   const contact=await customerContact(row.customer_id);if(!contact)throw Object.assign(new Error("CUSTOMER_CONTACT_NOT_FOUND"),{retryable:false});
   if(row.channel==="email"){
+    if(!(await notificationChannelAllowed(row.customer_id,"email")))throw Object.assign(new Error("CUSTOMER_EMAIL_NOTIFICATIONS_DISABLED"),{retryable:false});
     if(!contact.email||!contact.email_verified)throw Object.assign(new Error("VERIFIED_CUSTOMER_EMAIL_REQUIRED"),{retryable:false});
     return sendResend(row,contact.email);
   }
-  if(row.channel==="sms"||row.channel==="whatsapp")return sendTwilio(row,contact.phone||"");
+  if(row.channel==="sms"||row.channel==="whatsapp"){
+    if(!(await notificationChannelAllowed(row.customer_id,row.channel)))throw Object.assign(new Error(row.channel==="sms"?"CUSTOMER_SMS_NOTIFICATIONS_DISABLED":"CUSTOMER_WHATSAPP_NOTIFICATIONS_DISABLED"),{retryable:false});
+    return sendTwilio(row,contact.phone||"");
+  }
   throw Object.assign(new Error("UNSUPPORTED_NOTIFICATION_CHANNEL"),{retryable:false});
 }
 
 export async function processPendingDeliveryNotifications(limit=20){
   const rows=await claimPendingExternalDeliveryNotifications(limit);const summary={claimed:rows.length,accepted:0,retry:0,uncertain:0};
   for(const row of rows){
-    try{
-      const result=await sendOne(row);await markExternalNotificationAccepted({id:row.id,providerMessageId:result.providerMessageId,providerStatus:result.status});summary.accepted++;
-    }catch(error:any){
-      const code=clean(error instanceof Error?error.message:"NOTIFICATION_SEND_FAILED",120)||"NOTIFICATION_SEND_FAILED";
-      if(error?.retryable===true){const delay=Math.min(21600,Math.max(60,Math.pow(2,Math.min(8,row.attempt_count))*60));await markExternalNotificationRetry({id:row.id,errorCode:code,delaySeconds:delay});summary.retry++;}
-      else if(error?.httpStatus===undefined&&!["EMAIL_PROVIDER_NOT_CONFIGURED","TWILIO_NOT_CONFIGURED","WHATSAPP_PROVIDER_NOT_CONFIGURED","SMS_PROVIDER_NOT_CONFIGURED","CUSTOMER_CONTACT_NOT_FOUND","VERIFIED_CUSTOMER_EMAIL_REQUIRED","CUSTOMER_PHONE_MISSING","UNSUPPORTED_NOTIFICATION_CHANNEL"].includes(code)){await markExternalNotificationUncertain({id:row.id,errorCode:code});summary.uncertain++;}
-      else{await markExternalNotificationUncertain({id:row.id,errorCode:code});summary.uncertain++;}
-    }
+    try{const result=await sendOne(row);await markExternalNotificationAccepted({id:row.id,providerMessageId:result.providerMessageId,providerStatus:result.status});summary.accepted++;}
+    catch(error:any){const code=clean(error instanceof Error?error.message:"NOTIFICATION_SEND_FAILED",120)||"NOTIFICATION_SEND_FAILED";if(error?.retryable===true){const delay=Math.min(21600,Math.max(60,Math.pow(2,Math.min(8,row.attempt_count))*60));await markExternalNotificationRetry({id:row.id,errorCode:code,delaySeconds:delay});summary.retry++;}else{await markExternalNotificationUncertain({id:row.id,errorCode:code});summary.uncertain++;}}
   }
   return summary;
 }
