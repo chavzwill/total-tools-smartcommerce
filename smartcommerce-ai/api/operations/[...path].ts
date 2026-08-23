@@ -1,5 +1,5 @@
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../../src/server/hardenedOutboundFetch.js";
-import { abandonOperationsMutation, claimOperationsMutation, completeOperationsMutation, validIdempotencyKey } from "../../src/server/operationsMutationIdempotency.js";
+import { abandonOperationsMutation, claimOperationsMutation, completeOperationsMutation, markOperationsMutationUncertain, validIdempotencyKey } from "../../src/server/operationsMutationIdempotency.js";
 import { firstHeader, recordSecurityEvent } from "../../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../../src/server/staffSession.js";
 
@@ -182,6 +182,7 @@ export default async function handler(request: any, response: any) {
   const resource = segments[0] || "";
   const rule = RESOURCE_RULES[resource];
   let mutationRecordKey = "";
+  let upstreamMutationAttempted = false;
   if (!rule) return send(response, 404, { success: false, error: { code: "OPERATIONS_ROUTE_NOT_FOUND", message: "That operations resource is not exposed." } });
   if (!["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(method)) return send(response, 405, { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "That method is not allowed." } });
   if (!sameOrigin(request)) {
@@ -267,7 +268,7 @@ export default async function handler(request: any, response: any) {
         response.setHeader("X-Idempotency-Replayed", "true");
         return response.end(claim.replay.body);
       }
-      if (claim.inProgress) return send(response, 409, { success: false, error: { code: "IDEMPOTENCY_REQUEST_IN_PROGRESS", message: "This operation is already processing. Wait for the current request to finish before retrying." } });
+      if (claim.inProgress) return send(response, 409, { success: false, error: { code: "IDEMPOTENCY_REQUEST_IN_PROGRESS", message: "This operation is already processing or has an uncertain upstream outcome. Verify the authoritative POS state before retrying." } });
       mutationRecordKey = claim.recordKey;
     }
 
@@ -302,6 +303,7 @@ export default async function handler(request: any, response: any) {
       }
     }
 
+    if (isMutation(method)) upstreamMutationAttempted = true;
     const upstream = await requestFetch(upstreamUrl, { method, headers, body });
     const bytes = Buffer.from(await upstream.arrayBuffer());
     const responseContentType = upstream.headers.get("content-type") || "application/json";
@@ -313,13 +315,16 @@ export default async function handler(request: any, response: any) {
     if (mutationRecordKey) response.setHeader("X-Idempotency-Key-Accepted", "true");
     response.end(bytes);
   } catch (error) {
-    if (mutationRecordKey) await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
+    if (mutationRecordKey) {
+      if (upstreamMutationAttempted) await markOperationsMutationUncertain(mutationRecordKey, error instanceof Error ? error.message : "upstream_request_failed").catch(() => undefined);
+      else await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
+    }
     const status = Number((error as any)?.status || 500);
     if (status === 413) return send(response, 413, { success: false, error: { code: "REQUEST_TOO_LARGE", message: "The operations request is too large." } });
     const code = error instanceof Error ? error.message : "OPERATIONS_GATEWAY_ERROR";
     if (code === "OPERATIONS_IDEMPOTENCY_KEY_REUSED") return send(response, 409, { success: false, error: { code, message: "That idempotency key was already used for a different Operations request." } });
     if (code === "OPERATIONS_IDEMPOTENCY_DATABASE_NOT_CONFIGURED") return send(response, 503, { success: false, error: { code, message: "Duplicate-submit protection is not configured, so this write was blocked rather than sent unsafely.", retryable: true } });
-    console.error("staff_operations_gateway_error", { code, resource, method });
-    return send(response, 503, { success: false, error: { code: code === "POS_NOT_CONFIGURED" ? code : "OPERATIONS_GATEWAY_UNAVAILABLE", message: "The Total Tools operations service is temporarily unavailable.", retryable: true } });
+    console.error("staff_operations_gateway_error", { code, resource, method, upstreamMutationAttempted });
+    return send(response, 503, { success: false, error: { code: code === "POS_NOT_CONFIGURED" ? code : "OPERATIONS_GATEWAY_UNAVAILABLE", message: upstreamMutationAttempted ? "The POS outcome could not be confirmed. The operation is locked against automatic retry until the authoritative POS state is verified." : "The Total Tools operations service is temporarily unavailable.", retryable: !upstreamMutationAttempted } });
   }
 }
