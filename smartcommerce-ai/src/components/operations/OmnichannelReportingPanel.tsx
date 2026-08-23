@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import ManagementExceptionPanel from "./ManagementExceptionPanel";
 import "../../styles/omnichannel-reporting.css";
 
 type Row = Record<string, any>;
@@ -51,5 +52,6 @@ export default function OmnichannelReportingPanel() {
       <section><h3>Review & approval ledger</h3>{reviewQueue.length ? <table><thead><tr><th>Received</th><th>Source</th><th>Record</th><th>Status</th><th>Reviewer</th></tr></thead><tbody>{reviewQueue.slice(0, 100).map((row, i) => <tr key={i}><td>{row.received_at ? new Date(row.received_at).toLocaleString("en-JM") : "—"}</td><td>{label(row.source_channel)}</td><td>{label(row.item_type)}</td><td>{label(row.status)}</td><td>{row.reviewer_employee_id || "—"}</td></tr>)}</tbody></table> : <p>No imported workflow records in this period.</p>}</section>
       <section><h3>Intake status by channel</h3>{intakeByStatus.length ? <table><thead><tr><th>Status</th><th>Channel</th><th>Records</th></tr></thead><tbody>{intakeByStatus.map((row, i) => <tr key={i}><td>{label(row.status)}</td><td>{label(row.source_channel)}</td><td>{Number(row.records || 0).toLocaleString()}</td></tr>)}</tbody></table> : <p>No intake records in this period.</p>}</section>
     </div>
+    <ManagementExceptionPanel />
   </section>;
 }
