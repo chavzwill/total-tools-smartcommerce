@@ -3,6 +3,7 @@ import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } f
 import GuidedMode from "../components/guidance/GuidedMode";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
+import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
 import {
   getStaffSession,
   listActiveTechnicianTasks,
@@ -61,6 +62,7 @@ export default function OperationsPortalPage() {
   const [resource, setResource] = useState<ResourceState>({ loading: false });
   const [dashboard, setDashboard] = useState<DashboardState>(emptyDashboard);
   const [dashboardError, setDashboardError] = useState("");
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<string | null>(null);
 
   const employeeLabel = useMemo(() => {
     if (!staff) return "";
@@ -109,7 +111,10 @@ export default function OperationsPortalPage() {
     }
   }, []);
 
-  useEffect(() => { if (staff && section !== "overview") void loadResource(section); }, [staff, section, loadResource]);
+  useEffect(() => {
+    setSelectedWorkOrder(null);
+    if (staff && section !== "overview") void loadResource(section);
+  }, [staff, section, loadResource]);
 
   async function login(event: FormEvent) {
     event.preventDefault();
@@ -125,7 +130,7 @@ export default function OperationsPortalPage() {
 
   async function logout() {
     await logoutStaff().catch(() => undefined);
-    setStaff(null); setSection("overview"); setResource({ loading: false }); setDashboard(emptyDashboard);
+    setStaff(null); setSection("overview"); setResource({ loading: false }); setDashboard(emptyDashboard); setSelectedWorkOrder(null);
   }
 
   if (checking) return <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={26} /><strong>Checking staff access…</strong></div>;
@@ -163,7 +168,7 @@ export default function OperationsPortalPage() {
   return (
     <>
       <OperationsWorkspace
-        section={section} title={title[section]}
+        section={section} title={selectedWorkOrder && section === "repairs" ? "Work order detail" : title[section]}
         description={staff.securityGroupName ? `${staff.securityGroupName} access` : "Permission-aware staff workspace"}
         branchLabel={staff.defaultBranchName || staff.defaultBranchId || "Assigned branch"}
         employeeLabel={employeeLabel} allowedSections={allowedSections}
@@ -186,12 +191,14 @@ export default function OperationsPortalPage() {
           </>
         ) : section === "pos" ? (
           <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>The protected operations gateway is ready for the existing checkout, drawer and transaction workflows. No duplicate payment engine is being created.</p></div>
+        ) : selectedWorkOrder && section === "repairs" ? (
+          <WorkOrderDetailPanel workOrderId={selectedWorkOrder} onClose={() => setSelectedWorkOrder(null)} />
         ) : resource.loading ? (
           <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={22} /><strong>Loading live POS data…</strong></div>
         ) : resource.error ? (
           <div className="sc-ops-empty is-error"><AlertCircle size={20} /><strong>Live POS data unavailable</strong><p>{resource.error}</p><button className="sc-button sc-button--secondary" type="button" onClick={() => loadResource(section)}><RefreshCw size={16} />Retry</button></div>
         ) : section === "repairs" ? (
-          <WorkOrderBoard rows={items as WorkOrderRow[]} currency="JMD" />
+          <WorkOrderBoard rows={items as WorkOrderRow[]} currency="JMD" onOpen={setSelectedWorkOrder} />
         ) : (
           <div className="sc-ops-live-resource">
             <div className="sc-ops-live-resource__summary"><span>Connected POS records</span><strong>{items.length}</strong><small>No sample records are added by SmartCommerce.</small></div>
