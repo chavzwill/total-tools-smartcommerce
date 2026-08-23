@@ -12,14 +12,14 @@ function orderAction(order:CustomerOrderSummary){
  return {href:"#/account/returns",label:"Request help"};
 }
 
-export default function CustomerOrdersPage(){
+export default function CustomerOrdersPage({embedded=false}:{embedded?:boolean}){
  const [orders,setOrders]=useState<CustomerOrderSummary[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState("");
  async function refresh(){setLoading(true);setError("");try{const result=await listCustomerOrders();setOrders(result.orders||[]);}catch(err:any){setError(err?.message||"Your orders could not be loaded.");}finally{setLoading(false);}}
  useEffect(()=>{void refresh();},[]);
  const active=useMemo(()=>orders.filter((order)=>!["delivered","collected"].includes(order.fulfilment?.status||"")).length,[orders]);
- return <div className="sc-orders-page"><Container className="sc-orders-shell">
-  <header className="sc-orders-hero"><div><span className="sc-orders-kicker"><PackageCheck size={16}/> My orders</span><h1>Everything after checkout, in one place.</h1><p>Track fulfilment, pickup, delivery exceptions, commercial terms and return activity from the authoritative SmartCommerce order record.</p></div><div className="sc-orders-hero__stats"><strong>{orders.length}</strong><span>orders</span><strong>{active}</strong><span>active</span></div></header>
-  <section className="sc-orders-toolbar"><div><a href="#/account">Account overview</a><a href="#/account/returns">Returns & exchanges</a></div><button type="button" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16} className={loading?"sc-spin":""}/>Refresh</button></section>
+ const content=<>
+  <header className="sc-orders-hero"><div><span className="sc-orders-kicker"><PackageCheck size={16}/> My orders</span><h1>{embedded?"Your purchases":"Everything after checkout, in one place."}</h1><p>Track fulfilment, pickup, delivery exceptions, commercial terms and return activity from the authoritative SmartCommerce order record.</p></div><div className="sc-orders-hero__stats"><strong>{orders.length}</strong><span>orders</span><strong>{active}</strong><span>active</span></div></header>
+  <section className="sc-orders-toolbar"><div>{!embedded?<a href="#/account">Account overview</a>:null}<a href="#/account/returns">Returns & exchanges</a></div><button type="button" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16} className={loading?"sc-spin":""}/>Refresh</button></section>
   {error?<p className="sc-orders-alert" role="alert">{error}</p>:null}
   {loading?<div className="sc-orders-empty"><Loader2 className="sc-spin" size={24}/><strong>Loading your verified orders…</strong></div>:null}
   {!loading&&!orders.length?<div className="sc-orders-empty"><PackageCheck size={28}/><strong>No completed SmartCommerce orders yet.</strong><span>Provider-accepted orders will appear here automatically after checkout.</span><a href="#/products">Browse products</a></div>:null}
@@ -30,5 +30,7 @@ export default function CustomerOrdersPage(){
    {order.returnRequest?<div className="sc-order-return"><RotateCcw size={17}/><div><strong>{title(order.returnRequest.resolution)} request</strong><span>{title(order.returnRequest.status)}{order.returnRequest.approvedAmountMinor!=null?` · ${money(order.returnRequest.approvedAmountMinor,order.currency)} approved`:""}</span>{order.returnRequest.refundReference?<small>Refund ref: {order.returnRequest.refundReference}</small>:null}</div></div>:null}
    <footer><span>{order.id}</span><a href={action.href}>{action.label}<ArrowRight size={15}/></a></footer>
   </article>;})}</div>
- </Container></div>;
+ </>;
+ if(embedded)return <div className="sc-orders-page is-embedded"><div className="sc-orders-shell">{content}</div></div>;
+ return <div className="sc-orders-page"><Container className="sc-orders-shell">{content}</Container></div>;
 }
