@@ -6,6 +6,7 @@ import { parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../src/server/
 const MAX_BODY_BYTES = 32_000;
 let sqlClient: ReturnType<typeof neon> | undefined;
 let schemaReady = false;
+type Row = Record<string, any>;
 
 function sql() {
   if (!sqlClient) {
@@ -146,12 +147,12 @@ export default async function handler(req: any, res: any) {
 
     if (method === "GET") {
       const employeeId = String(req.query?.employeeId || "").trim();
-      const plans = await sql()`SELECT id,version,name,effective_from,effective_to,currency,overtime_multiplier,max_incentive_percent,plan_json,created_by,created_at FROM technician_compensation_plans ORDER BY effective_from DESC,version DESC`;
-      const rates = employeeId
-        ? await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} ORDER BY effective_from DESC,created_at DESC`
-        : isAdmin(session) ? await sql()`SELECT * FROM technician_rate_versions ORDER BY employee_id,effective_from DESC` : [];
-      const periods = employeeId
-        ? await sql()`SELECT * FROM technician_performance_periods WHERE employee_id=${employeeId} ORDER BY period_end DESC LIMIT 24`
+      const plans = await sql()`SELECT id,version,name,effective_from,effective_to,currency,overtime_multiplier,max_incentive_percent,plan_json,created_by,created_at FROM technician_compensation_plans ORDER BY effective_from DESC,version DESC` as Row[];
+      const rates: Row[] = employeeId
+        ? await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} ORDER BY effective_from DESC,created_at DESC` as Row[]
+        : isAdmin(session) ? await sql()`SELECT * FROM technician_rate_versions ORDER BY employee_id,effective_from DESC` as Row[] : [];
+      const periods: Row[] = employeeId
+        ? await sql()`SELECT * FROM technician_performance_periods WHERE employee_id=${employeeId} ORDER BY period_end DESC LIMIT 24` as Row[]
         : [];
       return send(res, 200, { plans, rates, periods, canAdminister: isAdmin(session) });
     }
@@ -176,11 +177,11 @@ export default async function handler(req: any, res: any) {
       if (!employeeId || !Number.isFinite(rate) || rate < 0 || !Number.isFinite(overtime) || overtime < 1 || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom) || reason.length < 5) {
         return send(res, 400, { error: { code: "INVALID_RATE_CHANGE", message: "Employee, valid rate, effective date and change reason are required." } });
       }
-      const previous = await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} AND effective_from<=${effectiveFrom}::date ORDER BY effective_from DESC,created_at DESC LIMIT 1`;
+      const previous = await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} AND effective_from<=${effectiveFrom}::date ORDER BY effective_from DESC,created_at DESC LIMIT 1` as Row[];
       await sql()`UPDATE technician_rate_versions SET effective_to=${effectiveFrom}::date WHERE employee_id=${employeeId} AND effective_to IS NULL AND effective_from<${effectiveFrom}::date`;
       const id = `trv_${randomBytes(16).toString("hex")}`;
       const rows = await sql()`INSERT INTO technician_rate_versions(id,employee_id,hourly_rate,overtime_multiplier,grade,effective_from,changed_by,change_reason)
-        VALUES(${id},${employeeId},${rate},${overtime},${grade},${effectiveFrom}::date,${session.employeeId},${reason}) RETURNING *`;
+        VALUES(${id},${employeeId},${rate},${overtime},${grade},${effectiveFrom}::date,${session.employeeId},${reason}) RETURNING *` as Row[];
       await audit(session.employeeId, "rate_changed", employeeId, id, reason, previous[0] || null, rows[0]);
       await recordSecurityEvent({ request: req, eventType: "technician_rate_changed", eventStatus: "success", riskLevel: "high", subject: employeeId, metadata: { rateVersionId: id, effectiveFrom } }).catch(() => undefined);
       return send(res, 201, { rate: rows[0] });
@@ -192,12 +193,12 @@ export default async function handler(req: any, res: any) {
       if (!plan || typeof plan !== "object" || !plan.id || !plan.name || !Array.isArray(plan.metrics) || !Array.isArray(plan.incentiveBands) || reason.length < 5) {
         return send(res, 400, { error: { code: "INVALID_COMPENSATION_PLAN", message: "A complete compensation plan and change reason are required." } });
       }
-      const prior = await sql()`SELECT * FROM technician_compensation_plans WHERE id=${String(plan.id)} ORDER BY version DESC LIMIT 1`;
+      const prior = await sql()`SELECT * FROM technician_compensation_plans WHERE id=${String(plan.id)} ORDER BY version DESC LIMIT 1` as Row[];
       const version = Number(prior[0]?.version || 0) + 1;
       const effectiveFrom = String(plan.effectiveFrom || new Date().toISOString().slice(0,10));
       if (prior[0]) await sql()`UPDATE technician_compensation_plans SET effective_to=${effectiveFrom}::date WHERE id=${String(plan.id)} AND version=${Number(prior[0].version)} AND effective_to IS NULL`;
       const rows = await sql()`INSERT INTO technician_compensation_plans(id,version,name,effective_from,currency,overtime_multiplier,max_incentive_percent,plan_json,created_by)
-        VALUES(${String(plan.id)},${version},${String(plan.name)},${effectiveFrom}::date,${String(plan.currency || "JMD")},${Number(plan.overtimeMultiplier || 1.5)},${Number(plan.maxIncentivePercent || 15)},${JSON.stringify({ ...plan, version })}::jsonb,${session.employeeId}) RETURNING *`;
+        VALUES(${String(plan.id)},${version},${String(plan.name)},${effectiveFrom}::date,${String(plan.currency || "JMD")},${Number(plan.overtimeMultiplier || 1.5)},${Number(plan.maxIncentivePercent || 15)},${JSON.stringify({ ...plan, version })}::jsonb,${session.employeeId}) RETURNING *` as Row[];
       await audit(session.employeeId, "plan_changed", null, `${plan.id}:${version}`, reason, prior[0] || null, rows[0]);
       return send(res, 201, { plan: rows[0] });
     }
