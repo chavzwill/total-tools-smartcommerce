@@ -1,5 +1,6 @@
 import { quoteDelivery } from "../src/server/deliveryFulfilmentEngine.js";
 import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
+import { getFulfilmentOrigin } from "../src/server/fulfilmentOriginStore.js";
 import { resolveJamaicaDeliveryZone } from "../src/server/jamaicaDeliveryZones.js";
 
 const MAX_BODY_BYTES = 32_000;
@@ -73,16 +74,23 @@ export default async function handler(request: any, response: any) {
 
     if (countryCode !== "JM") {
       const delivery = quoteDelivery({ items, destinationCountryCode: countryCode, requestedSpeed: input.requestedSpeed });
-      return send(response, 200, { delivery, zone: null });
+      return send(response, 200, { delivery, zone: null, origin: null });
     }
 
-    const zone = resolveJamaicaDeliveryZone({ town: input.address?.city, parish: input.address?.region });
+    const origin = await getFulfilmentOrigin();
+    const zone = resolveJamaicaDeliveryZone({
+      town: input.address?.city,
+      parish: input.address?.region,
+      originTown: origin.active ? origin.town : undefined,
+      originParish: origin.active ? origin.parish : undefined,
+    });
     if (zone.status === "unresolved") {
       return send(response, 200, {
         zone,
+        origin: { configured: origin.active, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
         delivery: {
           status: "manual_review",
-          reasonCode: "DELIVERY_ZONE_UNRESOLVED",
+          reasonCode: zone.reasonCode,
           message: zone.message,
           options: [],
         },
@@ -97,12 +105,17 @@ export default async function handler(request: any, response: any) {
       sameDayEligible: zone.sameDayEligible,
     });
 
-    return send(response, 200, { delivery, zone });
+    return send(response, 200, {
+      delivery,
+      zone,
+      origin: { configured: origin.active, branchName: origin.branchName || null, town: origin.town || null, parish: origin.parish || null },
+    });
   } catch (error: any) {
     const status = Number(error?.status || 500);
     if (status === 413) {
       return send(response, 413, { error: { code: "BODY_TOO_LARGE", message: "The delivery request is too large." } });
     }
+    console.error("delivery_quote_error", { code: error instanceof Error ? error.message : "unknown" });
     return send(response, 500, { error: { code: "DELIVERY_QUOTE_FAILED", message: "Delivery pricing could not be prepared." } });
   }
 }
