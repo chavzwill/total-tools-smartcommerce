@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRightLeft, FilePlus2, PackagePlus, SlidersHorizontal, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CalendarPlus2, FilePlus2, PackagePlus, SlidersHorizontal, UserRoundPen, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { normalizeOmnichannelHandoff } from "../../lib/omnichannelContracts";
 import { getStaffSession, operationsRequest, type StaffIdentity } from "../../lib/staffOperations";
@@ -24,9 +24,15 @@ async function currentStaff(): Promise<StaffIdentity> {
 
 const number = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const stockOf = (row: Row) => number(row.stock_qty ?? row.stock);
+const stringValue = (value: unknown) => value === undefined || value === null ? "" : String(value).trim();
 
 async function liveBranchInventory(branchId: string) {
   const rows = await operationsRequest<Row[]>(`inventory?branch_id=${encodeURIComponent(branchId)}&active=1&is_service=0&is_rental=0&is_non_inventory=0`);
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function liveRentalInventory(branchId: string) {
+  const rows = await operationsRequest<Row[]>(`inventory?branch_id=${encodeURIComponent(branchId)}&active=1&is_service=0&is_rental=1`);
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -89,6 +95,52 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
         required_date: handoff.fields.dueDate || null, request_type: "sale_items", supplier_id: handoff.fields.supplierId || null, currency: "JMD", items,
       }) });
       onApplied(await acknowledge(String(row.id), String(row.item_type), String(pr.pr_number || pr.id || "purchase request")));
+    } catch (e) { setError((e as Error).message); }
+    finally { setWorking(false); }
+  }
+
+  async function createRentalRequest() {
+    if (working) return;
+    setWorking(true); setError("");
+    try {
+      const staff = await currentStaff();
+      if (!handoff.customerId) throw new Error("Link this rental to an authoritative POS customer first.");
+      const branch = String(handoff.branchId || staff.defaultBranchId || "");
+      if (!branch) throw new Error("An authoritative branch is required for the rental request.");
+      if (!handoff.items.length || handoff.items.some((item) => item.productId === undefined)) throw new Error("Every rental line must be linked to an authoritative POS rental product ID.");
+      const startAt = String(handoff.fields.startDate || "");
+      const endAt = String(handoff.fields.dueDate || "");
+      const start = new Date(startAt).getTime();
+      const end = new Date(endAt).getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) throw new Error("The rental requires a valid start and end/return date.");
+
+      const [customer, catalogue] = await Promise.all([
+        operationsRequest<Row>(`customers/${encodeURIComponent(String(handoff.customerId))}`),
+        liveRentalInventory(branch),
+      ]);
+      if (!customer || String(customer.id || "") !== String(handoff.customerId)) throw new Error("The linked customer could not be verified in the POS.");
+      const byProduct = new Map(catalogue.map((item) => [String(item.id), item]));
+      const items = handoff.items.map((item) => {
+        const live = byProduct.get(String(item.productId));
+        if (!live) throw new Error(`${item.name || item.sku || `Product ${item.productId}`} is not in the live rental catalogue for this branch.`);
+        return { product_id: item.productId, quantity: Math.max(1, Math.trunc(item.quantity)), label: item.name || live.name || item.sku || `Product ${item.productId}` };
+      });
+      const customerLabel = customer.name || [customer.first_name, customer.last_name].filter(Boolean).join(" ") || `Customer ${handoff.customerId}`;
+      const summary = items.map((item) => `${item.label}: ${item.quantity}`).join("\n");
+      if (!window.confirm(`Create this real rental request?\n\nCustomer: ${customerLabel}\nBranch: ${branch}\nStart: ${startAt}\nEnd/return: ${endAt}\n\n${summary}\n\nThis creates a requested rental in the POS. It does not bypass availability, deposit, verification or approval requirements.`)) return;
+
+      const rental = await operationsRequest<Row>("rentals", { method: "POST", body: JSON.stringify({
+        customer_id: handoff.customerId,
+        employee_id: staff.employeeId,
+        branch_id: branch,
+        start_at: startAt,
+        end_at: endAt,
+        status: "requested",
+        fulfillment: handoff.fields.fulfillment || null,
+        items: items.map(({ product_id, quantity }) => ({ product_id, quantity })),
+        notes: [handoff.externalReference ? `SmartCommerce approved rental request: ${handoff.externalReference}` : "SmartCommerce approved rental request", handoff.notes].filter(Boolean).join("\n"),
+      }) });
+      onApplied(await acknowledge(String(row.id), String(row.item_type), String(rental.reservation_number || rental.rental_number || rental.id || "rental request")));
     } catch (e) { setError((e as Error).message); }
     finally { setWorking(false); }
   }
@@ -160,20 +212,57 @@ export default function TypedHandoffAction({ row, onApplied }: { row: Row; onApp
     finally { setWorking(false); }
   }
 
-  if (!["quote", "repair", "purchase_request", "transfer", "inventory"].includes(handoff.kind)) return null;
+  async function applyCustomerUpdate() {
+    if (working) return;
+    setWorking(true); setError("");
+    try {
+      await currentStaff();
+      if (!handoff.customerId) throw new Error("An authoritative POS customer ID is required before profile data can be changed.");
+      const current = await operationsRequest<Row>(`customers/${encodeURIComponent(String(handoff.customerId))}`);
+      if (!current || String(current.id || "") !== String(handoff.customerId)) throw new Error("The linked customer could not be verified in the POS.");
+
+      const proposed: Record<string, string> = {};
+      const allowed: Array<[string, unknown]> = [
+        ["first_name", handoff.fields.firstName], ["last_name", handoff.fields.lastName], ["name", handoff.fields.fullName],
+        ["company", handoff.fields.company], ["phone", handoff.fields.phone], ["email", handoff.fields.email], ["address", handoff.fields.address],
+      ];
+      for (const [key, value] of allowed) {
+        const next = stringValue(value);
+        if (next && next !== stringValue(current[key])) proposed[key] = next;
+      }
+      const entries = Object.entries(proposed);
+      if (!entries.length) throw new Error("No supported customer profile/contact field differs from the current POS record.");
+      const labels: Record<string, string> = { first_name: "First name", last_name: "Last name", name: "Name", company: "Company", phone: "Phone", email: "Email", address: "Address" };
+      const changes = entries.map(([key, value]) => `${labels[key] || key}: “${stringValue(current[key]) || "—"}” → “${value}”`).join("\n");
+      if (!window.confirm(`Apply these customer profile changes?\n\nCustomer ID: ${handoff.customerId}\n\n${changes}\n\nOnly ordinary profile/contact data is included. Credit, balances, verification, tax, permissions and security fields cannot be changed by this handoff.`)) return;
+
+      const updated = await operationsRequest<Row>(`customers/${encodeURIComponent(String(handoff.customerId))}`, { method: "PATCH", body: JSON.stringify({
+        ...proposed,
+        update_reason: handoff.externalReference ? `SmartCommerce approved customer update ${handoff.externalReference}` : "SmartCommerce approved customer update",
+      }) });
+      onApplied(await acknowledge(String(row.id), String(row.item_type), String(updated.customer_number || updated.id || `customer ${handoff.customerId}`)));
+    } catch (e) { setError((e as Error).message); }
+    finally { setWorking(false); }
+  }
+
+  if (!["quote", "repair", "purchase_request", "rental", "transfer", "inventory", "customer"].includes(handoff.kind)) return null;
   const hasAuthoritativeProducts = handoff.items.length > 0 && handoff.items.every((item) => item.productId !== undefined);
   const blocked = handoff.missing.length > 0 || (handoff.kind === "repair" && !handoff.customerId)
+    || (handoff.kind === "rental" && (!handoff.customerId || !hasAuthoritativeProducts))
     || (handoff.kind === "transfer" && !hasAuthoritativeProducts)
-    || (handoff.kind === "inventory" && (handoff.items.length !== 1 || !hasAuthoritativeProducts));
-  const mutation = ["transfer", "inventory"].includes(handoff.kind);
+    || (handoff.kind === "inventory" && (handoff.items.length !== 1 || !hasAuthoritativeProducts))
+    || (handoff.kind === "customer" && !handoff.customerId);
+  const controlled = ["rental", "transfer", "inventory", "customer"].includes(handoff.kind);
 
   return <div className="sc-ops-handoff__typed">
-    <div><strong>{mutation ? "Approved-data controlled action" : "Approved-data draft"}</strong><span>{handoff.warnings.length ? handoff.warnings.join(" ") : mutation ? "Live inventory will be revalidated immediately before the mutation." : "Typed SmartCommerce fields are ready for destination validation."}</span>{handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}</div>
+    <div><strong>{controlled ? "Approved-data controlled action" : "Approved-data draft"}</strong><span>{handoff.warnings.length ? handoff.warnings.join(" ") : controlled ? "Authoritative destination data will be revalidated immediately before this action." : "Typed SmartCommerce fields are ready for destination validation."}</span>{handoff.missing.length ? <small>Missing: {handoff.missing.join(", ")}</small> : null}</div>
     {handoff.kind === "quote" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createQuote()}><FilePlus2 size={15}/>{working ? "Creating…" : "Create draft quotation"}</button> : null}
     {handoff.kind === "repair" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRepair()}><Wrench size={15}/>{working ? "Creating…" : "Create repair intake"}</button> : null}
     {handoff.kind === "purchase_request" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createPurchaseRequest()}><PackagePlus size={15}/>{working ? "Creating…" : "Create draft purchase request"}</button> : null}
+    {handoff.kind === "rental" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createRentalRequest()}><CalendarPlus2 size={15}/>{working ? "Validating rental…" : "Review & create rental request"}</button> : null}
     {handoff.kind === "transfer" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void createTransfer()}><ArrowRightLeft size={15}/>{working ? "Checking live stock…" : "Review & create transfer"}</button> : null}
     {handoff.kind === "inventory" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void applyInventoryAdjustment()}><SlidersHorizontal size={15}/>{working ? "Checking live stock…" : "Review & post adjustment"}</button> : null}
+    {handoff.kind === "customer" ? <button type="button" className="sc-button sc-button--primary" disabled={working || blocked} onClick={() => void applyCustomerUpdate()}><UserRoundPen size={15}/>{working ? "Comparing customer…" : "Review & update customer"}</button> : null}
     {error ? <p className="sc-ops-handoff__error" role="alert"><AlertCircle size={15}/>{error}</p> : null}
   </div>;
 }
