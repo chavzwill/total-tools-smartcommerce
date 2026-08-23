@@ -1,5 +1,6 @@
 import { parseCookie, readStaffSession, STAFF_COOKIE_NAME, canStaff } from "../src/server/staffSession.js";
 import { listDeliveryLifecycles, updateDeliveryLifecycle, type DeliveryLifecycleStatus } from "../src/server/deliveryLifecycleStore.js";
+import { enqueueLatestDeliveryEventNotification } from "../src/server/deliveryNotificationOutbox.js";
 import { enforceDurableRateLimit, requestIp } from "../src/server/securityInfrastructure.js";
 
 const MAX_BODY_BYTES = 20_000;
@@ -70,7 +71,16 @@ export default async function handler(request: any, response: any) {
       proofReference: clean(input.proofReference, 180),
       proofNotes: clean(input.proofNotes, 500),
     });
-    return send(response, 200, { delivery });
+    let notificationsQueued = 0;
+    if (clean(input.publicMessage, 500)) {
+      try {
+        const queued = await enqueueLatestDeliveryEventNotification(orderId);
+        notificationsQueued = queued.length;
+      } catch (notificationError) {
+        console.error("delivery_notification_enqueue_failed", { orderId, code: notificationError instanceof Error ? notificationError.message : "unknown" });
+      }
+    }
+    return send(response, 200, { delivery, notificationsQueued });
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (error?.message === "DELIVERY_ORDER_NOT_FOUND") return send(response, 404, { error: { code: "DELIVERY_ORDER_NOT_FOUND", message: "That order does not have a delivery lifecycle." } });
