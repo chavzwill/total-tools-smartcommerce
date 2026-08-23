@@ -1,0 +1,144 @@
+.sc-fulfilment-origin-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+  border: 1px solid rgba(31, 108, 63, 0.16);
+  border-radius: 1.15rem;
+  background: #f7faf7;
+  color: #172019;
+}
+
+.sc-fulfilment-origin-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sc-fulfilment-origin-panel__head > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.sc-fulfilment-origin-panel__head > div > span {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  color: #2b7047;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.sc-fulfilment-origin-panel__head strong {
+  color: #173b26;
+  font-size: 1.05rem;
+}
+
+.sc-fulfilment-origin-panel__head small,
+.sc-fulfilment-origin-panel__note,
+.sc-fulfilment-origin-panel__warning,
+.sc-fulfilment-origin-panel__success {
+  color: #657168;
+  line-height: 1.45;
+}
+
+.sc-fulfilment-origin-panel__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.sc-fulfilment-origin-panel__form label {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  color: #34433a;
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.sc-fulfilment-origin-panel__form label > span {
+  color: #7a847d;
+  font-weight: 500;
+}
+
+.sc-fulfilment-origin-panel__form .is-wide {
+  grid-column: 1 / -1;
+}
+
+.sc-fulfilment-origin-panel__form input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 2.7rem;
+  padding: 0 .8rem;
+  border: 1px solid rgba(24, 63, 41, .16);
+  border-radius: .78rem;
+  background: #fff;
+  color: #172019;
+  font: inherit;
+}
+
+.sc-fulfilment-origin-panel__form input:disabled {
+  background: #f0f3f0;
+  color: #69736c;
+}
+
+.sc-fulfilment-origin-panel > button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: .8rem;
+  background: #1f6c3f;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.sc-fulfilment-origin-panel > button:disabled {
+  opacity: .5;
+}
+
+.sc-fulfilment-origin-panel__warning {
+  margin: 0;
+  padding: .75rem .85rem;
+  border: 1px solid rgba(166, 92, 32, .18);
+  border-radius: .8rem;
+  background: #fff7ed;
+  color: #6f482b;
+}
+
+.sc-fulfilment-origin-panel__note,
+.sc-fulfilment-origin-panel__success {
+  margin: 0;
+}
+
+.sc-fulfilment-origin-panel__success {
+  color: #25643e;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .sc-fulfilment-origin-panel {
+    padding: .9rem;
+  }
+
+  .sc-fulfilment-origin-panel__form {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-fulfilment-origin-panel__form .is-wide {
+    grid-column: auto;
+  }
+
+  .sc-fulfilment-origin-panel > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
