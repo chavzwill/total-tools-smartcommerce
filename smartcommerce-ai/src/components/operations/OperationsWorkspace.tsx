@@ -1,5 +1,6 @@
 import {
   Boxes,
+  BrainCircuit,
   ClipboardList,
   Gauge,
   PackageSearch,
@@ -13,6 +14,7 @@ import "../../styles/operations-workspace.css";
 
 export type OperationsSection =
   | "overview"
+  | "intelligence"
   | "pos"
   | "repairs"
   | "technicians"
@@ -39,6 +41,7 @@ const sections: Array<{
   icon: typeof Gauge;
 }> = [
   { id: "overview", label: "Operations", icon: Gauge },
+  { id: "intelligence", label: "ERP Intelligence", icon: BrainCircuit },
   { id: "pos", label: "Point of sale", icon: ShoppingCart },
   { id: "repairs", label: "Repairs", icon: Wrench },
   { id: "technicians", label: "Technicians", icon: UsersRound },
