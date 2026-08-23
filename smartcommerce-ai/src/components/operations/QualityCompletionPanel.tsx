@@ -1,6 +1,6 @@
 import { AlertCircle, BellRing, CheckCircle2, ClipboardCheck, ShieldCheck } from "lucide-react";
-import { useMemo, useState } from "react";
-import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import { useEffect, useMemo, useState } from "react";
+import { getStaffSession, operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
 import "../../styles/quality-completion.css";
 
 type Props = {
@@ -14,16 +14,27 @@ type Props = {
 const label = (value: unknown) => String(value || "—").replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export default function QualityCompletionPanel({ workOrder, staffEmployeeId, canSignOff = false, canNotify = false, onUpdated }: Props) {
+  const [sessionPermissions, setSessionPermissions] = useState<Record<string, boolean>>({});
   const [comment, setComment] = useState("");
   const [notifyMethod, setNotifyMethod] = useState<"email" | "phone">("email");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    let active = true;
+    void getStaffSession().then((state) => {
+      if (active && state.staff?.permissions) setSessionPermissions(state.staff.permissions);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const effectiveCanSignOff = canSignOff || sessionPermissions.wo_signoff === true;
+  const effectiveCanNotify = canNotify || sessionPermissions.work_orders === true;
   const tasks = Array.isArray(workOrder.tasks) ? workOrder.tasks : [];
   const incompleteTasks = useMemo(() => tasks.filter((task: any) => task.status !== "complete"), [tasks]);
   const runningTasks = useMemo(() => tasks.filter((task: any) => Boolean(task.open_time_entry_id)), [tasks]);
-  const readyForSignoff = canSignOff && ["in_progress", "awaiting_signoff"].includes(String(workOrder.status)) && tasks.length > 0 && incompleteTasks.length === 0 && runningTasks.length === 0;
-  const readyToNotify = canNotify && String(workOrder.status) === "complete";
+  const readyForSignoff = effectiveCanSignOff && ["in_progress", "awaiting_signoff"].includes(String(workOrder.status)) && tasks.length > 0 && incompleteTasks.length === 0 && runningTasks.length === 0;
+  const readyToNotify = effectiveCanNotify && String(workOrder.status) === "complete";
 
   async function signOff() {
     if (!readyForSignoff || busy) return;
@@ -67,7 +78,7 @@ export default function QualityCompletionPanel({ workOrder, staffEmployeeId, can
       <div><strong>Supervisor quality sign-off</strong><span>The POS will not release this repair until every technician task is complete.</span></div>
       <textarea rows={3} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="QC result, test performed, release notes or exception details" data-guide-id="repair-qc-comment"/>
       <button type="button" disabled={!readyForSignoff || busy === "signoff"} onClick={() => void signOff()} data-guide-id="repair-qc-signoff"><CheckCircle2 size={16}/>{busy === "signoff" ? "Signing off…" : "Sign off repair"}</button>
-      {!readyForSignoff ? <small>{!canSignOff ? "Your security group does not include supervisor sign-off." : !tasks.length ? "Add repair tasks before sign-off." : incompleteTasks.length ? "Complete every repair task before sign-off." : runningTasks.length ? "Stop all task timers before sign-off." : "This repair is not ready for sign-off."}</small> : null}
+      {!readyForSignoff ? <small>{!effectiveCanSignOff ? "Your security group does not include supervisor sign-off." : !tasks.length ? "Add repair tasks before sign-off." : incompleteTasks.length ? "Complete every repair task before sign-off." : runningTasks.length ? "Stop all task timers before sign-off." : "This repair is not ready for sign-off."}</small> : null}
     </div> : null}
 
     {String(workOrder.status) === "complete" ? <div className="sc-quality-completion__notify">
