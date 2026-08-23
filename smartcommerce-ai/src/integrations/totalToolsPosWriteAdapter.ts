@@ -225,13 +225,19 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
     }
   }
 
-  async function reconcileExternalOrder(context: PosAdapterContext, externalOrderId: string) {
+  async function reconcileExternalOrder(
+    context: PosAdapterContext,
+    externalOrderId: string,
+  ): Promise<PlatformApiResult<PlatformOrder>> {
     const result = await request<unknown>(context, "GET", `/api/smartcommerce-orders/${encodeURIComponent(externalOrderId)}`);
     if (!result.success) return result as PlatformApiResult<PlatformOrder>;
     const mapped = mapOrder(context, asRecord(result.data) || {});
-    return mapped
-      ? { ...result, data: mapped }
-      : { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_INVALID", message: "The POS returned an invalid SmartCommerce order record." }, requestId: context.requestId };
+    if (mapped) return { ...result, data: mapped };
+    return {
+      success: false,
+      error: { code: "TOTAL_TOOLS_POS_ORDER_INVALID", message: "The POS returned an invalid SmartCommerce order record." },
+      requestId: context.requestId,
+    };
   }
 
   return {
@@ -313,7 +319,7 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
         : { success: false, error: { code: "TOTAL_TOOLS_POS_CUSTOMER_INVALID", message: "The POS created a customer but returned an invalid record. Reconcile before retrying." }, requestId: context.requestId };
     },
 
-    async getOrderById(context, orderId) {
+    async getOrderById(context, orderId): Promise<PlatformApiResult<PlatformOrder>> {
       const direct = await request<unknown>(context, "GET", `/api/transactions/${encodeURIComponent(orderId)}`);
       if (direct.success) {
         const mapped = mapOrder(context, asRecord(direct.data) || {});
@@ -322,7 +328,7 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
       return reconcileExternalOrder(context, orderId);
     },
 
-    async createOrder(context, order) {
+    async createOrder(context, order): Promise<PlatformApiResult<PlatformOrder>> {
       const settlementMethod = String(order.metadata?.settlementMethod || "");
       if (settlementMethod !== "commercial_account_credit") {
         return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_SETTLEMENT_UNSUPPORTED", message: "The POS write adapter currently accepts only verified commercial-account credit orders." }, requestId: context.requestId };
@@ -359,12 +365,11 @@ export function createTotalToolsPosWriteAdapter(options: TotalToolsPosReadAdapte
 
       const deliveryMinor = Number(order.metadata?.deliveryMinor || 0);
       const serviceMinor = Number(order.metadata?.serviceMinor || 0);
-      const knownNonMerchandise = (deliveryMinor + serviceMinor) / 100;
       const expectedRemainder = Math.max(0, Number(order.totalAmount || 0) - Number(order.subtotalAmount || 0) - Number(order.taxAmount || 0) + Number(order.discountAmount || 0));
       const derivedService = Math.max(0, expectedRemainder - deliveryMinor / 100);
       const serviceAmount = serviceMinor > 0 ? serviceMinor / 100 : derivedService;
       const totalWithCharges = Number(order.subtotalAmount || 0) + Number(order.taxAmount || 0) - Number(order.discountAmount || 0) + deliveryMinor / 100 + serviceAmount;
-      if (Math.abs(totalWithCharges - Number(order.totalAmount || 0)) > 0.01 || !Number.isFinite(knownNonMerchandise + expectedRemainder)) {
+      if (Math.abs(totalWithCharges - Number(order.totalAmount || 0)) > 0.01 || !Number.isFinite(totalWithCharges)) {
         await markOperation(operationKey, "failed", "TOTAL_TOOLS_POS_ORDER_TOTAL_MISMATCH").catch(() => {});
         return { success: false, error: { code: "TOTAL_TOOLS_POS_ORDER_TOTAL_MISMATCH", message: "The SmartCommerce order total cannot be represented safely by the POS charge contract." }, requestId: context.requestId };
       }
