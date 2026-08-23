@@ -22,6 +22,7 @@ const SearchPage = lazy(() => import("./pages/CatalogPages").then((module) => ({
 const DealsPage = lazy(() => import("./pages/DealsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 const RepairPage = lazy(() => import("./pages/RepairPage"));
+const RepairAuthorizationPage = lazy(() => import("./pages/RepairAuthorizationPage"));
 const ProductMatchPage = lazy(() => import("./pages/ProductMatchPage"));
 const RentalsPage = lazy(() => import("./pages/RentalPages").then((module) => ({ default: module.RentalsPage })));
 const OperationalRentalDetailPage = lazy(() => import("./pages/OperationalRentalDetailPage"));
@@ -164,6 +165,9 @@ export default function App() {
   const path = route.path;
   if (path === "/operations" || path.startsWith("/operations/")) {
     return <Suspense fallback={<RouteFallback />}><OperationsPortalPage /></Suspense>;
+  }
+  if (path === "/repair-authorization") {
+    return <Suspense fallback={<RouteFallback />}><RepairAuthorizationPage token={route.query.get("token") || ""} /></Suspense>;
   }
 
   const branchRouteKey = route.query.get("branch") || "Online";
