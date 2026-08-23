@@ -31,7 +31,14 @@ export default async function handler(request:any,response:any){
   if(Number(error?.status)===413)return send(response,413,{error:{code:"REQUEST_TOO_LARGE",message:"The request is too large."}});
   if(error?.message==="RETURN_NOT_FOUND")return send(response,404,{error:{code:"RETURN_NOT_FOUND",message:"That return request was not found."}});
   if(error?.message==="REFUND_REFERENCE_REQUIRED")return send(response,400,{error:{code:"REFUND_REFERENCE_REQUIRED",message:"A verified refund reference is required before marking a refund completed."}});
+  if(error?.message==="RESOLUTION_REFERENCE_REQUIRED")return send(response,400,{error:{code:"RESOLUTION_REFERENCE_REQUIRED",message:"A provider or completion reference is required before marking this resolution completed."}});
   if(error?.message==="RETURN_ACTION_INVALID")return send(response,400,{error:{code:"RETURN_ACTION_INVALID",message:"That return action is not supported."}});
+  if(error?.message==="RETURN_TRANSITION_INVALID")return send(response,409,{error:{code:"RETURN_TRANSITION_INVALID",message:"That return cannot move directly to the selected status from its current state."}});
+  if(error?.message==="RETURN_RESOLUTION_MISMATCH")return send(response,409,{error:{code:"RETURN_RESOLUTION_MISMATCH",message:"That action does not match the resolution approved for this return."}});
+  if(error?.message==="RETURN_AMOUNT_EXCEEDS_ORDER")return send(response,400,{error:{code:"RETURN_AMOUNT_EXCEEDS_ORDER",message:"The approved amount cannot exceed the verified order charge."}});
+  if(error?.message==="RETURN_APPROVED_AMOUNT_REQUIRED")return send(response,400,{error:{code:"RETURN_APPROVED_AMOUNT_REQUIRED",message:"Enter the approved amount before continuing this financial resolution."}});
+  if(error?.message==="RETURN_ORDER_NOT_OWNED")return send(response,409,{error:{code:"RETURN_ORDER_NOT_OWNED",message:"The original order can no longer be verified for this return."}});
+  if(error?.message==="RETURN_STATE_CHANGED")return send(response,409,{error:{code:"RETURN_STATE_CHANGED",message:"This return changed while you were reviewing it. Refresh the queue before continuing."}});
   console.error("return_reviews_api_error",{code:error instanceof Error?error.message:"unknown"});
   return send(response,503,{error:{code:"RETURN_REVIEWS_UNAVAILABLE",message:"Return reviews are temporarily unavailable.",retryable:true}});
  }
