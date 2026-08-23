@@ -271,6 +271,11 @@ export default async function handler(request: any, response: any) {
       return send(response, 202, { fulfilment: manualReview, zone, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
     }
 
+    if (zone.status !== "resolved") {
+      return send(response, 409, { error: { code: "DELIVERY_ZONE_CHANGED", message: "The delivery zone could not be verified. Send this shipment for logistics review." } });
+    }
+    const resolvedZone = zone;
+
     if (!serviceId) return send(response, 400, { error: { code: "DELIVERY_SERVICE_REQUIRED", message: "Choose a delivery service before finalizing delivery." } });
     const option = delivery.options.find((candidate) => candidate.serviceId === serviceId);
     if (!option) return send(response, 409, { error: { code: "DELIVERY_SERVICE_CHANGED", message: "That delivery option is no longer available. Refresh the courier choices and try again." } });
@@ -294,8 +299,8 @@ export default async function handler(request: any, response: any) {
       customerChargeJmd: option.customerChargeJmd,
       billableWeightLb: option.billableWeightLb,
       address,
-      destinationClass: zone.destinationClass,
-      zone,
+      destinationClass: resolvedZone.destinationClass,
+      zone: resolvedZone,
       requestedSpeed,
       sourceStatus: option.sourceStatus,
       boundAt: new Date().toISOString(),
@@ -308,8 +313,8 @@ export default async function handler(request: any, response: any) {
           snapshot = ${JSON.stringify(nextSnapshot)}::jsonb
       WHERE id = ${quoteId} AND customer_id = ${customerId}
     `;
-    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: zone.destinationClass, deliveryMinor, totalMinor } });
-    return send(response, 200, { fulfilment: bound, zone, quote: { id: quoteId, deliveryMinor, totalMinor } });
+    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: resolvedZone.destinationClass, deliveryMinor, totalMinor } });
+    return send(response, 200, { fulfilment: bound, zone: resolvedZone, quote: { id: quoteId, deliveryMinor, totalMinor } });
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (error?.message === "RATE_LIMITED") {
