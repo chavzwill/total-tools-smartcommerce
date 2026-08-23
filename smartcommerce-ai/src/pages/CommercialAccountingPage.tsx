@@ -1,4 +1,4 @@
-import { Download, FileText, Landmark, Loader2, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, FileText, Landmark, Loader2, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { listCommercialAccounts, type CommercialAccountSummary } from "../services/commercialAccountClient";
@@ -85,6 +85,9 @@ export default function CommercialAccountingPage() {
   const reconciled = summary?.coverage === "provider_reconciled";
   const currency = (reconciled ? summary?.officialCurrency : null) || controls?.creditCurrency || data?.statement.entries[0]?.currency || receivables?.invoices[0]?.currency || "JMD";
   const periodLabel = new Date(period.start).toLocaleDateString("en-JM", { month: "long", year: "numeric", timeZone: "UTC" });
+  const refundEntries = data?.statement.entries.filter((entry) => entry.entry_type === "refund") || [];
+  const pendingRefundEntries = refundEntries.filter((entry) => entry.source_coverage !== "provider_synced");
+  const verifiedRefundEntries = refundEntries.filter((entry) => entry.source_coverage === "provider_synced");
 
   return (
     <div className="demo-page sc-commercial-accounting">
@@ -122,11 +125,16 @@ export default function CommercialAccountingPage() {
           <section className="sc-commercial-accounting__summary" aria-label="Commercial account summary">
             <article><WalletCards size={22} /><span>Approved credit</span><strong>{controls?.creditEnabled && controls.creditLimitMinor ? formatMinor(controls.creditLimitMinor, controls.creditCurrency || "JMD") : "Not enabled"}</strong><small>{controls?.paymentTermsCode ? `Terms ${controls.paymentTermsCode}` : "No approved payment terms"}</small></article>
             <article><ReceiptText size={22} /><span>{periodLabel} charges</span><strong>{formatMinor(summary?.debitMinor, currency)}</strong><small>{summary?.totalEntries || 0} ledger entr{summary?.totalEntries === 1 ? "y" : "ies"}</small></article>
-            <article><Landmark size={22} /><span>{periodLabel} credits</span><strong>{formatMinor(summary?.creditMinor, currency)}</strong><small>Payments, credits and adjustments</small></article>
+            <article><Landmark size={22} /><span>{periodLabel} credits</span><strong>{formatMinor(summary?.creditMinor, currency)}</strong><small>Payments, refunds, credits and adjustments</small></article>
             <article><ShieldCheck size={22} /><span>{reconciled ? "Official closing balance" : "SmartCommerce activity net"}</span><strong>{reconciled && summary?.officialBalanceMinor !== null ? formatMinor(summary?.officialBalanceMinor, currency) : formatMinor(summary?.activityNetMinor, currency)}</strong><small>{reconciled ? "Provider-reconciled statement period" : "Awaiting provider reconciliation"}</small></article>
           </section>
 
           <div className={`sc-commercial-accounting__disclosure ${reconciled ? "is-complete" : ""}`}><FileText size={18} /><p>{data.disclosure}</p></div>
+
+          {refundEntries.length ? <div className={`sc-commercial-accounting__disclosure ${pendingRefundEntries.length ? "is-warning" : "is-complete"}`}>
+            {pendingRefundEntries.length ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+            <p>{pendingRefundEntries.length ? <><strong>{pendingRefundEntries.length} refund entr{pendingRefundEntries.length === 1 ? "y is" : "ies are"} still awaiting provider verification.</strong> They are recorded in SmartCommerce but are not presented as externally reconciled until matching provider/accounting evidence arrives.</> : <><strong>Refund verification complete for this statement period.</strong> {verifiedRefundEntries.length} refund entr{verifiedRefundEntries.length === 1 ? "y is" : "ies are"} provider-synced.</>}</p>
+          </div> : null}
 
           {receivables ? <section className="sc-commercial-accounting__statement">
             <header><div><span>Receivables</span><h2>What is outstanding now</h2></div><strong>{formatMinor(receivables.totalOutstandingMinor, currency)}</strong></header>
@@ -153,9 +161,11 @@ export default function CommercialAccountingPage() {
               {data.statement.entries.map((entry) => {
                 const debit = Number(entry.debit_minor || 0);
                 const credit = Number(entry.credit_minor || 0);
+                const isRefund = entry.entry_type === "refund";
+                const providerVerified = entry.source_coverage === "provider_synced";
                 return <article key={entry.id} className="sc-commercial-accounting__entry">
                   <div className="sc-commercial-accounting__entry-main"><span>{new Date(entry.occurred_at).toLocaleDateString("en-JM", { day: "2-digit", month: "short", year: "numeric" })}</span><strong>{entry.description}</strong><small>{labelType(entry.entry_type)} · {entry.reference}{entry.purchase_order_reference ? ` · PO ${entry.purchase_order_reference}` : ""}</small></div>
-                  <div className="sc-commercial-accounting__entry-status"><span>{entry.status}</span><small>{entry.source}</small></div>
+                  <div className="sc-commercial-accounting__entry-status"><span>{isRefund ? (providerVerified ? "Refund verified" : "Refund verification pending") : entry.status}</span><small>{isRefund ? (providerVerified ? "Provider/accounting evidence matched" : "SmartCommerce record only") : entry.source}</small></div>
                   <strong className={credit > 0 ? "is-credit" : "is-debit"}>{credit > 0 ? `−${formatMinor(credit, entry.currency)}` : formatMinor(debit, entry.currency)}</strong>
                 </article>;
               })}
