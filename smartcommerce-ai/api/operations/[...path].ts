@@ -173,6 +173,14 @@ export default async function handler(request: any, response: any) {
         return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this quotation status change.", details: { permission: required } } });
       }
     }
+    if (resource === "purchase-orders" && method === "PATCH" && segments[2] === "status") {
+      const nextStatus = String(jsonBody?.status || "");
+      const required = nextStatus === "approved" ? "purchasing_approve" : "purchasing_create";
+      if (!canStaff(staff, required)) {
+        await recordSecurityEvent({ request, eventType: "staff_purchase_order_status_permission_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { status: nextStatus, permission: required } }).catch(() => undefined);
+        return send(response, 403, { success: false, error: { code: "STAFF_PERMISSION_DENIED", message: "Your security group does not allow this purchase-order status change.", details: { permission: required } } });
+      }
+    }
 
     const baseUrl = configuredPos();
     const upstreamSegments = [rule.upstream, ...segments.slice(1)].map((segment) => encodeURIComponent(segment));
