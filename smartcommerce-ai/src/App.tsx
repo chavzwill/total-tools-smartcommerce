@@ -27,6 +27,7 @@ const WishlistPage = lazy(() => import("./pages/UtilityPages").then((module) => 
 const DeliveryReviewPage = lazy(() => import("./pages/DeliveryReviewPage"));
 const DeliveryOperationsPage = lazy(() => import("./pages/DeliveryOperationsPage"));
 const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
+const DeliveryNotificationPreferencesPage = lazy(() => import("./pages/DeliveryNotificationPreferencesPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -92,13 +93,8 @@ export default function App() {
     window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED_EVENT, { detail: { count: cart.reduce((sum, item) => sum + item.quantity, 0) } }));
   }, [cart]);
 
-  useEffect(() => {
-    window.localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
-  }, [wishlist]);
-
-  useEffect(() => {
-    window.localStorage.setItem(COMPARE_KEY, JSON.stringify(compared));
-  }, [compared]);
+  useEffect(() => { window.localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist)); }, [wishlist]);
+  useEffect(() => { window.localStorage.setItem(COMPARE_KEY, JSON.stringify(compared)); }, [compared]);
 
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>, id: string) => setter((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
   const actions = useMemo(() => ({
@@ -144,6 +140,7 @@ export default function App() {
   else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;
+  else if (path === "/account/notifications") page = <DeliveryNotificationPreferencesPage />;
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
   else if (path === "/operations/delivery-reviews") page = <DeliveryReviewPage />;
   else if (path === "/operations/delivery-dispatch") page = <DeliveryOperationsPage />;
