@@ -1,6 +1,7 @@
 import { CheckCircle2, Loader2, MapPinned, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getFulfilmentOrigin, updateFulfilmentOrigin, type FulfilmentOrigin } from "../../services/fulfilmentOriginClient";
+import "../../styles/fulfilment-origin.css";
 
 const emptyDraft = { branchId: "", branchName: "", town: "", parish: "", addressLine1: "" };
 
