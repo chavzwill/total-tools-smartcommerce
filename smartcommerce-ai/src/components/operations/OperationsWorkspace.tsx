@@ -11,7 +11,7 @@ import {
 import type { ReactNode } from "react";
 import "../../styles/operations-workspace.css";
 
-type OperationsSection =
+export type OperationsSection =
   | "overview"
   | "pos"
   | "repairs"
@@ -28,6 +28,8 @@ type OperationsWorkspaceProps = {
   branchLabel?: string;
   employeeLabel?: string;
   children: ReactNode;
+  actions?: ReactNode;
+  allowedSections?: OperationsSection[];
   onNavigate?: (section: OperationsSection) => void;
 };
 
@@ -53,8 +55,14 @@ export default function OperationsWorkspace({
   branchLabel,
   employeeLabel,
   children,
+  actions,
+  allowedSections,
   onNavigate,
 }: OperationsWorkspaceProps) {
+  const visibleSections = allowedSections?.length
+    ? sections.filter((item) => allowedSections.includes(item.id))
+    : sections;
+
   return (
     <div className="sc-ops-shell">
       <aside className="sc-ops-sidebar" aria-label="POS and service navigation">
@@ -63,7 +71,7 @@ export default function OperationsWorkspace({
           <strong>Operations</strong>
         </div>
         <nav>
-          {sections.map((item) => {
+          {visibleSections.map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -92,6 +100,7 @@ export default function OperationsWorkspace({
           <div className="sc-ops-context" aria-label="Current operations context">
             {branchLabel ? <span><small>Branch</small><strong>{branchLabel}</strong></span> : null}
             {employeeLabel ? <span><small>Signed in</small><strong>{employeeLabel}</strong></span> : null}
+            {actions}
           </div>
         </header>
 
