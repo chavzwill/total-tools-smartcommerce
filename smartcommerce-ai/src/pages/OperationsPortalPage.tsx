@@ -234,7 +234,7 @@ export default function OperationsPortalPage() {
         ) : section === "inventory" ? (
           <><InventoryControlBoard rows={items as Record<string, any>[]} onRefresh={() => void loadResource("inventory")} /><InventoryIntegrityPanel products={items as Record<string, any>[]} onInventoryRefresh={() => void loadResource("inventory")} /></>
         ) : section === "purchasing" ? (
-          <SupplyChainBoard />
+          <SupplyChainBoard employeeId={staff.employeeId} />
         ) : (
           <div className="sc-ops-live-resource">
             <div className="sc-ops-live-resource__summary"><span>Connected POS records</span><strong>{items.length}</strong><small>No sample records are added by SmartCommerce.</small></div>
