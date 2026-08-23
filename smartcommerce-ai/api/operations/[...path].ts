@@ -1,5 +1,6 @@
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../../src/server/hardenedOutboundFetch.js";
 import { abandonOperationsMutation, claimOperationsMutation, completeOperationsMutation, markOperationsMutationUncertain, validIdempotencyKey } from "../../src/server/operationsMutationIdempotency.js";
+import { validateOperationsState } from "../../src/server/operationsStateGuards.js";
 import { firstHeader, recordSecurityEvent } from "../../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../../src/server/staffSession.js";
 
@@ -208,14 +209,7 @@ export default async function handler(request: any, response: any) {
       const scope = staffBranchScope(staff);
       const denied = requestedBranches.filter((branchId) => !scope.has(branchId));
       if (denied.length) {
-        await recordSecurityEvent({
-          request,
-          eventType: "staff_operations_branch_scope_denied",
-          eventStatus: "blocked",
-          riskLevel: "high",
-          subject: staff.employeeId,
-          metadata: { resource, method, requestedBranchCount: requestedBranches.length, deniedBranchCount: denied.length },
-        }).catch(() => undefined);
+        await recordSecurityEvent({ request, eventType: "staff_operations_branch_scope_denied", eventStatus: "blocked", riskLevel: "high", subject: staff.employeeId, metadata: { resource, method, requestedBranchCount: requestedBranches.length, deniedBranchCount: denied.length } }).catch(() => undefined);
         return send(response, 403, { success: false, error: { code: "STAFF_BRANCH_SCOPE_DENIED", message: "Your staff session does not allow access to one or more requested branches." } });
       }
     }
@@ -252,14 +246,7 @@ export default async function handler(request: any, response: any) {
     if (isMutation(method)) {
       const key = validIdempotencyKey(firstHeader(request.headers?.["idempotency-key"]));
       if (!key) return send(response, 400, { success: false, error: { code: "IDEMPOTENCY_KEY_REQUIRED", message: "A valid Idempotency-Key is required for Operations changes." } });
-      const claim = await claimOperationsMutation({
-        actorId: staff.employeeId,
-        operation: `${method}:${segments.join("/")}`,
-        idempotencyKey: key,
-        method,
-        pathname: String(request.url || `/api/operations/${segments.join("/")}`),
-        body,
-      });
+      const claim = await claimOperationsMutation({ actorId: staff.employeeId, operation: `${method}:${segments.join("/")}`, idempotencyKey: key, method, pathname: String(request.url || `/api/operations/${segments.join("/")}`), body });
       if (claim.replay) {
         response.statusCode = claim.replay.status;
         response.setHeader("Content-Type", claim.replay.contentType);
@@ -283,6 +270,16 @@ export default async function handler(request: any, response: any) {
     headers["X-SmartCommerce-Actor-Id"] = staff.employeeId;
     if (staff.defaultBranchId) headers["X-SmartCommerce-Branch-Id"] = staff.defaultBranchId;
     const requestFetch = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
+
+    if (isMutation(method)) {
+      const stateError = await validateOperationsState({ baseUrl, headers, requestFetch, resource, method, segments, jsonBody });
+      if (stateError) {
+        if (mutationRecordKey) await abandonOperationsMutation(mutationRecordKey).catch(() => undefined);
+        mutationRecordKey = "";
+        await recordSecurityEvent({ request, eventType: "staff_operations_state_transition_blocked", eventStatus: "blocked", riskLevel: "medium", subject: staff.employeeId, metadata: { resource, method, operation: segments.join("/"), code: stateError.code } }).catch(() => undefined);
+        return send(response, 409, { success: false, error: stateError });
+      }
+    }
 
     if (resource === "inventory" && method === "PATCH" && segments[2] === "stock" && Number(jsonBody?.adjustment) < 0) {
       const productUrl = new URL(`${baseUrl}/api/products/${encodeURIComponent(segments[1])}`);
