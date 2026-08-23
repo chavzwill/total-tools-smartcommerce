@@ -1,5 +1,7 @@
 export type HandoffItem = {
   productId?: string | number;
+  variationId?: string | number;
+  variationName?: string;
   sku?: string;
   name?: string;
   description?: string;
@@ -45,6 +47,8 @@ function itemRows(payload: Row) {
 function items(payload: Row): HandoffItem[] {
   return itemRows(payload).map((row) => ({
     productId: row.product_id ?? row.productId ?? row.id,
+    variationId: row.variation_id ?? row.variationId,
+    variationName: text(row.variation_name, row.variationName),
     sku: text(row.sku, row.product_sku, row.productSku),
     name: text(row.product_name, row.productName, row.name),
     description: text(row.description, row.details),
@@ -118,9 +122,12 @@ export function normalizeOmnichannelHandoff(row: Row): TypedHandoff {
     if (![firstName, lastName, fullName, company, phone, email, address].some(Boolean)) missing.push("profile/contact change");
     warnings.push("Only ordinary customer profile/contact fields may be applied here; financial, verification, permission, tax and security fields are excluded.");
   }
+  if (kind === "sale") {
+    warnings.push("SmartCommerce may prepare this order as a POS hold only. Final pricing, tax status, promotions, credit rules and payment are revalidated at checkout.");
+  }
   for (const item of normalizedItems) {
     if (item.productId === undefined && !item.sku) warnings.push(`Item ${item.name || item.description || "line"} is not linked to an authoritative product ID/SKU.`);
-    if (["transfer", "inventory", "rental"].includes(kind) && item.productId === undefined) warnings.push(`Item ${item.name || item.sku || "line"} must be linked to an authoritative POS product ID before this operation can continue.`);
+    if (["transfer", "inventory", "rental", "sale"].includes(kind) && item.productId === undefined) warnings.push(`Item ${item.name || item.sku || "line"} must be linked to an authoritative POS product ID before this operation can continue.`);
     if (item.unitPrice !== undefined && item.unitPrice < 0) warnings.push("A negative supplied item price was ignored by destination validation.");
   }
 
