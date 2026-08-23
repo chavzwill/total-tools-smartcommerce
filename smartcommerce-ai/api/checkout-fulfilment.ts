@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
 import { quoteDelivery } from "../src/server/deliveryFulfilmentEngine.js";
 import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
+import { createManualDeliveryReview } from "../src/server/deliveryReviewQueue.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
@@ -226,9 +227,21 @@ export default async function handler(request: any, response: any) {
     const delivery = quoteDelivery({ items: resolvedItems, destinationCountryCode: address.countryCode, destinationClass, requestedSpeed });
 
     if (delivery.status === "manual_review") {
+      const review = await createManualDeliveryReview({
+        quoteId,
+        customerId,
+        reasonCode: delivery.reasonCode,
+        reasonMessage: delivery.message,
+        requestedServiceId: serviceId,
+        requestedSpeed,
+        destinationClass,
+        address,
+        items,
+      });
       const manualReview = {
         mode: "delivery",
         status: "manual_review",
+        reviewId: review.id,
         reasonCode: delivery.reasonCode,
         message: delivery.message,
         address,
@@ -239,14 +252,13 @@ export default async function handler(request: any, response: any) {
       };
       const nextSnapshot = { ...snapshot, fulfilment: manualReview };
       await sql()`UPDATE checkout_quotes SET snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
-      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reasonCode: delivery.reasonCode, destinationClass, requestedSpeed } });
-      return send(response, 202, { fulfilment: manualReview, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
+      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reviewId: review.id, reasonCode: delivery.reasonCode, destinationClass, requestedSpeed } });
+      return send(response, 202, { fulfilment: manualReview, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
     }
 
     const option = delivery.options.find((candidate) => candidate.serviceId === serviceId);
     if (!option) return send(response, 409, { error: { code: "DELIVERY_SERVICE_CHANGED", message: "That delivery option is no longer available. Refresh the courier choices and try again." } });
 
-    // Branch/collection-point services need a destination branch selector before they can be authoritative.
     if (option.mode !== "door_to_door") {
       return send(response, 409, { error: { code: "DELIVERY_COLLECTION_POINT_REQUIRED", message: "Choose a courier collection point before this service can be attached to the order." } });
     }
