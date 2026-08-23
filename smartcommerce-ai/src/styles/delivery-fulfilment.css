@@ -233,6 +233,20 @@
   line-height: 1.4;
 }
 
+.sc-fulfilment__manual button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(111,72,43,.18);
+  border-radius: .7rem;
+  background: #fff;
+  color: #50321f;
+  padding: .55rem .7rem;
+  font: inherit;
+  font-weight: 750;
+}
+
 .sc-fulfilment__facts {
   flex-wrap: wrap;
   justify-content: space-between;
@@ -301,6 +315,104 @@
   opacity: 0.48;
 }
 
+.sc-manual-delivery-ready {
+  display: grid;
+  gap: .7rem;
+  padding: .9rem;
+  border: 1px solid rgba(43,123,72,.22);
+  border-radius: 1rem;
+  background: #eef7f0;
+}
+
+.sc-manual-delivery-ready__head {
+  display: flex;
+  gap: .6rem;
+  align-items: flex-start;
+}
+
+.sc-manual-delivery-ready__head svg {
+  flex: 0 0 auto;
+  color: #247044;
+  margin-top: .1rem;
+}
+
+.sc-manual-delivery-ready__head > div {
+  display: grid;
+  gap: .15rem;
+}
+
+.sc-manual-delivery-ready__head strong {
+  color: #173b26;
+}
+
+.sc-manual-delivery-ready__head span {
+  color: #52685a;
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
+.sc-manual-delivery-ready__option {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: .7rem 1rem;
+  align-items: center;
+  padding: .85rem;
+  border: 1px solid rgba(43,123,72,.16);
+  border-radius: .9rem;
+  background: #fff;
+}
+
+.sc-manual-delivery-ready__option > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: .12rem;
+}
+
+.sc-manual-delivery-ready__option span,
+.sc-manual-delivery-ready__option small {
+  color: #67736a;
+  line-height: 1.35;
+}
+
+.sc-manual-delivery-ready__option small {
+  margin-top: .18rem;
+}
+
+.sc-manual-delivery-ready__price {
+  text-align: right;
+  display: grid;
+  gap: .1rem;
+}
+
+.sc-manual-delivery-ready__price strong {
+  color: #173b26;
+  font-size: 1.08rem;
+}
+
+.sc-manual-delivery-ready__price span {
+  font-size: .7rem;
+}
+
+.sc-manual-delivery-ready__option > button {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.8rem;
+  border: 0;
+  border-radius: .8rem;
+  background: #1f6c3f;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.sc-manual-delivery-ready__option > button:disabled {
+  opacity: .55;
+}
+
 .sc-spin {
   animation: sc-fulfilment-spin 0.8s linear infinite;
 }
@@ -333,5 +445,13 @@
   .sc-fulfilment__options > button > strong {
     white-space: nowrap;
     font-size: 0.92rem;
+  }
+
+  .sc-manual-delivery-ready__option {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-manual-delivery-ready__price {
+    text-align: left;
   }
 }
