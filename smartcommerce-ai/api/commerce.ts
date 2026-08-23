@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
 import { handlePlatformRestRequest } from "../src/backend/platformRestApi.js";
 import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
+import { validateCustomerCartInventory } from "../src/server/authoritativeCartInventory.js";
 import {
   enforceDurableRateLimit,
   recordSecurityEvent,
@@ -227,6 +228,12 @@ async function createQuote(request: any, customerId: string, cartId: string) {
   if (!rows.length) throw Object.assign(new Error("CART_EMPTY"), { status: 400 });
   if (rows.some((row) => row.item_type !== "product")) throw Object.assign(new Error("RENTAL_CHECKOUT_NOT_READY"), { status: 409 });
 
+  const inventory = await validateCustomerCartInventory(customerId);
+  if (!inventory.verified) {
+    const error = Object.assign(new Error("STOCK_REVALIDATION_FAILED"), { status: 409, inventory });
+    throw error;
+  }
+
   const snapshotItems: any[] = [];
   let subtotal = 0;
   let currency: string | undefined;
@@ -243,7 +250,21 @@ async function createQuote(request: any, customerId: string, cartId: string) {
     const line = price.amount * row.quantity;
     subtotal += line;
     if (!price.taxInclusive && price.taxRate && price.taxRate > 0) taxMinor += Math.round(line * price.taxRate * 100);
-    snapshotItems.push({ productId: product.id, sku: product.sku || null, name: product.name || product.id, quantity: row.quantity, unitPrice: price.amount, currency: price.currency });
+    const stock = inventory.lines.find((entry) => entry.productId === product.id);
+    snapshotItems.push({
+      productId: product.id,
+      sku: product.sku || null,
+      name: product.name || product.id,
+      quantity: row.quantity,
+      unitPrice: price.amount,
+      currency: price.currency,
+      inventory: stock ? {
+        branchId: stock.branchId,
+        quantityAvailable: stock.quantityAvailable,
+        quantityOnHand: stock.quantityOnHand,
+        checkedAt: inventory.checkedAt,
+      } : null,
+    });
   }
 
   const subtotalMinor = Math.round(subtotal * 100);
@@ -252,18 +273,28 @@ async function createQuote(request: any, customerId: string, cartId: string) {
   const quoteFingerprint = stableHash({ customerId, cartId, quoteBucket, snapshotItems, subtotalMinor, taxMinor, totalMinor });
   const id = `qte_${quoteFingerprint.slice(0, 32)}`;
   const expiresAt = new Date((quoteBucket + 1) * QUOTE_TTL_MS).toISOString();
-  const snapshot = JSON.stringify({ items: snapshotItems, revalidatedAt: new Date().toISOString(), quoteFingerprint });
+  const snapshot = JSON.stringify({
+    items: snapshotItems,
+    inventory: {
+      verified: true,
+      branchId: inventory.branchId,
+      branchConfigured: inventory.branchConfigured,
+      checkedAt: inventory.checkedAt,
+    },
+    revalidatedAt: new Date().toISOString(),
+    quoteFingerprint,
+  });
   await sql()`
     INSERT INTO checkout_quotes (
       id, customer_id, cart_id, currency, subtotal_minor, tax_minor, delivery_minor,
       service_minor, total_minor, pricing_source, snapshot, expires_at
     ) VALUES (
       ${id}, ${customerId}, ${cartId}, ${currency || "JMD"}, ${subtotalMinor}, ${taxMinor}, 0,
-      0, ${totalMinor}, 'provider_revalidated', ${snapshot}::jsonb, ${expiresAt}
+      0, ${totalMinor}, 'provider_inventory_revalidated', ${snapshot}::jsonb, ${expiresAt}
     )
     ON CONFLICT (id) DO NOTHING
   `;
-  return { id, currency: currency || "JMD", subtotalMinor, taxMinor, deliveryMinor: 0, serviceMinor: 0, totalMinor, expiresAt, items: snapshotItems, paymentAvailable: false };
+  return { id, currency: currency || "JMD", subtotalMinor, taxMinor, deliveryMinor: 0, serviceMinor: 0, totalMinor, expiresAt, items: snapshotItems, paymentAvailable: false, inventory: { verified: true, branchId: inventory.branchId, checkedAt: inventory.checkedAt } };
 }
 
 function send(response: any, status: number, payload: unknown) {
@@ -343,7 +374,7 @@ export default async function handler(request: any, response: any) {
       await enforceDurableRateLimit({ request, action: "commerce_quote_customer", subject: customerId, limit: QUOTE_CUSTOMER_LIMIT, windowSeconds: 600 });
       await enforceDurableRateLimit({ request, action: "commerce_quote_ip", subject: requestIp(request), limit: QUOTE_IP_LIMIT, windowSeconds: 600 });
       const quote = await createQuote(request, customerId, cart.id);
-      await recordSecurityEvent({ request, eventType: "commerce_quote_created", eventStatus: "created_or_replayed", riskLevel: "info", customerId, metadata: { quoteId: quote.id, cartId: cart.id, totalMinor: quote.totalMinor, currency: quote.currency } });
+      await recordSecurityEvent({ request, eventType: "commerce_quote_created", eventStatus: "created_or_replayed", riskLevel: "info", customerId, metadata: { quoteId: quote.id, cartId: cart.id, totalMinor: quote.totalMinor, currency: quote.currency, inventoryVerified: true, inventoryBranchId: quote.inventory.branchId } });
       return send(response, 201, { quote });
     }
 
@@ -364,6 +395,7 @@ export default async function handler(request: any, response: any) {
       CART_EMPTY: "Your cart is empty.",
       RENTAL_CHECKOUT_NOT_READY: "Rental checkout requires rental verification before payment.",
       ITEM_REVALIDATION_FAILED: "One or more items could not be revalidated against live provider data.",
+      STOCK_REVALIDATION_FAILED: "One or more requested quantities could not be confirmed against live inventory. Review your cart or try again.",
       MIXED_CURRENCY_CART: "The current cart contains incompatible currencies.",
     };
     if (publicErrors[code]) return send(response, status, { error: { code, message: publicErrors[code] } });
