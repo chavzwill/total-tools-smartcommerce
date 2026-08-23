@@ -95,6 +95,8 @@ type QuoteRow = {
   currency: string;
   subtotal_minor: number | string;
   tax_minor: number | string;
+  delivery_minor: number | string;
+  service_minor: number | string;
   total_minor: number | string;
   snapshot: any;
   expires_at: string | Date;
@@ -155,7 +157,8 @@ export default async function handler(request: any, response: any) {
     }
 
     const quoteRows = await sql()`
-      SELECT id, cart_id, currency, subtotal_minor, tax_minor, total_minor, snapshot, expires_at
+      SELECT id, cart_id, currency, subtotal_minor, tax_minor, delivery_minor,
+             service_minor, total_minor, snapshot, expires_at
       FROM checkout_quotes
       WHERE id = ${quoteId}
         AND customer_id = ${session.customer_id}
@@ -164,6 +167,15 @@ export default async function handler(request: any, response: any) {
     const quote = quoteRows[0];
     if (!quote) return send(response, 404, { error: { code: "CHECKOUT_QUOTE_NOT_FOUND", message: "That verified checkout quote is no longer available. Refresh checkout and try again." } });
     if (new Date(quote.expires_at).getTime() <= Date.now()) return send(response, 409, { error: { code: "CHECKOUT_QUOTE_EXPIRED", message: "Your verified quote expired. Refresh checkout to revalidate current pricing." } });
+
+    const snapshot = typeof quote.snapshot === "string" ? JSON.parse(quote.snapshot) : quote.snapshot;
+    const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
+    const fulfilment = snapshot?.fulfilment;
+    if (!items.length) return send(response, 409, { error: { code: "CHECKOUT_QUOTE_INVALID", message: "The verified quote does not contain orderable items. Refresh checkout and try again." } });
+    if (!fulfilment || fulfilment.status !== "bound" || !["pickup", "delivery"].includes(String(fulfilment.mode || ""))) {
+      await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "fulfilment_not_bound", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId } });
+      return send(response, 409, { error: { code: "FULFILMENT_NOT_FINALIZED", message: "Finalize pickup or delivery before placing this order on commercial credit." } });
+    }
 
     const trustRows = await sql()`
       SELECT a.display_name, m.role, m.authority_status,
@@ -209,10 +221,6 @@ export default async function handler(request: any, response: any) {
       return send(response, 403, { error: { code: "PURCHASE_ORDER_NOT_ENABLED", message: "Purchase-order references are not enabled for this commercial account." } });
     }
 
-    const snapshot = typeof quote.snapshot === "string" ? JSON.parse(quote.snapshot) : quote.snapshot;
-    const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
-    if (!items.length) return send(response, 409, { error: { code: "CHECKOUT_QUOTE_INVALID", message: "The verified quote does not contain orderable items. Refresh checkout and try again." } });
-
     const businessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
     const providerId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
     if (!businessAccountId || !providerId) return send(response, 503, { error: { code: "COMMERCIAL_CREDIT_UNAVAILABLE", message: "Commercial credit checkout is temporarily unavailable because the provider connection is not configured." } });
@@ -251,6 +259,12 @@ export default async function handler(request: any, response: any) {
         checkoutQuoteId: quoteId,
         approvedCreditLimitMinor: String(control.credit_limit_minor || ""),
         creditCurrency: control.credit_currency || quoteCurrency,
+        fulfilmentMode: String(fulfilment.mode),
+        deliveryMinor: String(quote.delivery_minor || 0),
+        deliveryProvider: fulfilment.provider || null,
+        deliveryServiceId: fulfilment.serviceId || null,
+        deliveryServiceLabel: fulfilment.serviceLabel || null,
+        deliveryAddress: fulfilment.address ? JSON.stringify(fulfilment.address) : null,
       },
     });
 
@@ -279,13 +293,17 @@ export default async function handler(request: any, response: any) {
           checkoutQuoteId: quoteId,
           paymentTermsCode: termsCode,
           providerCommercialAccountId: trust.provider_account_id,
+          fulfilmentMode: String(fulfilment.mode),
+          deliveryMinor: String(quote.delivery_minor || 0),
+          deliveryProvider: fulfilment.provider || null,
+          deliveryServiceId: fulfilment.serviceId || null,
         },
       });
     } catch (ledgerError) {
       console.error("commercial_credit_ledger_record_failed", { orderId: orderResult.data.id, commercialAccountId, code: ledgerError instanceof Error ? ledgerError.message : "record_failed" });
       await recordSecurityEvent({ request, eventType: "commercial_credit_ledger_record_failed", eventStatus: "reconciliation_required", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id } });
     }
-    await recordSecurityEvent({ request, eventType: "commercial_credit_order_created", eventStatus: "provider_accepted", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id, paymentTermsCode: termsCode } });
+    await recordSecurityEvent({ request, eventType: "commercial_credit_order_created", eventStatus: "provider_accepted", riskLevel: "medium", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, orderId: orderResult.data.id, paymentTermsCode: termsCode, fulfilmentMode: fulfilment.mode, deliveryMinor: Number(quote.delivery_minor || 0) } });
 
     return send(response, 201, {
       order: {
