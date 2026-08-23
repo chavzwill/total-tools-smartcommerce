@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
 import { getDeliveryLifecycleForCustomer } from "../src/server/deliveryLifecycleStore.js";
+import { listCustomerDeliveryNotifications } from "../src/server/deliveryNotificationOutbox.js";
 import { enforceDurableRateLimit, requestIp } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
@@ -39,14 +40,18 @@ export default async function handler(request:any,response:any){
     await enforceDurableRateLimit({request,action:"customer_delivery_tracking",subject:customerId||requestIp(request),limit:120,windowSeconds:600});
     const orderId=String(request.query?.orderId||"").trim().slice(0,180);
     if(!orderId)return send(response,400,{error:{code:"ORDER_REFERENCE_REQUIRED",message:"An order reference is required."}});
-    const result=await getDeliveryLifecycleForCustomer(orderId,customerId);
+    const [result, notifications]=await Promise.all([
+      getDeliveryLifecycleForCustomer(orderId,customerId),
+      listCustomerDeliveryNotifications(customerId,orderId),
+    ]);
     if(!result)return send(response,404,{error:{code:"ORDER_TRACKING_NOT_FOUND",message:"Tracking is not available for that order."}});
     const row=result.lifecycle;
     return send(response,200,{tracking:{
       orderId:row.order_id,status:row.status,fulfilmentMode:row.fulfilment_mode,provider:row.provider||null,serviceLabel:row.service_label||null,
       collectionPointName:row.collection_point_name||null,scheduledFor:row.scheduled_for||null,trackingReference:row.tracking_reference||null,
-      exceptionMessage:row.exception_message||null,completedAt:row.completed_at||null,proofRecipientName:row.proof_recipient_name||null,proofReference:row.proof_reference||null,
-      events:result.events.map((event:any)=>({status:event.status,message:event.public_message||null,at:event.created_at}))
+      exceptionMessage:row.exception_message||null,completedAt:row.completed_at||null,proofRecipientName:row.proof_recipient_name||null,proofMethod:row.proof_method||null,proofReference:row.proof_reference||null,
+      events:result.events.map((event:any)=>({status:event.status,message:event.public_message||null,at:event.created_at})),
+      notifications:notifications.map((item:any)=>({id:item.id,status:item.status,message:item.message,readAt:item.read_at||null,createdAt:item.created_at}))
     }});
   }catch(error:any){
     if(error?.message==="RATE_LIMITED")return send(response,429,{error:{code:"RATE_LIMITED",message:"Too many tracking requests. Please wait and try again."}});
