@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { quoteDelivery } from "../src/server/deliveryFulfilmentEngine.js";
 import { resolveDeliveryItems } from "../src/server/deliveryProductFacts.js";
 import { createManualDeliveryReview } from "../src/server/deliveryReviewQueue.js";
+import { resolveJamaicaDeliveryZone } from "../src/server/jamaicaDeliveryZones.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 
 const COOKIE_NAME = "sc_session";
@@ -31,7 +32,6 @@ type BindInput = {
   mode?: "pickup" | "delivery";
   serviceId?: string;
   requestedSpeed?: "standard" | "same_day";
-  destinationClass?: "metro" | "regular" | "rural" | "remote";
   address?: AddressInput;
 };
 
@@ -214,25 +214,39 @@ export default async function handler(request: any, response: any) {
     }
 
     const address = normalizeAddress(input.address);
-    const destinationClass = input.destinationClass || "regular";
     const requestedSpeed = input.requestedSpeed === "same_day" ? "same_day" : "standard";
     const serviceId = clean(input.serviceId, 100);
-    if (!serviceId) return send(response, 400, { error: { code: "DELIVERY_SERVICE_REQUIRED", message: "Choose a delivery service before finalizing delivery." } });
+    const zone = resolveJamaicaDeliveryZone({ town: address.city, parish: address.region });
 
     const resolvedItems = await resolveDeliveryItems(items.map((item: any) => ({
       productId: clean(item.productId, 180),
       quantity: Math.max(1, Math.min(999, Math.floor(Number(item.quantity || 1)))),
       fulfilmentType: "sale" as const,
     })));
-    const delivery = quoteDelivery({ items: resolvedItems, destinationCountryCode: address.countryCode, destinationClass, requestedSpeed });
+
+    const delivery = zone.status === "resolved"
+      ? quoteDelivery({
+          items: resolvedItems,
+          destinationCountryCode: address.countryCode,
+          destinationClass: zone.destinationClass,
+          requestedSpeed,
+          sameDayEligible: zone.sameDayEligible,
+        })
+      : {
+          status: "manual_review" as const,
+          reasonCode: zone.reasonCode,
+          message: zone.message,
+          options: [] as [],
+        };
 
     if (delivery.status === "manual_review") {
+      const destinationClass = zone.status === "resolved" ? zone.destinationClass : undefined;
       const review = await createManualDeliveryReview({
         quoteId,
         customerId,
         reasonCode: delivery.reasonCode,
         reasonMessage: delivery.message,
-        requestedServiceId: serviceId,
+        requestedServiceId: serviceId || undefined,
         requestedSpeed,
         destinationClass,
         address,
@@ -245,17 +259,19 @@ export default async function handler(request: any, response: any) {
         reasonCode: delivery.reasonCode,
         message: delivery.message,
         address,
-        destinationClass,
+        destinationClass: destinationClass || null,
+        zone,
         requestedSpeed,
-        requestedServiceId: serviceId,
+        requestedServiceId: serviceId || null,
         requestedAt: new Date().toISOString(),
       };
       const nextSnapshot = { ...snapshot, fulfilment: manualReview };
       await sql()`UPDATE checkout_quotes SET snapshot = ${JSON.stringify(nextSnapshot)}::jsonb WHERE id = ${quoteId} AND customer_id = ${customerId}`;
-      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reviewId: review.id, reasonCode: delivery.reasonCode, destinationClass, requestedSpeed } });
-      return send(response, 202, { fulfilment: manualReview, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
+      await recordSecurityEvent({ request, eventType: "delivery_manual_review_requested", eventStatus: "pending", riskLevel: "info", customerId, metadata: { quoteId, reviewId: review.id, reasonCode: delivery.reasonCode, destinationClass: destinationClass || null, requestedSpeed } });
+      return send(response, 202, { fulfilment: manualReview, zone, review: { id: review.id, status: review.status }, quote: { id: quoteId, deliveryMinor: Number(quote.delivery_minor || 0), totalMinor: Number(quote.total_minor || 0) } });
     }
 
+    if (!serviceId) return send(response, 400, { error: { code: "DELIVERY_SERVICE_REQUIRED", message: "Choose a delivery service before finalizing delivery." } });
     const option = delivery.options.find((candidate) => candidate.serviceId === serviceId);
     if (!option) return send(response, 409, { error: { code: "DELIVERY_SERVICE_CHANGED", message: "That delivery option is no longer available. Refresh the courier choices and try again." } });
 
@@ -278,7 +294,8 @@ export default async function handler(request: any, response: any) {
       customerChargeJmd: option.customerChargeJmd,
       billableWeightLb: option.billableWeightLb,
       address,
-      destinationClass,
+      destinationClass: zone.destinationClass,
+      zone,
       requestedSpeed,
       sourceStatus: option.sourceStatus,
       boundAt: new Date().toISOString(),
@@ -291,8 +308,8 @@ export default async function handler(request: any, response: any) {
           snapshot = ${JSON.stringify(nextSnapshot)}::jsonb
       WHERE id = ${quoteId} AND customer_id = ${customerId}
     `;
-    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, deliveryMinor, totalMinor } });
-    return send(response, 200, { fulfilment: bound, quote: { id: quoteId, deliveryMinor, totalMinor } });
+    await recordSecurityEvent({ request, eventType: "checkout_fulfilment_bound", eventStatus: "delivery", riskLevel: "info", customerId, metadata: { quoteId, provider: option.provider, serviceId: option.serviceId, destinationClass: zone.destinationClass, deliveryMinor, totalMinor } });
+    return send(response, 200, { fulfilment: bound, zone, quote: { id: quoteId, deliveryMinor, totalMinor } });
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (error?.message === "RATE_LIMITED") {
