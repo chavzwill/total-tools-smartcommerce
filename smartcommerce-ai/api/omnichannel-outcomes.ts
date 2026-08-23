@@ -6,6 +6,7 @@ import { listOutcomeLinks, refreshOutcomeLink, registerOutcomeLink } from "../sr
 
 const CUSTOMER_COOKIE = "sc_session";
 let sqlClient: ReturnType<typeof neon> | undefined;
+let customerLinkSchemaReady = false;
 
 function sql() {
   if (!sqlClient) {
@@ -14,6 +15,18 @@ function sql() {
     sqlClient = neon(url);
   }
   return sqlClient;
+}
+async function ensureCustomerLinkSchema() {
+  if (customerLinkSchemaReady) return;
+  await sql()`CREATE TABLE IF NOT EXISTS customer_pos_links(
+    customer_account_id TEXT PRIMARY KEY,
+    pos_customer_id TEXT NOT NULL,
+    matched_by TEXT NOT NULL,
+    matched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_sync_at TIMESTAMPTZ
+  )`;
+  await sql()`CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_pos_links_pos_customer ON customer_pos_links(pos_customer_id)`;
+  customerLinkSchemaReady = true;
 }
 function send(res: any, status: number, payload: unknown) {
   res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.setHeader("X-Content-Type-Options", "nosniff"); res.end(JSON.stringify(payload));
@@ -27,6 +40,7 @@ async function customerIdentity(req: any) {
   if (!token) return null;
   const rows = await sql()`SELECT c.id,c.email_verified FROM customer_sessions s JOIN customer_accounts c ON c.id=s.customer_id WHERE s.token_hash=${hashToken(token)} AND s.revoked_at IS NULL AND s.expires_at>NOW() LIMIT 1` as Array<{ id: string; email_verified: boolean }>;
   const account = rows[0]; if (!account) return null;
+  await ensureCustomerLinkSchema();
   const links = await sql()`SELECT pos_customer_id FROM customer_pos_links WHERE customer_account_id=${account.id} LIMIT 1` as Array<{ pos_customer_id: string }>;
   return { accountId: account.id, emailVerified: Boolean(account.email_verified), posCustomerId: links[0]?.pos_customer_id || null };
 }
