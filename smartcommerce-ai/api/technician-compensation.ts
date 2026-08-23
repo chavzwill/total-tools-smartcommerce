@@ -2,8 +2,9 @@ import { neon } from "@neondatabase/serverless";
 import { randomBytes } from "node:crypto";
 import { firstHeader, recordSecurityEvent } from "../src/server/securityInfrastructure.js";
 import { parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../src/server/staffSession.js";
+import { calculateTechnicianCompensation, resolveTechnicianPayPeriod, type CompensationPlan, type TechnicianPeriodInput } from "../src/lib/technicianCompensation.js";
 
-const MAX_BODY_BYTES = 32_000;
+const MAX_BODY_BYTES = 48_000;
 let sqlClient: ReturnType<typeof neon> | undefined;
 let schemaReady = false;
 type Row = Record<string, any>;
@@ -60,6 +61,10 @@ function isAdmin(session: any) {
   const role = String(session?.role || "").toLowerCase();
   const group = String(session?.securityGroupName || "").toLowerCase();
   return role === "admin" || role === "owner" || group.includes("admin") || session?.permissions?.technician_compensation_admin === true;
+}
+
+function canReview(session: any) {
+  return isAdmin(session) || session?.permissions?.technician_compensation_review === true || session?.permissions?.wo_supervisor === true;
 }
 
 async function ensureSchema() {
@@ -138,6 +143,25 @@ async function audit(actorId: string, eventType: string, employeeId: string | nu
     VALUES(${`tce_${randomBytes(16).toString("hex")}`},${employeeId},${eventType},${actorId},${entityId},${reason},${before == null ? null : JSON.stringify(before)}::jsonb,${after == null ? null : JSON.stringify(after)}::jsonb)`;
 }
 
+async function activePlan(at: string): Promise<Row | null> {
+  const rows = await sql()`SELECT * FROM technician_compensation_plans WHERE effective_from<=${at}::date AND (effective_to IS NULL OR effective_to>${at}::date) ORDER BY effective_from DESC,version DESC LIMIT 1` as Row[];
+  return rows[0] || null;
+}
+
+async function activeRate(employeeId: string, at: string): Promise<Row | null> {
+  const rows = await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} AND effective_from<=${at}::date AND (effective_to IS NULL OR effective_to>${at}::date) ORDER BY effective_from DESC,created_at DESC LIMIT 1` as Row[];
+  return rows[0] || null;
+}
+
+function periodCsv(rows: Row[]) {
+  const headers = ["employee_id","period_start","period_end","status","plan_id","plan_version","rate_version_id","performance_score","incentive_percent","incentive_amount","total_pay","finalized_at"];
+  const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  return [headers.join(","), ...rows.map((row) => {
+    const result = row.result_json || {};
+    return [row.employee_id,row.period_start,row.period_end,row.status,row.plan_id,row.plan_version,row.rate_version_id,result.performanceScore,result.incentivePercent,result.incentiveAmount,result.totalPay,row.finalized_at].map(escape).join(",");
+  })].join("\n");
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const session = staff(req);
@@ -147,14 +171,26 @@ export default async function handler(req: any, res: any) {
 
     if (method === "GET") {
       const employeeId = String(req.query?.employeeId || "").trim();
+      const exportFormat = String(req.query?.export || "").toLowerCase();
+      const periodRef = String(req.query?.periodRef || "").trim();
+      if (exportFormat === "csv") {
+        if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });
+        const bounds = resolveTechnicianPayPeriod(periodRef || new Date().toISOString().slice(0,10));
+        const rows = await sql()`SELECT * FROM technician_performance_periods WHERE period_start=${bounds.start}::date AND period_end=${bounds.end}::date ORDER BY employee_id` as Row[];
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="technician-payroll-${bounds.start}-to-${bounds.end}.csv"`);
+        res.setHeader("Cache-Control", "no-store");
+        return res.end(periodCsv(rows));
+      }
       const plans = await sql()`SELECT id,version,name,effective_from,effective_to,currency,overtime_multiplier,max_incentive_percent,plan_json,created_by,created_at FROM technician_compensation_plans ORDER BY effective_from DESC,version DESC` as Row[];
       const rates: Row[] = employeeId
         ? await sql()`SELECT * FROM technician_rate_versions WHERE employee_id=${employeeId} ORDER BY effective_from DESC,created_at DESC` as Row[]
         : isAdmin(session) ? await sql()`SELECT * FROM technician_rate_versions ORDER BY employee_id,effective_from DESC` as Row[] : [];
       const periods: Row[] = employeeId
         ? await sql()`SELECT * FROM technician_performance_periods WHERE employee_id=${employeeId} ORDER BY period_end DESC LIMIT 24` as Row[]
-        : [];
-      return send(res, 200, { plans, rates, periods, canAdminister: isAdmin(session) });
+        : canReview(session) ? await sql()`SELECT * FROM technician_performance_periods ORDER BY period_end DESC,employee_id LIMIT 200` as Row[] : [];
+      return send(res, 200, { plans, rates, periods, canAdminister: isAdmin(session), canReview: canReview(session), currentPeriod: resolveTechnicianPayPeriod(new Date().toISOString().slice(0,10)) });
     }
 
     if (method !== "POST") {
@@ -162,12 +198,12 @@ export default async function handler(req: any, res: any) {
       return send(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "GET or POST is required." } });
     }
     if (!sameOrigin(req)) return send(res, 403, { error: { code: "ORIGIN_REJECTED", message: "This request was rejected." } });
-    if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });
 
     const input: any = await body(req);
     const action = String(input.action || "");
 
     if (action === "set_rate") {
+      if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });
       const employeeId = String(input.employeeId || "").trim();
       const rate = Number(input.hourlyRate);
       const overtime = Number(input.overtimeMultiplier ?? 1.5);
@@ -188,6 +224,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (action === "save_plan") {
+      if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });
       const plan = input.plan;
       const reason = String(input.reason || "").trim();
       if (!plan || typeof plan !== "object" || !plan.id || !plan.name || !Array.isArray(plan.metrics) || !Array.isArray(plan.incentiveBands) || reason.length < 5) {
@@ -201,6 +238,57 @@ export default async function handler(req: any, res: any) {
         VALUES(${String(plan.id)},${version},${String(plan.name)},${effectiveFrom}::date,${String(plan.currency || "JMD")},${Number(plan.overtimeMultiplier || 1.5)},${Number(plan.maxIncentivePercent || 15)},${JSON.stringify({ ...plan, version })}::jsonb,${session.employeeId}) RETURNING *` as Row[];
       await audit(session.employeeId, "plan_changed", null, `${plan.id}:${version}`, reason, prior[0] || null, rows[0]);
       return send(res, 201, { plan: rows[0] });
+    }
+
+    if (action === "create_period") {
+      if (!canReview(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_REVIEW_REQUIRED", message: "Supervisor or administrator permission is required." } });
+      const employeeId = String(input.employeeId || "").trim();
+      const periodRef = String(input.periodRef || "").slice(0,10);
+      const snapshot = input.snapshot as TechnicianPeriodInput | undefined;
+      if (!employeeId || !/^\d{4}-\d{2}-\d{2}$/.test(periodRef) || !snapshot || String(snapshot.employeeId || "") !== employeeId) {
+        return send(res, 400, { error: { code: "INVALID_PERIOD_SNAPSHOT", message: "Employee, pay-period date, and a matching verified metric snapshot are required." } });
+      }
+      const bounds = resolveTechnicianPayPeriod(periodRef);
+      const planRow = await activePlan(bounds.start);
+      if (!planRow) return send(res, 409, { error: { code: "COMPENSATION_PLAN_REQUIRED", message: "No active technician compensation plan covers this pay period." } });
+      const rateRow = await activeRate(employeeId, bounds.start);
+      if (!rateRow) return send(res, 409, { error: { code: "TECHNICIAN_RATE_REQUIRED", message: "No active technician rate covers this pay period." } });
+      const plan = planRow.plan_json as CompensationPlan;
+      const normalizedSnapshot: TechnicianPeriodInput = { ...snapshot, employeeId, baseHourlyRate: Number(rateRow.hourly_rate) };
+      const result = calculateTechnicianCompensation(plan, normalizedSnapshot);
+      const id = `tpp_${randomBytes(16).toString("hex")}`;
+      const rows = await sql()`INSERT INTO technician_performance_periods(id,employee_id,period_start,period_end,status,plan_id,plan_version,rate_version_id,snapshot_json,result_json)
+        VALUES(${id},${employeeId},${bounds.start}::date,${bounds.end}::date,'review',${String(planRow.id)},${Number(planRow.version)},${String(rateRow.id)},${JSON.stringify(normalizedSnapshot)}::jsonb,${JSON.stringify(result)}::jsonb)
+        ON CONFLICT(employee_id,period_start,period_end) DO UPDATE SET snapshot_json=EXCLUDED.snapshot_json,result_json=EXCLUDED.result_json,status=CASE WHEN technician_performance_periods.status IN ('finalized','adjusted') THEN technician_performance_periods.status ELSE 'review' END
+        RETURNING *` as Row[];
+      await audit(session.employeeId, "period_submitted", employeeId, rows[0]?.id || id, "Period snapshot created or recalculated", null, rows[0]);
+      return send(res, 201, { period: rows[0] });
+    }
+
+    if (action === "approve_period") {
+      if (!canReview(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_REVIEW_REQUIRED", message: "Supervisor or administrator permission is required." } });
+      const periodId = String(input.periodId || "").trim();
+      const reason = String(input.reason || "").trim();
+      const existing = await sql()`SELECT * FROM technician_performance_periods WHERE id=${periodId} LIMIT 1` as Row[];
+      const period = existing[0];
+      if (!period) return send(res, 404, { error: { code: "PERIOD_NOT_FOUND", message: "That technician pay period was not found." } });
+      if (period.status === "finalized" || period.status === "adjusted") return send(res, 409, { error: { code: "PERIOD_IMMUTABLE", message: "Finalized technician periods cannot be changed." } });
+      const rows = await sql()`UPDATE technician_performance_periods SET status='approved',reviewed_by=${session.employeeId},reviewed_at=NOW() WHERE id=${periodId} RETURNING *` as Row[];
+      await audit(session.employeeId, "period_approved", period.employee_id, periodId, reason || "Supervisor approval", period, rows[0]);
+      return send(res, 200, { period: rows[0] });
+    }
+
+    if (action === "finalize_period") {
+      if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });
+      const periodId = String(input.periodId || "").trim();
+      const existing = await sql()`SELECT * FROM technician_performance_periods WHERE id=${periodId} LIMIT 1` as Row[];
+      const period = existing[0];
+      if (!period) return send(res, 404, { error: { code: "PERIOD_NOT_FOUND", message: "That technician pay period was not found." } });
+      if (period.status !== "approved") return send(res, 409, { error: { code: "PERIOD_APPROVAL_REQUIRED", message: "The period must be supervisor-approved before finalization." } });
+      const rows = await sql()`UPDATE technician_performance_periods SET status='finalized',finalized_by=${session.employeeId},finalized_at=NOW() WHERE id=${periodId} RETURNING *` as Row[];
+      await audit(session.employeeId, "period_finalized", period.employee_id, periodId, "Payroll period finalized", period, rows[0]);
+      await recordSecurityEvent({ request: req, eventType: "technician_pay_period_finalized", eventStatus: "success", riskLevel: "high", subject: period.employee_id, metadata: { periodId } }).catch(() => undefined);
+      return send(res, 200, { period: rows[0] });
     }
 
     return send(res, 400, { error: { code: "INVALID_ACTION", message: "That compensation action is not supported." } });
