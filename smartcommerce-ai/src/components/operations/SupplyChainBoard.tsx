@@ -1,6 +1,7 @@
 import { ArrowRightLeft, ClipboardList, PackageCheck, RefreshCw, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import PurchaseOrderLifecyclePanel from "./PurchaseOrderLifecyclePanel";
 import "../../styles/supply-chain-board.css";
 
 type Row = Record<string, any>;
@@ -36,10 +37,12 @@ export default function SupplyChainBoard() {
     </div>
     <div className="sc-supply-chain__toolbar"><div>{(["requests","orders","transfers"] as const).map((key)=><button key={key} className={tab===key?"is-active":""} onClick={()=>setTab(key)}>{key==="requests"?"Purchase requests":key==="orders"?"Purchase orders":"Branch transfers"}</button>)}</div><button className="sc-supply-chain__refresh" onClick={()=>void load()} disabled={state.loading}><RefreshCw size={15}/>{state.loading?"Refreshing…":"Refresh"}</button></div>
     {state.error?<div className="sc-ops-empty is-error"><strong>Supply-chain data unavailable</strong><p>{state.error}</p></div>:null}
-    {!state.error && !rows.length && !state.loading?<div className="sc-ops-empty"><strong>No {tab.replace(/s$/,'')} records</strong><p>The board only shows records returned by the connected POS.</p></div>:null}
-    {rows.length?<div className="sc-supply-chain__list">{rows.map((row,index)=><article key={String(row.id??index)}>
-      <div><span>{tab==="requests"?(row.pr_number||`PR ${row.id}`):tab==="orders"?(row.po_number||`PO ${row.id}`):(row.transfer_number||`Transfer ${row.id}`)}</span><strong>{tab==="transfers"?`${row.from_branch_name||"Source"} → ${row.to_branch_name||"Destination"}`:(row.supplier_name||row.department||row.branch_name||"Total Tools")}</strong><small>{tab==="transfers"?(row.item_summary||"Inventory transfer"):(row.notes||row.request_type||"Purchasing record")}</small></div>
-      <div><em className={`is-${String(row.status||"unknown")}`}>{label(row.status)}</em><small>{row.created_at||row.expected_date||row.required_date||""}</small></div>
-    </article>)}</div>:null}
+    {tab === "orders" ? <PurchaseOrderLifecyclePanel /> : <>
+      {!state.error && !rows.length && !state.loading?<div className="sc-ops-empty"><strong>No {tab.replace(/s$/,'')} records</strong><p>The board only shows records returned by the connected POS.</p></div>:null}
+      {rows.length?<div className="sc-supply-chain__list">{rows.map((row,index)=><article key={String(row.id??index)}>
+        <div><span>{tab==="requests"?(row.pr_number||`PR ${row.id}`):(row.transfer_number||`Transfer ${row.id}`)}</span><strong>{tab==="transfers"?`${row.from_branch_name||"Source"} → ${row.to_branch_name||"Destination"}`:(row.supplier_name||row.department||row.branch_name||"Total Tools")}</strong><small>{tab==="transfers"?(row.item_summary||"Inventory transfer"):(row.notes||row.request_type||"Purchasing record")}</small></div>
+        <div><em className={`is-${String(row.status||"unknown")}`}>{label(row.status)}</em><small>{row.created_at||row.expected_date||row.required_date||""}</small></div>
+      </article>)}</div>:null}
+    </>}
   </section>;
 }
