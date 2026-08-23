@@ -1,6 +1,7 @@
 import { parseCookie, readStaffSession, STAFF_COOKIE_NAME, canStaff } from "../src/server/staffSession.js";
 import { listDeliveryLifecycles, updateDeliveryLifecycle, type DeliveryLifecycleStatus, type DeliveryProofMethod } from "../src/server/deliveryLifecycleStore.js";
 import { enqueueLatestDeliveryEventNotification } from "../src/server/deliveryNotificationOutbox.js";
+import { processPendingDeliveryNotifications } from "../src/server/deliveryNotificationSender.js";
 import { enforceDurableRateLimit, requestIp } from "../src/server/securityInfrastructure.js";
 
 const MAX_BODY_BYTES = 20_000;
@@ -63,31 +64,19 @@ export default async function handler(request: any, response: any) {
     }
 
     const delivery = await updateDeliveryLifecycle({
-      orderId,
-      status,
-      actorId: staff.employeeId,
-      publicMessage: clean(input.publicMessage, 500),
-      internalNote: clean(input.internalNote, 1000),
-      provider: clean(input.provider, 180),
-      serviceLabel: clean(input.serviceLabel, 180),
-      trackingReference: clean(input.trackingReference, 120),
-      scheduledFor: input.scheduledFor ? new Date(input.scheduledFor).toISOString() : null,
-      exceptionMessage: clean(input.exceptionMessage, 500),
-      proofRecipientName: clean(input.proofRecipientName, 120),
-      proofMethod: proofMethodRaw || undefined,
-      proofReference: clean(input.proofReference, 180),
-      proofNotes: clean(input.proofNotes, 500),
+      orderId,status,actorId:staff.employeeId,publicMessage:clean(input.publicMessage,500),internalNote:clean(input.internalNote,1000),
+      provider:clean(input.provider,180),serviceLabel:clean(input.serviceLabel,180),trackingReference:clean(input.trackingReference,120),
+      scheduledFor:input.scheduledFor?new Date(input.scheduledFor).toISOString():null,exceptionMessage:clean(input.exceptionMessage,500),
+      proofRecipientName:clean(input.proofRecipientName,120),proofMethod:proofMethodRaw||undefined,proofReference:clean(input.proofReference,180),proofNotes:clean(input.proofNotes,500),
     });
-    let notificationsQueued = 0;
-    if (clean(input.publicMessage, 500)) {
-      try {
-        const queued = await enqueueLatestDeliveryEventNotification(orderId);
-        notificationsQueued = queued.length;
-      } catch (notificationError) {
-        console.error("delivery_notification_enqueue_failed", { orderId, code: notificationError instanceof Error ? notificationError.message : "unknown" });
-      }
+    let notificationsQueued=0; let notificationDelivery:any=null;
+    if(clean(input.publicMessage,500)){
+      try{
+        const queued=await enqueueLatestDeliveryEventNotification(orderId);notificationsQueued=queued.length;
+        notificationDelivery=await processPendingDeliveryNotifications(12);
+      }catch(notificationError){console.error("delivery_notification_processing_failed",{orderId,code:notificationError instanceof Error?notificationError.message:"unknown"});}
     }
-    return send(response, 200, { delivery, notificationsQueued });
+    return send(response,200,{delivery,notificationsQueued,notificationDelivery});
   } catch (error: any) {
     if (error instanceof SyntaxError) return send(response, 400, { error: { code: "INVALID_JSON", message: "The request body is invalid." } });
     if (error?.message === "DELIVERY_ORDER_NOT_FOUND") return send(response, 404, { error: { code: "DELIVERY_ORDER_NOT_FOUND", message: "That order does not have a delivery lifecycle." } });
