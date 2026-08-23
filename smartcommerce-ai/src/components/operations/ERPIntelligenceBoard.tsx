@@ -1,6 +1,7 @@
 import { AlertTriangle, BrainCircuit, Clock3, PackageSearch, RefreshCw, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { operationsRequest, type OperationsApiError } from "../../lib/staffOperations";
+import InventoryCapitalIntelligence from "./InventoryCapitalIntelligence";
 import SmartTransferRecommendations from "./SmartTransferRecommendations";
 import "../../styles/erp-intelligence.css";
 
@@ -174,6 +175,7 @@ export default function ERPIntelligenceBoard() {
     </div>
 
     <SmartTransferRecommendations />
+    <InventoryCapitalIntelligence />
 
     <section className="sc-erp-intelligence__panel">
       <div className="sc-erp-intelligence__title"><Truck size={18}/><div><strong>Supplier intelligence</strong><span>Lead-time reliability, cycle time and spend derived from purchase-order history</span></div></div>
