@@ -1,0 +1,191 @@
+.sc-fulfilment {
+  margin-top: 1.25rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(20, 58, 38, 0.12);
+  border-radius: 1.25rem;
+  background: #f7f9f6;
+  color: #172019;
+}
+
+.sc-fulfilment__heading {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.sc-fulfilment__heading p,
+.sc-fulfilment__estimate-note {
+  margin: 0;
+  color: #667168;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.sc-fulfilment__modes,
+.sc-fulfilment__options {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sc-fulfilment__modes > button,
+.sc-fulfilment__options > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(24, 63, 41, 0.14);
+  border-radius: 1rem;
+  background: #fff;
+  color: #172019;
+  text-align: left;
+  box-shadow: none;
+}
+
+.sc-fulfilment__modes > button > span,
+.sc-fulfilment__options > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.sc-fulfilment__modes strong,
+.sc-fulfilment__options strong {
+  color: #172019;
+}
+
+.sc-fulfilment__modes small,
+.sc-fulfilment__options small {
+  color: #6c756e;
+  line-height: 1.35;
+}
+
+.sc-fulfilment__modes > button.is-active,
+.sc-fulfilment__options > button.is-active {
+  border-color: rgba(43, 123, 72, 0.42);
+  background: #eef7f0;
+  box-shadow: 0 0 0 1px rgba(43, 123, 72, 0.08);
+}
+
+.sc-fulfilment__delivery {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(24, 63, 41, 0.1);
+}
+
+.sc-fulfilment__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.sc-fulfilment__controls label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  color: #34433a;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sc-fulfilment__controls select {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.8rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(24, 63, 41, 0.16);
+  border-radius: 0.8rem;
+  background: #fff;
+  color: #172019;
+  font: inherit;
+}
+
+.sc-fulfilment__status,
+.sc-fulfilment__manual,
+.sc-fulfilment__cost-note,
+.sc-fulfilment__facts {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  border-radius: 0.9rem;
+}
+
+.sc-fulfilment__status {
+  padding: 0.8rem 0.9rem;
+  background: #fff;
+  color: #536058;
+}
+
+.sc-fulfilment__manual {
+  display: grid;
+  padding: 0.9rem;
+  background: #fff7ed;
+  border: 1px solid rgba(166, 92, 32, 0.18);
+  color: #6f482b;
+}
+
+.sc-fulfilment__manual strong {
+  color: #50321f;
+}
+
+.sc-fulfilment__manual small {
+  color: #816248;
+  line-height: 1.4;
+}
+
+.sc-fulfilment__facts {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  color: #677269;
+  font-size: 0.78rem;
+}
+
+.sc-fulfilment__cost-note {
+  padding: 0.8rem 0.9rem;
+  background: #f0f5f1;
+  color: #526158;
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+
+.sc-fulfilment__cost-note svg {
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+  color: #2c7949;
+}
+
+.sc-spin {
+  animation: sc-fulfilment-spin 0.8s linear infinite;
+}
+
+@keyframes sc-fulfilment-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .sc-fulfilment {
+    margin-inline: 0;
+    padding: 0.9rem;
+    border-radius: 1rem;
+  }
+
+  .sc-fulfilment__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-fulfilment__modes > button,
+  .sc-fulfilment__options > button {
+    padding: 0.85rem;
+  }
+
+  .sc-fulfilment__options > button > strong {
+    white-space: nowrap;
+    font-size: 0.92rem;
+  }
+}
