@@ -82,10 +82,27 @@ Courier choices shown before binding are estimates. When the customer selects `V
 
 Pickup is also explicitly bound to the quote at J$0 delivery.
 
-If the engine returns manual review, SmartCommerce stores the pending manual-review fulfilment state in the quote snapshot and records an auditable `delivery_manual_review_requested` event. Payment/order creation remains blocked until a final transport charge is approved and bound.
+If the engine returns manual review, SmartCommerce stores the pending manual-review fulfilment state in the quote snapshot, creates a durable logistics review record, and records an auditable `delivery_manual_review_requested` event. Payment/order creation remains blocked until a final transport charge is approved and then rebound to a fresh merchandise quote.
+
+## Manual logistics review queue
+Manual delivery cases are persisted separately from the short-lived checkout quote. This is intentional: a staff logistics review may take longer than the merchandise quote should remain valid.
+
+The internal workspace is available at `/operations/delivery-reviews` and requires a signed POS-backed SmartCommerce staff session. Customer sessions cannot enumerate or price delivery reviews.
+
+Authorized staff can record:
+- transport provider / internal fleet source
+- vehicle or handling class
+- provider/operating cost
+- customer delivery charge
+- proposed delivery date/time
+- access, unloading, collection or special-handling notes
+
+The queue stores provider/operating cost, internal margin and customer charge separately. The 20% automatic parcel markup does not automatically control manually reviewed heavy/rental logistics; staff must price the real operational requirement and management policy applies.
+
+A review marked `priced` is not automatically payable. Merchandise pricing and availability must still be freshly revalidated before the reviewed transport charge can be attached to a payable order total.
 
 ## Order integrity
-Commercial-credit order creation now independently enforces the fulfilment gate. It rejects a request unless the checkout quote contains a server-bound `pickup` or `delivery` state. The browser cannot bypass this by enabling a button manually.
+Commercial-credit order creation independently enforces the fulfilment gate. It rejects a request unless the checkout quote contains a server-bound `pickup` or `delivery` state. The browser cannot bypass this by enabling a button manually.
 
 When a delivery order is created, fulfilment mode, delivery amount, provider/service and destination are carried into order metadata. The commercial ledger records the total authorised order value and delivery identifiers for reconciliation.
 
@@ -97,15 +114,27 @@ Sales agents should know:
 - Small parcels can receive automatic courier options when freight data is complete.
 - Never promise an automated rate for large items or rentals.
 - Manual-review orders remain valid sales opportunities; logistics staff must price delivery before final payment/confirmation.
-- A courier's underlying cost is not the customer-facing charge; SmartCommerce applies the approved operational markup.
+- A courier's underlying cost is not the customer-facing charge; SmartCommerce applies the approved operational markup for automated parcel services.
 - A displayed courier estimate is not final until checkout shows that delivery has been verified and attached.
+- A manually priced logistics review still requires fresh merchandise revalidation before the customer can pay.
+
+## Logistics / dispatch module
+Logistics reviewers should:
+1. Confirm the destination, access notes and recipient details.
+2. Determine the correct vehicle / transport provider and whether loading/unloading assistance is required.
+3. Enter the real provider or internal operating cost.
+4. Enter the approved customer delivery charge.
+5. Add schedule and handling notes.
+6. Mark the review priced only after the transport requirement is credible.
+
+Do not alter merchandise price or stock from the delivery review workspace. Do not mark the order paid or fulfilled from this queue.
 
 ## Bookkeeping module
 Bookkeepers should see separate values for:
-- provider/courier cost
-- 20% operational markup
+- provider/courier/operating cost
+- operational markup or manual delivery margin
 - customer delivery charge
-- provider/service
+- provider/service/vehicle
 - order/reference
 - settlement/payment status
 
@@ -114,26 +143,34 @@ This separation enables courier invoice reconciliation and delivery-margin repor
 ## Management module
 Management should be able to review:
 - delivery revenue
-- courier cost
+- courier/transport cost
 - delivery gross margin
 - manual-review volume
 - average delivery charge
 - provider usage and service performance
 - rate-table freshness
+- manual-review turnaround time
 
-The 20% markup is a policy setting and may later become configurable; this first implementation keeps it fixed at 20% by decision.
+The 20% markup is a policy setting for automated parcel services and may later become configurable.
 
 ## Developer module
 Primary implementation:
 - `src/server/deliveryFulfilmentEngine.ts`
 - `src/server/deliveryProductFacts.ts`
+- `src/server/deliveryReviewQueue.ts`
+- `src/server/staffSession.ts`
 - `src/services/deliveryClient.ts`
 - `src/services/checkoutFulfilmentClient.ts`
+- `src/services/deliveryReviewClient.ts`
 - `api/delivery-quote.ts`
 - `api/checkout-fulfilment.ts`
+- `api/delivery-reviews.ts`
+- `api/staff-session.ts`
 - `api/commercial-credit-checkout.ts`
 - `src/pages/CheckoutPage.tsx`
+- `src/pages/DeliveryReviewPage.tsx`
 - `src/styles/delivery-fulfilment.css`
+- `src/styles/delivery-review.css`
 
 Engineering rules:
 - Provider rates belong in configuration/data structures, never scattered through checkout components.
@@ -144,9 +181,10 @@ Engineering rules:
 - Manual review is a valid routing decision, not an error condition.
 - Never create an order with an estimated delivery charge that has not been revalidated and persisted into the authoritative checkout quote.
 - Every order-creation endpoint must enforce fulfilment binding server-side; UI guards are not security controls.
+- Manual delivery review records must outlive short merchandise quotes; pricing a logistics review must never extend stale merchandise pricing.
 
 ## Next implementation stages
-1. Build the staff delivery/manual-review work queue and controlled final-pricing action.
+1. Reattach a priced manual-delivery review to a newly revalidated merchandise quote.
 2. Add saved customer addresses/job-site records.
 3. Add authoritative route/zone intelligence so metro/rural/remote classification does not depend on customer selection.
 4. Add courier collection-point/branch selection for branch-to-branch services.
