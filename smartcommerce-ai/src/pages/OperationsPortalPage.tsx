@@ -8,6 +8,7 @@ import OperationsWorkspace, { type OperationsSection } from "../components/opera
 import PointOfSaleWorkspace from "../components/operations/PointOfSaleWorkspace";
 import SupplyChainBoard from "../components/operations/SupplyChainBoard";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
+import TransactionServicePanel from "../components/operations/TransactionServicePanel";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
 import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
 import {
@@ -206,7 +207,7 @@ export default function OperationsPortalPage() {
         ) : section === "intelligence" ? (
           <ERPIntelligenceBoard />
         ) : section === "pos" ? (
-          <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /></>
+          <><PointOfSaleWorkspace staff={staff} /><CashDrawerLifecyclePanel staff={staff} /><TransactionServicePanel staff={staff} /></>
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
