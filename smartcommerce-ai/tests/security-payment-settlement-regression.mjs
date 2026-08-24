@@ -11,8 +11,10 @@ const reconciliationUi = fs.readFileSync(path.join(root, "src", "pages", "Paymen
 const commerceClient = fs.readFileSync(path.join(root, "src", "lib", "customerCommerce.ts"), "utf8");
 const paymentClient = fs.readFileSync(path.join(root, "src", "services", "paymentAttemptClient.ts"), "utf8");
 const paymentPanel = fs.readFileSync(path.join(root, "src", "components", "checkout", "PaymentMethodPanel.tsx"), "utf8");
+const paymentPrincipal = fs.readFileSync(path.join(root, "src", "server", "paymentPrincipal.ts"), "utf8");
+const guestIdentity = fs.readFileSync(path.join(root, "src", "server", "guestCheckoutIdentity.ts"), "utf8");
 
-const sources = `${capabilities}\n${attemptsApi}\n${reconciliationApi}\n${settlement}\n${reconciliation}\n${reconciliationUi}\n${commerceClient}\n${paymentClient}\n${paymentPanel}`;
+const sources = `${capabilities}\n${attemptsApi}\n${reconciliationApi}\n${settlement}\n${reconciliation}\n${reconciliationUi}\n${commerceClient}\n${paymentClient}\n${paymentPanel}\n${paymentPrincipal}\n${guestIdentity}`;
 const checks = [
   ["durable payment attempt table exists", /payment_attempts/],
   ["payment attempts use stable idempotency", /UNIQUE[\s\S]*(quote_id|idempotency)|ON CONFLICT|createHash/],
@@ -20,8 +22,10 @@ const checks = [
   ["browser redirect is never proof of payment", /browserRedirectIsProofOfPayment\s*:\s*false/],
   ["paid requires verified provider evidence", /paidRequiresVerifiedProviderEvidence\s*:\s*true/],
   ["confirmation sources are constrained", /verified_webhook[\s\S]*server_side_provider_query[\s\S]*verified_pos_confirmation/],
-  ["payment preparation requires authentication", /AUTH_REQUIRED[\s\S]*online payment/],
-  ["quote ownership is server checked", /checkout_quotes[\s\S]*customer_id=\$\{customerId\}/],
+  ["payment preparation requires server payment identity", /PAYMENT_IDENTITY_REQUIRED[\s\S]*customer or guest checkout session/],
+  ["customer quote ownership is server checked", /checkout_quotes[\s\S]*customer_id=\$\{principal\.customerId\}/],
+  ["guest quote ownership is server checked", /getGuestQuoteForSession\([\s\S]*guestSessionId:principal\.guestSessionId[\s\S]*quoteId/],
+  ["guest payment identity is opaque and server derived", /GUEST_CHECKOUT_COOKIE[\s\S]*guestSessionFromToken[\s\S]*guestPaymentSubject/],
   ["expired quotes cannot start payment", /CHECKOUT_QUOTE_EXPIRED/],
   ["fulfilment must be bound before payment", /FULFILMENT_NOT_FINALIZED/],
   ["authoritative total is read server side", /total_minor/],
@@ -32,7 +36,7 @@ const checks = [
   ["finance reconciliation route is staff protected", /PAYMENT_RECONCILIATION_FORBIDDEN/],
   ["finance UI explicitly states redirects are not payment proof", /redirects never count as payment proof/i],
   ["verified checkout quote pointer is session scoped", /smartcommerce_verified_quote_id[\s\S]*sessionStorage|sessionStorage[\s\S]*smartcommerce_verified_quote_id/],
-  ["guest checkout payment remains blocked", /quoteContext\.mode === "guest"[\s\S]*guest-payment identity contract/],
+  ["guest checkout payment remains UI blocked until guest fulfilment is complete", /quoteContext\.mode === "guest"[\s\S]*guest-payment identity contract/],
   ["checkout prepares server payment attempt", /prepareStandardPaymentAttempt\([\s\S]*quoteId:[\s\S]*paymentMethod/],
   ["provider navigation only occurs when launch is ready", /launch\?\.ready[\s\S]*launch\.url[\s\S]*window\.location\.assign/],
   ["payment preparation errors state no charge attempted", /No charge was attempted/i],
