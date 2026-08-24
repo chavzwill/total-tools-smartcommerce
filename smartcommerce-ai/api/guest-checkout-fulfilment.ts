@@ -223,7 +223,7 @@ export default async function handler(request: any, response: any) {
       return send(response, 429, { error: { code: "RATE_LIMITED", message: "Too many fulfilment requests. Please wait and try again.", retryAfterSeconds: retryAfter } });
     }
     if (Number(error?.status) === 413) return send(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "The request is too large." } });
-    if (["DELIVERY_ADDRESS_INCOMPLETE"].includes(error?.message)) return send(response, 400, { error: { code: error.message, message: "Complete the Jamaican delivery address before requesting courier pricing." } });
+    if (error?.message === "DELIVERY_ADDRESS_INCOMPLETE") return send(response, 400, { error: { code: "DELIVERY_ADDRESS_INCOMPLETE", message: "Complete the Jamaican delivery address before requesting courier pricing." } });
     console.error("guest_checkout_fulfilment_api_error", { code: error instanceof Error ? error.message : "unknown" });
     return send(response, 503, { error: { code: "GUEST_CHECKOUT_FULFILMENT_UNAVAILABLE", message: "Guest checkout fulfilment is temporarily unavailable.", retryable: true } });
   }
