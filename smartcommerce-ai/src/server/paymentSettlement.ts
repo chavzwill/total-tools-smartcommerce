@@ -75,7 +75,7 @@ export async function getPaymentAttemptForCustomer(input: { customerId: string; 
   await ensurePaymentSettlementSchema();
   const rows = await sql()`
     SELECT id, quote_id, payment_method, provider, currency, amount_minor, status,
-           provider_reference, confirmation_source, confirmed_at, created_at, updated_at
+           provider_payment_id, provider_reference, confirmation_source, confirmed_at, created_at, updated_at
     FROM payment_attempts
     WHERE id=${input.attemptId} AND customer_id=${input.customerId}
     LIMIT 1
