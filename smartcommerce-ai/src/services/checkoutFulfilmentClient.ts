@@ -83,7 +83,8 @@ export async function bindCheckoutFulfilment(input: {
   requestedSpeed?: "standard" | "same_day";
   address?: CheckoutDeliveryAddress;
 }) {
-  const response = await fetch("/api/checkout-fulfilment", {
+  const endpoint = input.quoteId.startsWith("gqte_") ? "/api/guest-checkout-fulfilment" : "/api/checkout-fulfilment";
+  const response = await fetch(endpoint, {
     method: "POST",
     credentials: "same-origin",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
