@@ -104,7 +104,7 @@ async function posGet(path: string) {
   const headers: Record<string, string> = { Accept: "application/json" };
   const key = process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim();
   if (key) headers["X-API-Key"] = key;
-  const fetcher = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 2_000_000 });
+  const fetcher = createHardenedServerFetch({ timeoutMs: 9000, maxResponseBytes: 3_000_000 });
   const response = await fetcher(url, { headers });
   if (!response.ok) throw new Error(`POS_IMPORT_${response.status}`);
   return response.json();
@@ -132,21 +132,30 @@ async function resolveLink(customer: Customer) {
   return rows[0];
 }
 
+function repairLabel(row: Row) {
+  const equipment = row.equipment || {};
+  return [equipment.brand, equipment.model].filter(Boolean).join(" ") || equipment.type || row.item_label || row.equipment_description || "Service repair";
+}
+
 async function importRepairs(accountId: string, posCustomerId: string) {
-  const repairs = await posGet(`work-orders?customer_id=${encodeURIComponent(posCustomerId)}&limit=200`);
-  for (const row of Array.isArray(repairs) ? repairs : []) {
-    const workOrderId = String(row.id);
+  const portal = await posGet(`customer-repair-portal/customers/${encodeURIComponent(posCustomerId)}`);
+  const repairs = Array.isArray(portal?.repairs) ? portal.repairs : [];
+  for (const row of repairs) {
+    const workOrderId = String(row.work_order_id);
+    const equipment = row.equipment || null;
+    const description = equipment?.reported_issue || row.description || row.problem_description || row.customer_complaint || null;
     await sql()`INSERT INTO customer_repair_imports(id,customer_account_id,pos_customer_id,work_order_id,wo_number,status,item_label,description,branch_name,employee_name,assessment_fee,estimate_labor,estimate_consumables,deposit_amount,parts_total,pickup_due_date,source_created_at,source_completed_at,payload_json,synced_at)
-      VALUES(${`cri_${randomBytes(16).toString("hex")}`},${accountId},${posCustomerId},${workOrderId},${row.wo_number || null},${String(row.status || "unknown")},${row.item_label || row.item_description || row.equipment_description || null},${row.description || row.problem_description || row.customer_complaint || null},${row.branch_name || null},${row.employee_name || null},${Number(row.assessment_fee || 0)},${Number(row.estimate_labor || 0)},${Number(row.estimate_consumables || 0)},${Number(row.deposit_amount || 0)},${Number(row.parts_total || 0)},${row.pickup_due_date || null},${row.created_at || null},${row.completed_at || null},${JSON.stringify(row)}::jsonb,NOW())
+      VALUES(${`cri_${randomBytes(16).toString("hex")}`},${accountId},${posCustomerId},${workOrderId},${row.wo_number || null},${String(row.status || "unknown")},${repairLabel(row)},${description},${row.branch_name || null},${row.employee_name || null},${Number(row.assessment_fee || 0)},${Number(row.estimate_labor || 0)},${Number(row.estimate_consumables || 0)},${Number(row.deposit_amount || 0)},${Number(row.parts_total || 0)},${row.pickup_due_date || null},${row.created_at || null},${row.completed_at || null},${JSON.stringify(row)}::jsonb,NOW())
       ON CONFLICT(customer_account_id,work_order_id) DO UPDATE SET wo_number=EXCLUDED.wo_number,status=EXCLUDED.status,item_label=EXCLUDED.item_label,description=EXCLUDED.description,branch_name=EXCLUDED.branch_name,employee_name=EXCLUDED.employee_name,assessment_fee=EXCLUDED.assessment_fee,estimate_labor=EXCLUDED.estimate_labor,estimate_consumables=EXCLUDED.estimate_consumables,deposit_amount=EXCLUDED.deposit_amount,parts_total=EXCLUDED.parts_total,pickup_due_date=EXCLUDED.pickup_due_date,source_created_at=EXCLUDED.source_created_at,source_completed_at=EXCLUDED.source_completed_at,payload_json=EXCLUDED.payload_json,synced_at=NOW()`;
   }
   await sql()`UPDATE customer_pos_links SET last_sync_at=NOW() WHERE customer_account_id=${accountId}`;
 }
 
 async function accountRepairs(accountId: string) {
-  return await sql()`SELECT id,work_order_id,wo_number,status,item_label,description,branch_name,employee_name,assessment_fee,estimate_labor,estimate_consumables,deposit_amount,parts_total,pickup_due_date,source_created_at,source_completed_at,synced_at
+  const rows = await sql()`SELECT id,work_order_id,wo_number,status,item_label,description,branch_name,employee_name,assessment_fee,estimate_labor,estimate_consumables,deposit_amount,parts_total,pickup_due_date,source_created_at,source_completed_at,payload_json,synced_at
     FROM customer_repair_imports WHERE customer_account_id=${accountId}
     ORDER BY COALESCE(source_created_at,synced_at) DESC` as Row[];
+  return rows.map((row) => ({ ...row, ...(row.payload_json || {}), payload_json: undefined, synced_at: row.synced_at }));
 }
 
 export default async function handler(req: any, res: any) {
