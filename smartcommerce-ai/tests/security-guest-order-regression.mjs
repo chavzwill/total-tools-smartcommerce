@@ -25,7 +25,7 @@ guard("order currency must match payment attempt", /GUEST_ORDER_CURRENCY_MISMATC
 guard("verified provider evidence triggers guest finalization", /confirmPaymentFromProvider[\s\S]*finalizeGuestOrderForConfirmedAttempt/);
 guard("guest finalization failure does not falsify payment state", /guest_order_finalization_deferred/);
 guard("receipt access tokens are stored hashed", /token_hash TEXT NOT NULL UNIQUE[\s\S]*hash\(token\)/);
-guard("receipt access tokens expire", /expires_at TIMESTAMPTZ NOT NULL[\s\S]*ACCESS_TTL_DAYS\s*=\s*30/);
+guard("receipt access tokens expire", /ACCESS_TTL_DAYS\s*=\s*30[\s\S]*expires_at TIMESTAMPTZ NOT NULL|expires_at TIMESTAMPTZ NOT NULL[\s\S]*ACCESS_TTL_DAYS\s*=\s*30/);
 guard("session receipt access is owner checked", /getGuestOrderForSession[\s\S]*guestSessionId/);
 guard("bearer receipt access validates order and token", /getGuestOrderByAccessToken[\s\S]*orderId[\s\S]*token_hash/);
 guard("guest order API blocks cross-origin writes", /if \(!sameOrigin\(request\)\) return send\(response, 403/);
