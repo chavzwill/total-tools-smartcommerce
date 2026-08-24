@@ -43,6 +43,7 @@ export interface PaymentProviderAdapter {
   launch(input: PaymentProviderLaunchInput): Promise<PaymentProviderLaunchResult>;
   verifyWebhook(input: { rawBody: Buffer; headers: Record<string, string | string[] | undefined> }): Promise<PaymentProviderVerificationResult>;
   query(input: { attemptId: string; providerPaymentId: string }): Promise<PaymentProviderVerificationResult>;
+  completeReturn?(input: { attemptId: string; providerPaymentId: string; query: Record<string, string | string[] | undefined> }): Promise<PaymentProviderVerificationResult>;
 }
 
 function unavailableAdapter(key: PaymentProviderKey, supports: readonly PaymentMethodId[]): PaymentProviderAdapter {
@@ -55,6 +56,7 @@ function unavailableAdapter(key: PaymentProviderKey, supports: readonly PaymentM
     launch: unavailable,
     verifyWebhook: unavailable,
     query: unavailable,
+    completeReturn: unavailable,
   };
 }
 
