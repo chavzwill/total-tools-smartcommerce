@@ -187,12 +187,40 @@ async function query(input: { attemptId: string; providerPaymentId: string }): P
   return evidence;
 }
 
+async function completeReturn(input: { attemptId: string; providerPaymentId: string; query: Record<string, string | string[] | undefined> }): Promise<PaymentProviderVerificationResult> {
+  assertConfigured();
+  const tokenParam = Array.isArray(input.query.token) ? input.query.token[0] : input.query.token;
+  if (!tokenParam || tokenParam !== input.providerPaymentId) throw new Error("PAYMENT_PROVIDER_TRANSACTION_MISMATCH");
+
+  const before = await getOrder(input.providerPaymentId);
+  const purchaseUnit = Array.isArray(before?.purchase_units) ? before.purchase_units[0] : undefined;
+  if (String(purchaseUnit?.custom_id || "") !== input.attemptId) throw new Error("PAYMENT_PROVIDER_TRANSACTION_MISMATCH");
+  if (before?.status === "COMPLETED") return evidenceFromOrder(before, "server_side_provider_query");
+  if (before?.status !== "APPROVED") return evidenceFromOrder(before, "server_side_provider_query");
+
+  const token = await accessToken();
+  await paypalFetch(`/v2/checkout/orders/${encodeURIComponent(input.providerPaymentId)}/capture`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Prefer: "return=representation",
+      "PayPal-Request-Id": `${input.attemptId}-capture`,
+    },
+    body: "{}",
+  });
+  const after = await getOrder(input.providerPaymentId);
+  return evidenceFromOrder(after, "server_side_provider_query");
+}
+
 export const paypalPaymentAdapter: PaymentProviderAdapter = {
   key: "paypal",
   supports: ["paypal"],
   launch,
   verifyWebhook,
   query,
+  completeReturn,
 };
 
 export function paypalSupportsCurrency(currency: string) {
