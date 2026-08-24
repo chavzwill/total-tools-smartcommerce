@@ -135,6 +135,28 @@ export async function getGuestQuoteForSession(input: { guestSessionId: string; q
   return rows[0] || null;
 }
 
+export async function updateGuestQuoteFulfilment(input: {
+  guestSessionId: string;
+  quoteId: string;
+  deliveryMinor: number;
+  totalMinor: number;
+  snapshot: unknown;
+}) {
+  await ensureGuestCheckoutSchema();
+  const rows = await sql()`
+    UPDATE guest_checkout_quotes
+    SET delivery_minor=${Math.max(0, Math.trunc(input.deliveryMinor))},
+        total_minor=${Math.max(0, Math.trunc(input.totalMinor))},
+        snapshot=${JSON.stringify(input.snapshot)}::jsonb,
+        updated_at=NOW()
+    WHERE id=${input.quoteId}
+      AND guest_session_id=${input.guestSessionId}
+      AND expires_at > NOW()
+    RETURNING id, currency, delivery_minor, total_minor, snapshot, expires_at
+  ` as unknown as Array<any>;
+  return rows[0] || null;
+}
+
 export function guestPaymentSubject(guestSessionId: string) {
   return `guest:${guestSessionId}`;
 }
