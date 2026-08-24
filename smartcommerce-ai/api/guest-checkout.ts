@@ -142,8 +142,7 @@ export default async function handler(request: any, response: any) {
     const cookies = parseCookie(firstHeader(request.headers?.cookie));
     const guestSession = await getOrCreateGuestSession(cookies[GUEST_CHECKOUT_COOKIE]);
     if (guestSession.created) {
-      const forwardedProto = firstHeader(request.headers?.["x-forwarded-proto"]);
-      response.setHeader("Set-Cookie", guestCheckoutCookie(guestSession.token, forwardedProto !== "http"));
+      response.setHeader("Set-Cookie", guestCheckoutCookie(guestSession.token));
     }
 
     const input = await readJsonBody<{ items?: GuestItemInput[] }>(request);
