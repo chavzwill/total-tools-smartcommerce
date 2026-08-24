@@ -35,6 +35,7 @@ const ReturnOperationsPage = lazy(() => import("./pages/ReturnOperationsPage"));
 const CustomerOrdersPage = lazy(() => import("./pages/CustomerOrdersPage"));
 const RefundReconciliationPage = lazy(() => import("./pages/RefundReconciliationPage"));
 const CommercialCreditReconciliationPage = lazy(() => import("./pages/CommercialCreditReconciliationPage"));
+const PaymentReconciliationPage = lazy(() => import("./pages/PaymentReconciliationPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -147,6 +148,7 @@ export default function App() {
   else if (path === "/operations/returns") page = <ReturnOperationsPage />;
   else if (path === "/operations/refund-reconciliation") page = <RefundReconciliationPage />;
   else if (path === "/operations/commercial-credit-reconciliation") page = <CommercialCreditReconciliationPage />;
+  else if (path === "/operations/payment-reconciliation") page = <PaymentReconciliationPage />;
   else if (path === "/track-order") page = <OrderTrackingPage orderId={route.query.get("ref") || ""} />;
   else if (path === "/order-success") page = <ConfirmationPage type="order" reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
   else if (path === "/rental-confirmation") page = <ConfirmationPage type="rental" item={route.query.get("item") || ""} reference={route.query.get("ref") || undefined} status={route.query.get("status") || undefined} />;
