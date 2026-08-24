@@ -158,11 +158,9 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
   }, [capabilities]);
 
   const methodsFor = (group: PaymentMethodGroup) => resolvedMethods.filter((method) => method.group === group);
-  const contextBlock = quoteContext.mode === "guest"
-    ? "Online payment for guest checkout is not enabled until the secure guest-payment identity contract is complete."
-    : !quoteContext.quoteId
-      ? "A verified checkout quote is required before payment can start."
-      : undefined;
+  const contextBlock = !quoteContext.quoteId
+    ? "A verified checkout quote is required before payment can start."
+    : undefined;
 
   async function selectMethod(method: PaymentMethodId) {
     if (contextBlock || busyMethod) return;
