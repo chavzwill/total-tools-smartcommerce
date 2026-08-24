@@ -8,8 +8,11 @@ const reconciliationApi = fs.readFileSync(path.join(root, "api", "payment-reconc
 const settlement = fs.readFileSync(path.join(root, "src", "server", "paymentSettlement.ts"), "utf8");
 const reconciliation = fs.readFileSync(path.join(root, "src", "server", "paymentReconciliation.ts"), "utf8");
 const reconciliationUi = fs.readFileSync(path.join(root, "src", "pages", "PaymentReconciliationPage.tsx"), "utf8");
+const commerceClient = fs.readFileSync(path.join(root, "src", "lib", "customerCommerce.ts"), "utf8");
+const paymentClient = fs.readFileSync(path.join(root, "src", "services", "paymentAttemptClient.ts"), "utf8");
+const paymentPanel = fs.readFileSync(path.join(root, "src", "components", "checkout", "PaymentMethodPanel.tsx"), "utf8");
 
-const sources = `${capabilities}\n${attemptsApi}\n${reconciliationApi}\n${settlement}\n${reconciliation}\n${reconciliationUi}`;
+const sources = `${capabilities}\n${attemptsApi}\n${reconciliationApi}\n${settlement}\n${reconciliation}\n${reconciliationUi}\n${commerceClient}\n${paymentClient}\n${paymentPanel}`;
 const checks = [
   ["durable payment attempt table exists", /payment_attempts/],
   ["payment attempts use stable idempotency", /UNIQUE[\s\S]*(quote_id|idempotency)|ON CONFLICT|createHash/],
@@ -28,6 +31,11 @@ const checks = [
   ["confirmed paid status requires confirmation source", /status === "confirmed"[\s\S]*confirmation_source/],
   ["finance reconciliation route is staff protected", /PAYMENT_RECONCILIATION_FORBIDDEN/],
   ["finance UI explicitly states redirects are not payment proof", /redirects never count as payment proof/i],
+  ["verified checkout quote pointer is session scoped", /sessionStorage[\s\S]*smartcommerce_verified_quote_id/],
+  ["guest checkout payment remains blocked", /quoteContext\.mode === "guest"[\s\S]*guest-payment identity contract/],
+  ["checkout prepares server payment attempt", /prepareStandardPaymentAttempt\([\s\S]*quoteId:[\s\S]*paymentMethod/],
+  ["provider navigation only occurs when launch is ready", /launch\?\.ready[\s\S]*launch\.url[\s\S]*window\.location\.assign/],
+  ["payment preparation errors state no charge attempted", /No charge was attempted/i],
 ];
 
 const failures = checks.filter(([, pattern]) => !pattern.test(sources));
