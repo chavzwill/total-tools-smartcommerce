@@ -1,4 +1,5 @@
 import type { PaymentMethodId } from "./paymentSettlement.js";
+import { paypalPaymentAdapter } from "./paypalPaymentAdapter.js";
 
 export type PaymentProviderKey = "primary_acquirer" | "paypal" | "store_pos";
 export type PaymentProviderEvidenceSource = "verified_webhook" | "server_side_provider_query" | "verified_pos_confirmation";
@@ -59,7 +60,7 @@ function unavailableAdapter(key: PaymentProviderKey, supports: readonly PaymentM
 
 const adapters: Record<PaymentProviderKey, PaymentProviderAdapter> = {
   primary_acquirer: unavailableAdapter("primary_acquirer", ["apple-pay", "google-pay", "click-to-pay", "card"]),
-  paypal: unavailableAdapter("paypal", ["paypal"]),
+  paypal: paypalPaymentAdapter,
   store_pos: unavailableAdapter("store_pos", ["pay-in-store"]),
 };
 
