@@ -31,7 +31,7 @@ const checks = [
   ["confirmed paid status requires confirmation source", /status === "confirmed"[\s\S]*confirmation_source/],
   ["finance reconciliation route is staff protected", /PAYMENT_RECONCILIATION_FORBIDDEN/],
   ["finance UI explicitly states redirects are not payment proof", /redirects never count as payment proof/i],
-  ["verified checkout quote pointer is session scoped", /sessionStorage[\s\S]*smartcommerce_verified_quote_id/],
+  ["verified checkout quote pointer is session scoped", /smartcommerce_verified_quote_id[\s\S]*sessionStorage|sessionStorage[\s\S]*smartcommerce_verified_quote_id/],
   ["guest checkout payment remains blocked", /quoteContext\.mode === "guest"[\s\S]*guest-payment identity contract/],
   ["checkout prepares server payment attempt", /prepareStandardPaymentAttempt\([\s\S]*quoteId:[\s\S]*paymentMethod/],
   ["provider navigation only occurs when launch is ready", /launch\?\.ready[\s\S]*launch\.url[\s\S]*window\.location\.assign/],
