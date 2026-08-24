@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { enforceDurableRateLimit, requestIp } from "../src/server/securityInfrastructure.js";
 import { getPaymentAttemptForCustomer, markPaymentProviderPending, preparePaymentAttempt, type PaymentMethodId } from "../src/server/paymentSettlement.js";
-import { assertProviderSupportsMethod, getPaymentProviderAdapter } from "../src/server/paymentProviderAdapters.js";
+import { assertProviderSupportsMethod, getPaymentProviderAdapter, isPaymentProviderAdapterImplemented } from "../src/server/paymentProviderAdapters.js";
 import { paypalSupportsCurrency } from "../src/server/paypalPaymentAdapter.js";
 
 const COOKIE_NAME = "sc_session";
@@ -52,9 +52,9 @@ async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
 }
 function configured(value: string | undefined) { return Boolean(value && value.trim()); }
 function methodCapability(method: PaymentMethodId) {
-  const primaryReady = configured(process.env.PAYMENT_PRIMARY_PROVIDER) && configured(process.env.PAYMENT_WEBHOOK_SECRET);
-  const paypalReady = configured(process.env.PAYPAL_CLIENT_ID) && configured(process.env.PAYPAL_CLIENT_SECRET) && configured(process.env.PAYPAL_WEBHOOK_ID);
-  const storeReady = configured(process.env.STORE_POS_PAYMENT_CONFIRMATION_URL) && configured(process.env.STORE_POS_PAYMENT_CONFIRMATION_SECRET);
+  const primaryReady = configured(process.env.PAYMENT_PRIMARY_PROVIDER) && configured(process.env.PAYMENT_WEBHOOK_SECRET) && isPaymentProviderAdapterImplemented("primary_acquirer");
+  const paypalReady = configured(process.env.PAYPAL_CLIENT_ID) && configured(process.env.PAYPAL_CLIENT_SECRET) && configured(process.env.PAYPAL_WEBHOOK_ID) && isPaymentProviderAdapterImplemented("paypal");
+  const storeReady = configured(process.env.STORE_POS_PAYMENT_CONFIRMATION_URL) && configured(process.env.STORE_POS_PAYMENT_CONFIRMATION_SECRET) && isPaymentProviderAdapterImplemented("store_pos");
   const flag = (name:string) => process.env[name] === "true";
   if (method === "paypal") return { enabled: paypalReady && flag("PAYMENT_PAYPAL_ENABLED"), provider: "paypal" };
   if (method === "pay-in-store") return { enabled: storeReady && flag("PAYMENT_PAY_IN_STORE_ENABLED"), provider: "store_pos" };
@@ -97,7 +97,7 @@ export default async function handler(request:any,response:any) {
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return send(response,409,{error:{code:"INVALID_PAYMENT_AMOUNT",message:"This order does not have a valid payable total."}});
 
     const capability = methodCapability(paymentMethod);
-    if (!capability.enabled) return send(response,409,{error:{code:"PAYMENT_METHOD_UNAVAILABLE",message:"That payment method is not enabled for this merchant environment."}});
+    if (!capability.enabled) return send(response,409,{error:{code:"PAYMENT_METHOD_UNAVAILABLE",message:"That payment method is not executable for this merchant environment."}});
     if (paymentMethod === "paypal" && !paypalSupportsCurrency(currency)) {
       return send(response,409,{error:{code:"PAYMENT_CURRENCY_UNSUPPORTED",message:`PayPal cannot settle this ${currency} quote directly. Choose another payment method.`}});
     }
@@ -109,7 +109,7 @@ export default async function handler(request:any,response:any) {
     }
 
     const adapter = getPaymentProviderAdapter(capability.provider);
-    if (!adapter) return send(response,503,{error:{code:"PAYMENT_PROVIDER_UNAVAILABLE",message:"The selected payment provider is unavailable."}});
+    if (!adapter || !adapter.implemented) return send(response,503,{error:{code:"PAYMENT_PROVIDER_UNAVAILABLE",message:"The selected payment provider is unavailable."}});
     assertProviderSupportsMethod(adapter, paymentMethod);
     const origin = publicOrigin(request);
     const returnUrl = `${origin}/api/payment-provider-return?provider=${encodeURIComponent(capability.provider)}&attemptId=${encodeURIComponent(attempt.id)}`;
