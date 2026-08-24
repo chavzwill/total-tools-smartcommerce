@@ -1,11 +1,13 @@
-import { Building2, CreditCard, Landmark, Loader2, Smartphone, Store } from "lucide-react";
+import { Building2, CreditCard, Landmark, Loader2, ShieldCheck, Smartphone, Store } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { currentVerifiedQuoteContext } from "../../lib/customerCommerce";
 import {
   paymentMethods,
   type PaymentMethodDefinition,
   type PaymentMethodGroup,
   type PaymentMethodId,
 } from "../../payments/paymentMethods";
+import { prepareStandardPaymentAttempt, type PaymentAttemptResponse } from "../../services/paymentAttemptClient";
 
 type ServerCapability = {
   id: PaymentMethodId;
@@ -39,43 +41,46 @@ function MethodIcon({ method }: { method: PaymentMethodDefinition }) {
   return <Smartphone size={20} aria-hidden="true" />;
 }
 
-function MethodRow({ method, onSelect }: { method: ResolvedMethod; onSelect?: (method: PaymentMethodId) => void }) {
-  const adapterReady = Boolean(onSelect);
-  const actionable = method.providerEnabled && adapterReady;
-  const status = actionable ? "Available" : method.providerEnabled ? "Provider ready" : "Setup required";
-  const explanation = method.providerEnabled
-    ? adapterReady
-      ? undefined
-      : "Merchant capability is configured, but the SmartCommerce checkout adapter is not connected yet."
-    : method.providerReason || "Requires merchant payment-provider configuration.";
+function MethodRow({ method, disabled, busy, explanation, onSelect }: {
+  method: ResolvedMethod;
+  disabled: boolean;
+  busy: boolean;
+  explanation?: string;
+  onSelect: (method: PaymentMethodId) => void;
+}) {
+  const actionable = method.providerEnabled && !disabled;
+  const status = busy ? "Preparing…" : actionable ? "Available" : method.providerEnabled ? "Unavailable here" : "Setup required";
+  const reason = explanation || (!method.providerEnabled ? method.providerReason || "Requires merchant payment-provider configuration." : undefined);
 
   return (
     <button
       type="button"
       className="sc-payment-method"
-      disabled={!actionable}
-      aria-disabled={!actionable}
-      title={explanation}
-      onClick={actionable ? () => onSelect?.(method.id) : undefined}
+      disabled={!actionable || busy}
+      aria-disabled={!actionable || busy}
+      title={reason}
+      onClick={actionable && !busy ? () => onSelect(method.id) : undefined}
     >
       <span className="sc-payment-method__icon"><MethodIcon method={method} /></span>
       <span className="sc-payment-method__copy">
         <strong>{method.label}</strong>
         <small>{method.description}</small>
-        {!actionable && explanation ? <em>{explanation}</em> : null}
+        {!actionable && reason ? <em>{reason}</em> : null}
       </span>
       <span className={`sc-payment-method__status${actionable ? " is-ready" : " is-pending"}`}>
-        {status}
+        {busy ? <><Loader2 size={14} aria-hidden="true" /> Preparing</> : status}
       </span>
     </button>
   );
 }
 
-function Section({ title, subtitle, methods, onSelect }: {
+function Section({ title, subtitle, methods, disabledReason, busyMethod, onSelect }: {
   title: string;
   subtitle: string;
   methods: readonly ResolvedMethod[];
-  onSelect?: (method: PaymentMethodId) => void;
+  disabledReason?: string;
+  busyMethod?: PaymentMethodId | null;
+  onSelect: (method: PaymentMethodId) => void;
 }) {
   if (!methods.length) return null;
   return (
@@ -84,7 +89,16 @@ function Section({ title, subtitle, methods, onSelect }: {
         <div><strong>{title}</strong><span>{subtitle}</span></div>
       </div>
       <div className="sc-payment-group__methods">
-        {methods.map((method) => <MethodRow key={method.id} method={method} onSelect={onSelect} />)}
+        {methods.map((method) => (
+          <MethodRow
+            key={method.id}
+            method={method}
+            disabled={Boolean(disabledReason)}
+            busy={busyMethod === method.id}
+            explanation={method.providerEnabled ? disabledReason : undefined}
+            onSelect={onSelect}
+          />
+        ))}
       </div>
     </section>
   );
@@ -93,6 +107,10 @@ function Section({ title, subtitle, methods, onSelect }: {
 export default function PaymentMethodPanel({ onSelect }: Props) {
   const [capabilities, setCapabilities] = useState<ServerCapability[] | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
+  const [busyMethod, setBusyMethod] = useState<PaymentMethodId | null>(null);
+  const [paymentError, setPaymentError] = useState("");
+  const [prepared, setPrepared] = useState<PaymentAttemptResponse | null>(null);
+  const quoteContext = currentVerifiedQuoteContext();
 
   useEffect(() => {
     let active = true;
@@ -137,6 +155,30 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
   }, [capabilities]);
 
   const methodsFor = (group: PaymentMethodGroup) => resolvedMethods.filter((method) => method.group === group);
+  const contextBlock = quoteContext.mode === "guest"
+    ? "Online payment for guest checkout is not enabled until the secure guest-payment identity contract is complete."
+    : !quoteContext.quoteId
+      ? "A verified checkout quote is required before payment can start."
+      : undefined;
+
+  async function selectMethod(method: PaymentMethodId) {
+    if (contextBlock || busyMethod) return;
+    setBusyMethod(method);
+    setPaymentError("");
+    setPrepared(null);
+    try {
+      const result = await prepareStandardPaymentAttempt({ quoteId: quoteContext.quoteId, paymentMethod: method });
+      setPrepared(result);
+      onSelect?.(method);
+      if (result.launch?.ready && result.launch.url) {
+        window.location.assign(result.launch.url);
+      }
+    } catch (error: any) {
+      setPaymentError(error?.message || "Payment could not be prepared. No charge was attempted.");
+    } finally {
+      setBusyMethod(null);
+    }
+  }
 
   return (
     <div className="sc-payment-panel" aria-label="Payment methods">
@@ -148,24 +190,32 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
 
       {capabilities === null ? <div className="sc-payment-panel__loading" role="status"><Loader2 size={17} aria-hidden="true" /> Checking payment availability…</div> : null}
       {capabilityError ? <p className="sc-payment-panel__error" role="alert">{capabilityError}</p> : null}
+      {paymentError ? <p className="sc-payment-panel__error" role="alert">{paymentError}</p> : null}
+      {prepared ? <div className="sc-payment-panel__integrity" role="status"><ShieldCheck size={19} aria-hidden="true" /><div><strong>Payment attempt prepared safely.</strong><span>{prepared.launch?.ready ? "Opening the verified provider checkout. Payment is still pending until SmartCommerce receives verified settlement evidence." : prepared.launch?.reason || "No charge was attempted because the provider launch adapter is not connected."}</span></div></div> : null}
 
       <Section
         title="Express checkout"
         subtitle="Wallet and recognised-card methods intended to settle through the primary acquirer."
         methods={methodsFor("express")}
-        onSelect={onSelect}
+        disabledReason={contextBlock}
+        busyMethod={busyMethod}
+        onSelect={selectMethod}
       />
       <Section
         title="Other online methods"
         subtitle="Additional payment rails that may reconcile separately."
         methods={[...methodsFor("wallet"), ...methodsFor("standard")]}
-        onSelect={onSelect}
+        disabledReason={contextBlock}
+        busyMethod={busyMethod}
+        onSelect={selectMethod}
       />
       <Section
         title="Pay at branch"
         subtitle="Reserve online and settle through the store POS when operationally enabled."
         methods={methodsFor("offline")}
-        onSelect={onSelect}
+        disabledReason={contextBlock}
+        busyMethod={busyMethod}
+        onSelect={selectMethod}
       />
 
       <div className="sc-payment-panel__integrity">
