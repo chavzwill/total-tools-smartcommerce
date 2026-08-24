@@ -6,6 +6,7 @@ import {
 } from "./paymentSettlement.js";
 import type { PaymentProviderKey, PaymentProviderVerificationResult } from "./paymentProviderAdapters.js";
 import { finalizeGuestOrderForConfirmedAttempt } from "./guestOrderStore.js";
+import { ensureOperationalOrderForConfirmedAttempt } from "./operationalOrderHandoff.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
 function sql() {
@@ -25,6 +26,19 @@ async function authoritativeAttempt(attemptId: string) {
     LIMIT 1
   ` as unknown as Array<any>;
   return rows[0] || null;
+}
+
+async function finalizeVerifiedPayment(attemptId: string) {
+  try {
+    await ensureOperationalOrderForConfirmedAttempt(attemptId);
+  } catch (error) {
+    console.error("operational_order_handoff_deferred", { code: error instanceof Error ? error.message : "unknown" });
+  }
+  try {
+    await finalizeGuestOrderForConfirmedAttempt(attemptId);
+  } catch (error) {
+    console.error("guest_order_finalization_deferred", { code: error instanceof Error ? error.message : "unknown" });
+  }
 }
 
 export async function applyVerifiedProviderEvidence(provider: PaymentProviderKey, evidence: PaymentProviderVerificationResult) {
@@ -58,13 +72,7 @@ export async function applyVerifiedProviderEvidence(provider: PaymentProviderKey
       providerReference: evidence.providerReference,
       confirmationSource: evidence.source,
     });
-    if (confirmed) {
-      try {
-        await finalizeGuestOrderForConfirmedAttempt(evidence.attemptId);
-      } catch (error) {
-        console.error("guest_order_finalization_deferred", { code: error instanceof Error ? error.message : "unknown" });
-      }
-    }
+    if (confirmed) await finalizeVerifiedPayment(evidence.attemptId);
     return { applied: Boolean(confirmed), status: "confirmed" as const };
   }
 
