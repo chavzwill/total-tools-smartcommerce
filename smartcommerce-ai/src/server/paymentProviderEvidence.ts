@@ -5,6 +5,7 @@ import {
   markPaymentProviderPending,
 } from "./paymentSettlement.js";
 import type { PaymentProviderKey, PaymentProviderVerificationResult } from "./paymentProviderAdapters.js";
+import { finalizeGuestOrderForConfirmedAttempt } from "./guestOrderStore.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
 function sql() {
@@ -57,6 +58,13 @@ export async function applyVerifiedProviderEvidence(provider: PaymentProviderKey
       providerReference: evidence.providerReference,
       confirmationSource: evidence.source,
     });
+    if (confirmed) {
+      try {
+        await finalizeGuestOrderForConfirmedAttempt(evidence.attemptId);
+      } catch (error) {
+        console.error("guest_order_finalization_deferred", { code: error instanceof Error ? error.message : "unknown" });
+      }
+    }
     return { applied: Boolean(confirmed), status: "confirmed" as const };
   }
 
