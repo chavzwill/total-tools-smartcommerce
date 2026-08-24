@@ -16,8 +16,10 @@ type ServerCapability = {
 };
 
 type CapabilityResponse = {
+  currency?: string;
   capabilities?: ServerCapability[];
   policy?: {
+    capabilityMeansExecutable?: boolean;
     browserRedirectIsProofOfPayment?: boolean;
     paymentConfirmationRequired?: boolean;
     confirmationSources?: string[];
@@ -118,7 +120,8 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
 
     async function loadCapabilities() {
       try {
-        const response = await fetch("/api/payment-capabilities", {
+        const currency = /^[A-Z]{3}$/.test(quoteContext.currency) ? quoteContext.currency : "JMD";
+        const response = await fetch(`/api/payment-capabilities?currency=${encodeURIComponent(currency)}`, {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
           signal: controller.signal,
@@ -140,7 +143,7 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [quoteContext.currency]);
 
   const resolvedMethods = useMemo<ResolvedMethod[]>(() => {
     const byId = new Map((capabilities || []).map((item) => [item.id, item]));
@@ -185,7 +188,7 @@ export default function PaymentMethodPanel({ onSelect }: Props) {
       <div className="sc-payment-panel__intro">
         <span>Payment options</span>
         <strong>Choose the fastest method available to you.</strong>
-        <p>SmartCommerce verifies payment capability on the server and will not enable a method until both the merchant rail and its confirmation flow are production-ready.</p>
+        <p>SmartCommerce verifies payment capability for this order’s currency on the server and will not enable a method until its provider adapter, merchant rail, and confirmation flow are executable.</p>
       </div>
 
       {capabilities === null ? <div className="sc-payment-panel__loading" role="status"><Loader2 size={17} aria-hidden="true" /> Checking payment availability…</div> : null}
