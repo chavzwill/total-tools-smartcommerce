@@ -12,7 +12,7 @@ const source = `${store}\n${evidence}\n${api}\n${providerReturn}\n${page}\n${cli
 
 const checks = [];
 function guard(name, pattern) { checks.push(name); assert.match(source, pattern, `${name} invariant is missing`); }
-function reject(name, pattern) { checks.push(name); assert.doesNotMatch(source, pattern, `${name} forbidden pattern returned`); }
+function reject(name, target, pattern) { checks.push(name); assert.doesNotMatch(target, pattern, `${name} forbidden pattern returned`); }
 
 guard("guest orders are durable", /CREATE TABLE IF NOT EXISTS guest_orders/);
 guard("guest orders are paid-only records", /status TEXT NOT NULL CHECK \(status IN \('paid'\)\)/);
@@ -35,8 +35,7 @@ guard("guest provider returns route to receipt flow", /principal\.kind === "cust
 guard("guest receipt route is mounted", /path === "\/guest-order"[\s\S]*GuestOrderPage/);
 guard("receipt page states payment is verified", /Payment verified/);
 guard("receipt page can create secure receipt link", /issueGuestReceiptLink/);
-checks.push("guest receipt tokens are not persisted in localStorage");
-assert.doesNotMatch(`${page}\n${client}`, /localStorage\.(setItem|getItem)\([^\n;]*(accessToken|receipt)/i, "guest receipt tokens must not be persisted in localStorage");
-reject("guest order API never marks payment itself", /confirmPaymentFromProvider\(/);
+reject("guest receipt tokens are not persisted in localStorage", `${page}\n${client}`, /localStorage\.(setItem|getItem)\([^\n;]*(accessToken|receipt)/i);
+reject("guest order API never marks payment itself", api, /confirmPaymentFromProvider\(/);
 
 console.log(`Guest order security regression gate passed: ${checks.length} invariants verified.`);
