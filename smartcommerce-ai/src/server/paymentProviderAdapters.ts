@@ -40,6 +40,7 @@ export type PaymentProviderVerificationResult =
 export interface PaymentProviderAdapter {
   readonly key: PaymentProviderKey;
   readonly supports: readonly PaymentMethodId[];
+  readonly implemented: boolean;
   launch(input: PaymentProviderLaunchInput): Promise<PaymentProviderLaunchResult>;
   verifyWebhook(input: { rawBody: Buffer; headers: Record<string, string | string[] | undefined> }): Promise<PaymentProviderVerificationResult>;
   query(input: { attemptId: string; providerPaymentId: string }): Promise<PaymentProviderVerificationResult>;
@@ -53,6 +54,7 @@ function unavailableAdapter(key: PaymentProviderKey, supports: readonly PaymentM
   return {
     key,
     supports,
+    implemented: false,
     launch: unavailable,
     verifyWebhook: unavailable,
     query: unavailable,
@@ -75,6 +77,10 @@ export function paymentProviderForMethod(method: PaymentMethodId): PaymentProvid
 export function getPaymentProviderAdapter(provider: string): PaymentProviderAdapter | null {
   const key = String(provider || "").trim() as PaymentProviderKey;
   return adapters[key] || null;
+}
+
+export function isPaymentProviderAdapterImplemented(provider: PaymentProviderKey) {
+  return Boolean(adapters[provider]?.implemented);
 }
 
 export function assertProviderSupportsMethod(adapter: PaymentProviderAdapter, method: PaymentMethodId) {
