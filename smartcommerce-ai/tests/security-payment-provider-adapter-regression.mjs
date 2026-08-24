@@ -8,20 +8,31 @@ const evidence = fs.readFileSync(path.join(root, "src", "server", "paymentProvid
 const webhook = fs.readFileSync(path.join(root, "api", "payment-provider-webhook.ts"), "utf8");
 const providerReturn = fs.readFileSync(path.join(root, "api", "payment-provider-return.ts"), "utf8");
 const paymentAttempt = fs.readFileSync(path.join(root, "api", "payment-attempt.ts"), "utf8");
+const capabilities = fs.readFileSync(path.join(root, "api", "payment-capabilities.ts"), "utf8");
+const commerceClient = fs.readFileSync(path.join(root, "src", "lib", "customerCommerce.ts"), "utf8");
+const paymentPanel = fs.readFileSync(path.join(root, "src", "components", "checkout", "PaymentMethodPanel.tsx"), "utf8");
 const recheck = fs.readFileSync(path.join(root, "api", "payment-provider-recheck.ts"), "utf8");
 const recheckUi = fs.readFileSync(path.join(root, "src", "pages", "PaymentReconciliationPage.tsx"), "utf8");
 const settlement = fs.readFileSync(path.join(root, "src", "server", "paymentSettlement.ts"), "utf8");
-const sources = `${adapters}\n${paypal}\n${evidence}\n${webhook}\n${providerReturn}\n${paymentAttempt}\n${recheck}\n${recheckUi}\n${settlement}`;
+const sources = `${adapters}\n${paypal}\n${evidence}\n${webhook}\n${providerReturn}\n${paymentAttempt}\n${capabilities}\n${commerceClient}\n${paymentPanel}\n${recheck}\n${recheckUi}\n${settlement}`;
 
 const checks = [
   ["provider adapter exposes launch webhook query and return contracts", /launch\([\s\S]*verifyWebhook\([\s\S]*query\([\s\S]*completeReturn/],
+  ["provider adapters declare implementation state", /readonly implemented:\s*boolean[\s\S]*implemented:\s*false/],
   ["wallet and card methods share the primary acquirer boundary", /primary_acquirer[\s\S]*apple-pay[\s\S]*google-pay[\s\S]*click-to-pay[\s\S]*card/],
   ["paypal is registered as its own concrete provider", /paypal:\s*paypalPaymentAdapter/],
+  ["paypal adapter is marked implemented", /paypalPaymentAdapter[\s\S]*implemented:\s*true/],
   ["pay in store remains a POS confirmation boundary", /store_pos[\s\S]*pay-in-store/],
   ["unconfigured adapters fail closed", /PAYMENT_PROVIDER_ADAPTER_NOT_CONFIGURED/],
+  ["capabilities require implemented primary adapter", /primaryAdapterImplemented[\s\S]*primaryAcquirerReady\s*=\s*primaryMerchantConfigured\s*&&\s*primaryAdapterImplemented/],
+  ["payment attempts require implemented adapters", /isPaymentProviderAdapterImplemented\("primary_acquirer"\)[\s\S]*PAYMENT_METHOD_UNAVAILABLE/],
+  ["capability lookup is currency scoped", /request\.query\?\.currency[\s\S]*currency[\s\S]*capabilities/],
+  ["verified quote currency is session scoped for capability hints", /smartcommerce_verified_quote_currency[\s\S]*sessionStorage/],
+  ["checkout requests capabilities for verified quote currency", /payment-capabilities\?currency=[\s\S]*quoteContext\.currency/],
   ["paypal uses oauth client credentials", /\/v1\/oauth2\/token[\s\S]*grant_type=client_credentials/],
   ["paypal currency support is explicit and excludes silent conversion", /SUPPORTED_CURRENCIES[\s\S]*PAYPAL_CURRENCY_UNSUPPORTED/],
   ["checkout blocks unsupported paypal quote currencies", /paypalSupportsCurrency\(currency\)[\s\S]*PAYMENT_CURRENCY_UNSUPPORTED/],
+  ["capability endpoint disables paypal for unsupported currency", /paypalCurrencySupported[\s\S]*paypalReady[\s\S]*direct \$\{currency\} settlement/],
   ["paypal order creation is idempotent", /PayPal-Request-Id[\s\S]*input\.attemptId/],
   ["paypal approval url comes from provider response", /rel === "approve"[\s\S]*launchUrl/],
   ["paypal webhook signature is verified by paypal", /verify-webhook-signature[\s\S]*verification_status !== "SUCCESS"/],
