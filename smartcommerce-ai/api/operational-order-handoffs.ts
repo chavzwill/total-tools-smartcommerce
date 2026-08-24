@@ -1,0 +1,56 @@
+import { neon } from "@neondatabase/serverless";
+import { currentStaffPrincipal, requireStaffPermission } from "../src/server/staffAuthorization.js";
+import { ensureOperationalOrderHandoffSchema } from "../src/server/operationalOrderHandoff.js";
+
+let sqlClient: ReturnType<typeof neon> | undefined;
+function sql() {
+  if (!sqlClient) {
+    const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.DATABASE_URL;
+    if (!url) throw new Error("OPERATIONAL_ORDER_DATABASE_NOT_CONFIGURED");
+    sqlClient = neon(url);
+  }
+  return sqlClient;
+}
+
+function send(response: any, status: number, payload: unknown) {
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json");
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "same-origin");
+  response.end(JSON.stringify(payload));
+}
+
+export default async function handler(request: any, response: any) {
+  if (String(request.method || "GET").toUpperCase() !== "GET") {
+    response.setHeader("Allow", "GET");
+    return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "GET is required." } });
+  }
+  try {
+    const principal = await currentStaffPrincipal(request);
+    if (!principal) return send(response, 401, { error: { code: "AUTH_REQUIRED", message: "Staff sign-in is required." } });
+    if (!requireStaffPermission(principal, "operations:read")) return send(response, 403, { error: { code: "FORBIDDEN", message: "You do not have access to operational order handoffs." } });
+    await ensureOperationalOrderHandoffSchema();
+    const rows = await sql()`
+      SELECT o.id, o.payment_attempt_id, o.quote_id, o.subject_kind, o.currency, o.amount_minor,
+             o.fulfilment_mode, o.fulfilment_status, o.tracking_reference, o.pos_handoff_status,
+             o.pos_order_reference, o.inventory_commitment_status, o.created_at, o.updated_at,
+             COALESCE((SELECT COUNT(*) FROM operational_order_inventory_commitments c WHERE c.order_id=o.id),0) AS commitment_lines,
+             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='pending'),0) AS pending_handoffs
+      FROM operational_orders o
+      ORDER BY o.created_at DESC
+      LIMIT 250
+    ` as unknown as Array<any>;
+    const summary = rows.reduce((acc, row) => {
+      acc.total += 1;
+      if (row.pos_handoff_status === "pending") acc.pendingPos += 1;
+      if (Number(row.pending_handoffs || 0) > 0) acc.pendingOperations += 1;
+      if (row.inventory_commitment_status === "committed_internal") acc.internalInventoryCommitments += 1;
+      return acc;
+    }, { total: 0, pendingPos: 0, pendingOperations: 0, internalInventoryCommitments: 0 });
+    return send(response, 200, { summary, orders: rows });
+  } catch (error) {
+    console.error("operational_order_handoffs_api_error", { code: error instanceof Error ? error.message : "unknown" });
+    return send(response, 503, { error: { code: "OPERATIONAL_ORDER_HANDOFFS_UNAVAILABLE", message: "Operational order handoffs are temporarily unavailable." } });
+  }
+}
