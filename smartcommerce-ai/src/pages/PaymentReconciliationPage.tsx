@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Clock3, CreditCard, Loader2, LogOut, Refre
 import { useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import { getStaffSession, loginStaff, logoutStaff, type StaffSessionSummary } from "../services/deliveryReviewClient";
-import { getPaymentReconciliation, type PaymentReconciliationItem } from "../services/paymentReconciliationClient";
+import { getPaymentReconciliation, type PaymentProviderReadiness, type PaymentReconciliationItem } from "../services/paymentReconciliationClient";
 import { recheckPaymentProvider } from "../services/paymentProviderRecheckClient";
 import "../styles/refund-reconciliation.css";
 
@@ -20,6 +20,12 @@ function statusCopy(item: PaymentReconciliationItem) {
   return { title: "Payment prepared", detail: "SmartCommerce created an idempotent payment attempt. No provider-confirmed payment exists yet." };
 }
 
+function providerLabel(key: PaymentProviderReadiness["providers"][number]["key"]) {
+  if (key === "primary_acquirer") return "Primary JMD acquirer";
+  if (key === "store_pos") return "Store POS";
+  return "PayPal";
+}
+
 export default function PaymentReconciliationPage() {
   const [staff, setStaff] = useState<StaffSessionSummary | null>(null);
   const [checking, setChecking] = useState(true);
@@ -27,6 +33,7 @@ export default function PaymentReconciliationPage() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [items, setItems] = useState<PaymentReconciliationItem[]>([]);
+  const [providerReadiness, setProviderReadiness] = useState<PaymentProviderReadiness | null>(null);
   const [summary, setSummary] = useState({ total: 0, prepared: 0, pending: 0, confirmed: 0, failed: 0, stale: 0, staleAmountMinor: 0 });
   const [thresholds, setThresholds] = useState({ warningMinutes: 15, staleMinutes: 60 });
   const [loading, setLoading] = useState(false);
@@ -48,6 +55,7 @@ export default function PaymentReconciliationPage() {
       setItems(result.items);
       setSummary(result.summary);
       setThresholds(result.thresholds);
+      setProviderReadiness(result.providerReadiness);
     } catch (cause: any) {
       setError(cause?.message || "Payment reconciliation could not be loaded.");
     } finally {
@@ -87,6 +95,7 @@ export default function PaymentReconciliationPage() {
     await logoutStaff().catch(() => undefined);
     setStaff(null);
     setItems([]);
+    setProviderReadiness(null);
   }
 
   if (checking) return <div className="sc-refund-page"><Container><div className="sc-refund-empty"><Loader2 className="sc-spin" size={20} /> Checking staff access…</div></Container></div>;
@@ -97,6 +106,14 @@ export default function PaymentReconciliationPage() {
 
     <section className="sc-refund-summary"><article><strong>{summary.pending}</strong><span>Provider pending</span></article><article><strong>{summary.stale}</strong><span>Stale settlements</span></article><article><strong>{money(summary.staleAmountMinor)}</strong><span>Stale amount</span></article><article><strong>{summary.confirmed}</strong><span>Verified paid</span></article></section>
     <p className="sc-refund-note">Watch after {thresholds.warningMinutes} minutes · stale after {thresholds.staleMinutes} minutes. Provider recheck asks the provider for authoritative status; it never manually marks a payment paid.</p>
+
+    {providerReadiness ? <section className="sc-refund-list" aria-label="Payment provider readiness">
+      {providerReadiness.providers.map((provider) => <article className="sc-refund-card" key={provider.key}>
+        <div className="sc-refund-card__head"><div><ShieldCheck size={20} /><div><span>{provider.selectedProvider || "Provider not selected"}</span><strong>{providerLabel(provider.key)}</strong></div></div><span>{provider.executable ? "Executable" : "Not ready"}</span></div>
+        <p>{provider.key === "paypal" && provider.currencySupported === false ? `${providerReadiness.currency} is not supported for direct PayPal settlement.` : provider.executable ? "Adapter and merchant configuration are both ready for this provider boundary." : "This provider remains disabled until both the concrete adapter and merchant configuration are ready."}</p>
+        <dl><div><dt>Adapter</dt><dd>{provider.adapterImplemented ? "Implemented" : "Pending"}</dd></div><div><dt>Merchant setup</dt><dd>{provider.merchantConfigured ? "Configured" : "Missing"}</dd></div><div><dt>{providerReadiness.currency} support</dt><dd>{provider.currencySupported == null ? "Provider-specific" : provider.currencySupported ? "Supported" : "Unsupported"}</dd></div><div><dt>Feature flags</dt><dd>{provider.methods.filter((method) => method.enabled).map((method) => method.id).join(", ") || "None enabled"}</dd></div></dl>
+      </article>)}
+    </section> : null}
 
     {error ? <p className="sc-refund-error" role="alert">{error}</p> : null}
     {!loading && !items.length ? <section className="sc-refund-empty"><CheckCircle2 size={28} /><strong>No payment attempts yet.</strong><span>Standard checkout attempts will appear here once a customer prepares or starts a provider payment.</span></section> : null}
