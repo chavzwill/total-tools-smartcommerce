@@ -217,6 +217,7 @@ async function completeReturn(input: { attemptId: string; providerPaymentId: str
 export const paypalPaymentAdapter: PaymentProviderAdapter = {
   key: "paypal",
   supports: ["paypal"],
+  implemented: true,
   launch,
   verifyWebhook,
   query,
