@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../src/server/staffSession.js";
 import { firstHeader, recordSecurityEvent } from "../src/server/securityInfrastructure.js";
-import { ensureOperationalOrderHandoffSchema } from "../src/server/operationalOrderHandoff.js";
+import { ensureOperationalOutboxWorkerSchema } from "../src/server/operationalOrderOutboxWorker.js";
 
 let sqlClient: ReturnType<typeof neon> | undefined;
 function sql() {
@@ -37,13 +37,19 @@ export default async function handler(request: any, response: any) {
       await recordSecurityEvent({request,eventType:"operational_order_handoffs_access_denied",eventStatus:"blocked",riskLevel:"high",subject:staff.employeeId}).catch(()=>undefined);
       return send(response,403,{error:{code:"OPERATIONAL_ORDER_HANDOFFS_FORBIDDEN",message:"Your staff role is not authorized to review operational order handoffs."}});
     }
-    await ensureOperationalOrderHandoffSchema();
+    await ensureOperationalOutboxWorkerSchema();
     const rows = await sql()`
       SELECT o.id, o.payment_attempt_id, o.quote_id, o.subject_kind, o.currency, o.amount_minor,
              o.fulfilment_mode, o.fulfilment_status, o.tracking_reference, o.pos_handoff_status,
              o.pos_order_reference, o.inventory_commitment_status, o.created_at, o.updated_at,
              COALESCE((SELECT COUNT(*) FROM operational_order_inventory_commitments c WHERE c.order_id=o.id),0) AS commitment_lines,
-             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='pending'),0) AS pending_handoffs
+             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='pending'),0) AS pending_handoffs,
+             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='processing' AND q.lease_until > NOW()),0) AS processing_handoffs,
+             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='processing' AND q.lease_until <= NOW()),0) AS reclaimable_handoffs,
+             COALESCE((SELECT COUNT(*) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='failed'),0) AS failed_handoffs,
+             COALESCE((SELECT MAX(q.attempts) FROM operational_order_outbox q WHERE q.order_id=o.id),0) AS max_handoff_attempts,
+             (SELECT MIN(q.next_attempt_at) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.status='pending') AS next_handoff_attempt_at,
+             (SELECT MAX(q.last_error_code) FROM operational_order_outbox q WHERE q.order_id=o.id AND q.last_error_code IS NOT NULL) AS last_handoff_error_code
       FROM operational_orders o
       ORDER BY o.created_at DESC
       LIMIT 250
@@ -52,9 +58,12 @@ export default async function handler(request: any, response: any) {
       acc.total += 1;
       if (row.pos_handoff_status === "pending") acc.pendingPos += 1;
       if (Number(row.pending_handoffs || 0) > 0) acc.pendingOperations += 1;
+      if (Number(row.processing_handoffs || 0) > 0) acc.processingOperations += 1;
+      if (Number(row.reclaimable_handoffs || 0) > 0) acc.reclaimableOperations += 1;
+      if (Number(row.failed_handoffs || 0) > 0) acc.failedOperations += 1;
       if (row.inventory_commitment_status === "committed_internal") acc.internalInventoryCommitments += 1;
       return acc;
-    }, { total: 0, pendingPos: 0, pendingOperations: 0, internalInventoryCommitments: 0 });
+    }, { total: 0, pendingPos: 0, pendingOperations: 0, processingOperations: 0, reclaimableOperations: 0, failedOperations: 0, internalInventoryCommitments: 0 });
     return send(response, 200, { summary, orders: rows, staff:{employeeId:staff.employeeId,username:staff.username,role:staff.role} });
   } catch (error) {
     console.error("operational_order_handoffs_api_error", { code: error instanceof Error ? error.message : "unknown" });
