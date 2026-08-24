@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Container from "../components/shared/Container";
 import { getStaffSession, loginStaff, logoutStaff, type StaffSessionSummary } from "../services/deliveryReviewClient";
 import { getPaymentReconciliation, type PaymentReconciliationItem } from "../services/paymentReconciliationClient";
+import { recheckPaymentProvider } from "../services/paymentProviderRecheckClient";
 import "../styles/refund-reconciliation.css";
 
 function money(value: number, currency = "JMD") {
@@ -29,6 +30,7 @@ export default function PaymentReconciliationPage() {
   const [summary, setSummary] = useState({ total: 0, prepared: 0, pending: 0, confirmed: 0, failed: 0, stale: 0, staleAmountMinor: 0 });
   const [thresholds, setThresholds] = useState({ warningMinutes: 15, staleMinutes: 60 });
   const [loading, setLoading] = useState(false);
+  const [recheckingId, setRecheckingId] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -55,6 +57,20 @@ export default function PaymentReconciliationPage() {
 
   useEffect(() => { if (staff) void refresh(); }, [staff]);
 
+  async function recheck(item: PaymentReconciliationItem) {
+    if (item.status !== "provider_pending" || recheckingId) return;
+    setRecheckingId(item.id);
+    setError("");
+    try {
+      await recheckPaymentProvider(item.id);
+      await refresh();
+    } catch (cause: any) {
+      setError(cause?.message || "The payment provider could not be rechecked.");
+    } finally {
+      setRecheckingId("");
+    }
+  }
+
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
     setLoginError("");
@@ -77,10 +93,10 @@ export default function PaymentReconciliationPage() {
   if (!staff) return <div className="sc-refund-page"><Container className="sc-refund-shell"><section className="sc-refund-login"><span><ShieldCheck size={17} /> Finance controls</span><h1>Payment reconciliation</h1><p>Sign in with authorized Total Tools staff credentials to review standard payment settlement evidence.</p><form onSubmit={signIn}><label>Username<input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required /></label><label>Password<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" required /></label>{loginError ? <p role="alert">{loginError}</p> : null}<button type="submit">Sign in</button></form></section></Container></div>;
 
   return <div className="sc-refund-page"><Container className="sc-refund-shell">
-    <header className="sc-refund-hero"><div><span><CreditCard size={17} /> Settlement integrity</span><h1>Payment reconciliation</h1><p>Provider redirects never count as payment proof. This workspace shows the durable SmartCommerce attempt and the verified settlement evidence behind each payment state.</p></div><div className="sc-refund-hero__actions"><button type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "sc-spin" : ""} /> Refresh</button><button type="button" onClick={() => void signOut()}><LogOut size={16} /> Sign out</button></div></header>
+    <header className="sc-refund-hero"><div><span><CreditCard size={17} /> Settlement integrity</span><h1>Payment reconciliation</h1><p>Provider redirects never count as payment proof. This workspace shows the durable SmartCommerce attempt and the verified settlement evidence behind each payment state.</p></div><div className="sc-refund-hero__actions"><button type="button" onClick={() => void refresh()} disabled={loading || Boolean(recheckingId)}><RefreshCw size={16} className={loading ? "sc-spin" : ""} /> Refresh</button><button type="button" onClick={() => void signOut()}><LogOut size={16} /> Sign out</button></div></header>
 
     <section className="sc-refund-summary"><article><strong>{summary.pending}</strong><span>Provider pending</span></article><article><strong>{summary.stale}</strong><span>Stale settlements</span></article><article><strong>{money(summary.staleAmountMinor)}</strong><span>Stale amount</span></article><article><strong>{summary.confirmed}</strong><span>Verified paid</span></article></section>
-    <p className="sc-refund-note">Watch after {thresholds.warningMinutes} minutes · stale after {thresholds.staleMinutes} minutes.</p>
+    <p className="sc-refund-note">Watch after {thresholds.warningMinutes} minutes · stale after {thresholds.staleMinutes} minutes. Provider recheck asks the provider for authoritative status; it never manually marks a payment paid.</p>
 
     {error ? <p className="sc-refund-error" role="alert">{error}</p> : null}
     {!loading && !items.length ? <section className="sc-refund-empty"><CheckCircle2 size={28} /><strong>No payment attempts yet.</strong><span>Standard checkout attempts will appear here once a customer prepares or starts a provider payment.</span></section> : null}
@@ -88,7 +104,7 @@ export default function PaymentReconciliationPage() {
     <div className="sc-refund-list">{items.map((item) => {
       const copy = statusCopy(item);
       const Icon = item.status === "confirmed" && item.paid ? CheckCircle2 : item.attention === "stale" || item.status === "failed" ? AlertTriangle : Clock3;
-      return <article className="sc-refund-card" key={item.id}><div className="sc-refund-card__head"><div><Icon size={20} /><div><span>{item.paymentMethod.replaceAll("-", " ")}{item.provider ? ` · ${item.provider}` : ""}</span><strong>{copy.title}</strong></div></div><span>{item.status.replaceAll("_", " ")}</span></div><p>{copy.detail}</p><dl><div><dt>Amount</dt><dd>{money(item.amountMinor, item.currency)}</dd></div><div><dt>Quote</dt><dd>{item.quoteId}</dd></div><div><dt>Provider reference</dt><dd>{item.providerReference || item.providerPaymentId || "Not recorded"}</dd></div><div><dt>Confirmation source</dt><dd>{item.confirmationSource || "None"}</dd></div><div><dt>Age</dt><dd>{item.ageMinutes} min</dd></div><div><dt>Paid</dt><dd>{item.paid ? "Verified" : "No verified proof"}</dd></div></dl><footer><span>Attempt {item.id}</span><time>{new Date(item.updatedAt).toLocaleString("en-JM")}</time></footer></article>;
+      return <article className="sc-refund-card" key={item.id}><div className="sc-refund-card__head"><div><Icon size={20} /><div><span>{item.paymentMethod.replaceAll("-", " ")}{item.provider ? ` · ${item.provider}` : ""}</span><strong>{copy.title}</strong></div></div><span>{item.status.replaceAll("_", " ")}</span></div><p>{copy.detail}</p><dl><div><dt>Amount</dt><dd>{money(item.amountMinor, item.currency)}</dd></div><div><dt>Quote</dt><dd>{item.quoteId}</dd></div><div><dt>Provider reference</dt><dd>{item.providerReference || item.providerPaymentId || "Not recorded"}</dd></div><div><dt>Confirmation source</dt><dd>{item.confirmationSource || "None"}</dd></div><div><dt>Age</dt><dd>{item.ageMinutes} min</dd></div><div><dt>Paid</dt><dd>{item.paid ? "Verified" : "No verified proof"}</dd></div></dl><footer><span>Attempt {item.id}</span><div>{item.status === "provider_pending" ? <button type="button" onClick={() => void recheck(item)} disabled={Boolean(recheckingId)}>{recheckingId === item.id ? <><Loader2 size={14} className="sc-spin" /> Rechecking…</> : <><RefreshCw size={14} /> Recheck provider</>}</button> : null}<time>{new Date(item.updatedAt).toLocaleString("en-JM")}</time></div></footer></article>;
     })}</div>
   </Container></div>;
 }
