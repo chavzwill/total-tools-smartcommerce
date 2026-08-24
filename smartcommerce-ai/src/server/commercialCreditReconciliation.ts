@@ -11,10 +11,20 @@ function sql() {
   return sqlClient;
 }
 
+function thresholdMinutes(name: string, fallback: number) {
+  const value = Number(process.env[name] || fallback);
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
+}
+
+const warningMinutes = thresholdMinutes("SMARTCOMMERCE_CREDIT_RECONCILIATION_WARNING_MINUTES", 15);
+const staleMinutes = Math.max(warningMinutes + 1, thresholdMinutes("SMARTCOMMERCE_CREDIT_RECONCILIATION_STALE_MINUTES", 60));
+
 export type CommercialCreditReservationState =
   | "active_reservation"
   | "expired_reservation"
-  | "committed_unreconciled"
+  | "committed_syncing"
+  | "committed_watch"
+  | "committed_stale"
   | "reconciled_commitment"
   | "released";
 
@@ -48,18 +58,26 @@ export async function listCommercialCreditReservationReconciliation(limit = 200)
         WHEN r.status='reserved' THEN 2
         ELSE 3
       END,
-      r.updated_at DESC
+      r.updated_at ASC
     LIMIT ${safeLimit}
   ` as unknown as Array<any>;
 
+  const now = Date.now();
   const items = rows.map((row) => {
     const providerReconciled = Boolean(row.provider_reconciled);
+    const updatedAtMs = new Date(row.updated_at).getTime();
+    const ageMinutes = Math.max(0, Math.floor((now - updatedAtMs) / 60_000));
     let state: CommercialCreditReservationState;
     if (row.status === "released") state = "released";
-    else if (row.status === "reserved" && row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) state = "expired_reservation";
+    else if (row.status === "reserved" && row.expires_at && new Date(row.expires_at).getTime() <= now) state = "expired_reservation";
     else if (row.status === "reserved") state = "active_reservation";
     else if (providerReconciled) state = "reconciled_commitment";
-    else state = "committed_unreconciled";
+    else if (ageMinutes >= staleMinutes) state = "committed_stale";
+    else if (ageMinutes >= warningMinutes) state = "committed_watch";
+    else state = "committed_syncing";
+
+    const consumesCredit = state === "active_reservation" || state === "committed_syncing" || state === "committed_watch" || state === "committed_stale";
+    const needsAttention = state === "committed_watch" || state === "committed_stale";
     return {
       id: String(row.id),
       commercialAccountId: String(row.commercial_account_id),
@@ -75,21 +93,29 @@ export async function listCommercialCreditReservationReconciliation(limit = 200)
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       providerReconciled,
-      consumesCredit: state === "active_reservation" || state === "committed_unreconciled",
+      consumesCredit,
+      needsAttention,
+      ageMinutes,
     };
   });
 
   return {
     items,
+    thresholds: { warningMinutes, staleMinutes },
     summary: {
       total: items.length,
       consumingCredit: items.filter((item) => item.consumesCredit).length,
       active: items.filter((item) => item.state === "active_reservation").length,
       expired: items.filter((item) => item.state === "expired_reservation").length,
-      committedUnreconciled: items.filter((item) => item.state === "committed_unreconciled").length,
+      syncing: items.filter((item) => item.state === "committed_syncing").length,
+      watch: items.filter((item) => item.state === "committed_watch").length,
+      stale: items.filter((item) => item.state === "committed_stale").length,
+      committedUnreconciled: items.filter((item) => ["committed_syncing", "committed_watch", "committed_stale"].includes(item.state)).length,
+      needsAttention: items.filter((item) => item.needsAttention).length,
       reconciled: items.filter((item) => item.state === "reconciled_commitment").length,
       released: items.filter((item) => item.state === "released").length,
       consumingAmountMinor: items.filter((item) => item.consumesCredit).reduce((sum, item) => sum + item.amountMinor, 0),
+      staleAmountMinor: items.filter((item) => item.state === "committed_stale").reduce((sum, item) => sum + item.amountMinor, 0),
     },
   };
 }
