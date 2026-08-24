@@ -48,6 +48,23 @@ export type CheckoutQuote = {
 
 type CommerceError = Error & { code?: string; status?: number };
 
+const VERIFIED_QUOTE_ID_KEY = "smartcommerce_verified_quote_id";
+const VERIFIED_QUOTE_MODE_KEY = "smartcommerce_verified_quote_mode";
+
+function rememberVerifiedQuote(quote: CheckoutQuote, mode: "account" | "guest") {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(VERIFIED_QUOTE_ID_KEY, quote.id);
+  window.sessionStorage.setItem(VERIFIED_QUOTE_MODE_KEY, mode);
+}
+
+export function currentVerifiedQuoteContext() {
+  if (typeof window === "undefined") return { quoteId: "", mode: undefined as "account" | "guest" | undefined };
+  const quoteId = window.sessionStorage.getItem(VERIFIED_QUOTE_ID_KEY) || "";
+  const rawMode = window.sessionStorage.getItem(VERIFIED_QUOTE_MODE_KEY);
+  const mode = rawMode === "account" || rawMode === "guest" ? rawMode : undefined;
+  return { quoteId, mode };
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -106,7 +123,9 @@ export async function removePersistentCartItem(itemId: string) {
 
 export async function createCheckoutQuote() {
   const result = await request<{ quote: CheckoutQuote }>("POST", { action: "create_quote" });
-  return { ...result.quote, checkoutMode: result.quote.checkoutMode || "account" as const };
+  const quote = { ...result.quote, checkoutMode: result.quote.checkoutMode || "account" as const };
+  rememberVerifiedQuote(quote, "account");
+  return quote;
 }
 
 export async function createGuestCheckoutQuote(items: GuestCheckoutItem[]) {
@@ -117,5 +136,7 @@ export async function createGuestCheckoutQuote(items: GuestCheckoutItem[]) {
     body: JSON.stringify({ items }),
   });
   const result = await parseResponse<{ quote: CheckoutQuote }>(response);
-  return { ...result.quote, checkoutMode: "guest" as const };
+  const quote = { ...result.quote, checkoutMode: "guest" as const };
+  rememberVerifiedQuote(quote, "guest");
+  return quote;
 }
