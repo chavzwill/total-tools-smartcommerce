@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import { handlePlatformRestRequest } from "../src/backend/platformRestApi.js";
 import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
+import {
+  GUEST_CHECKOUT_COOKIE,
+  getOrCreateGuestSession,
+  guestCheckoutCookie,
+  parseCookie,
+  persistGuestQuote,
+} from "../src/server/guestCheckoutIdentity.js";
 
 const MAX_BODY_BYTES = 24_000;
 const QUOTE_TTL_MS = 10 * 60 * 1000;
@@ -132,6 +139,13 @@ export default async function handler(request: any, response: any) {
       windowSeconds: 600,
     });
 
+    const cookies = parseCookie(firstHeader(request.headers?.cookie));
+    const guestSession = await getOrCreateGuestSession(cookies[GUEST_CHECKOUT_COOKIE]);
+    if (guestSession.created) {
+      const forwardedProto = firstHeader(request.headers?.["x-forwarded-proto"]);
+      response.setHeader("Set-Cookie", guestCheckoutCookie(guestSession.token, forwardedProto !== "http"));
+    }
+
     const input = await readJsonBody<{ items?: GuestItemInput[] }>(request);
     const items = normalizeItems(input.items || []);
     const snapshotItems: Array<{ productId: string; sku?: string | null; name: string; quantity: number; unitPrice: number; currency: string }> = [];
@@ -163,7 +177,7 @@ export default async function handler(request: any, response: any) {
     const subtotalMinor = Math.round(subtotal * 100);
     const totalMinor = subtotalMinor + taxMinor;
     const quoteBucket = Math.floor(Date.now() / QUOTE_TTL_MS);
-    const fingerprint = stableHash({ kind: "guest", quoteBucket, snapshotItems, subtotalMinor, taxMinor, totalMinor });
+    const fingerprint = stableHash({ kind: "guest", guestSessionId: guestSession.id, quoteBucket, snapshotItems, subtotalMinor, taxMinor, totalMinor });
     const quote = {
       id: `gqte_${fingerprint.slice(0, 32)}`,
       currency: currency || "JMD",
@@ -178,13 +192,26 @@ export default async function handler(request: any, response: any) {
       checkoutMode: "guest" as const,
     };
 
+    await persistGuestQuote({
+      id: quote.id,
+      guestSessionId: guestSession.id,
+      currency: quote.currency,
+      subtotalMinor: quote.subtotalMinor,
+      taxMinor: quote.taxMinor,
+      deliveryMinor: quote.deliveryMinor,
+      serviceMinor: quote.serviceMinor,
+      totalMinor: quote.totalMinor,
+      snapshot: { items: snapshotItems, revalidatedAt: new Date().toISOString(), quoteFingerprint: fingerprint },
+      expiresAt: quote.expiresAt,
+    });
+
     await recordSecurityEvent({
       request,
       eventType: "commerce_guest_quote_created",
       eventStatus: "created_or_replayed",
       riskLevel: "info",
       customerId: null,
-      metadata: { quoteId: quote.id, itemCount: snapshotItems.length, totalMinor, currency: quote.currency },
+      metadata: { quoteId: quote.id, guestSessionId: guestSession.id, itemCount: snapshotItems.length, totalMinor, currency: quote.currency },
     });
 
     return send(response, 201, { quote });
