@@ -33,7 +33,8 @@ guard("worker endpoint uses timing safe comparison", /timingSafeEqual/);
 guard("worker endpoint refuses missing configuration", /WORKER_NOT_CONFIGURED/);
 guard("operations queue exposes reclaimable work", /reclaimable_handoffs/);
 guard("operations queue exposes terminal failures", /failed_handoffs/);
-reject("worker endpoint does not accept staff cookie auth", /STAFF_COOKIE_NAME|readStaffSession|canStaff/);
+checks.push("worker endpoint does not accept staff cookie auth");
+assert.doesNotMatch(endpoint, /STAFF_COOKIE_NAME|readStaffSession|canStaff/, "internal worker endpoint must not accept staff session authentication");
 reject("provider-disabled destinations are not default-processable", /const destinations:[\s\S]*\["fulfilment_activation",\s*"pos_order_write"/);
 
 console.log(`Operational outbox worker regression gate passed: ${checks.length} invariants verified.`);
