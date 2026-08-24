@@ -50,19 +50,23 @@ type CommerceError = Error & { code?: string; status?: number };
 
 const VERIFIED_QUOTE_ID_KEY = "smartcommerce_verified_quote_id";
 const VERIFIED_QUOTE_MODE_KEY = "smartcommerce_verified_quote_mode";
+const VERIFIED_QUOTE_CURRENCY_KEY = "smartcommerce_verified_quote_currency";
 
 function rememberVerifiedQuote(quote: CheckoutQuote, mode: "account" | "guest") {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(VERIFIED_QUOTE_ID_KEY, quote.id);
   window.sessionStorage.setItem(VERIFIED_QUOTE_MODE_KEY, mode);
+  window.sessionStorage.setItem(VERIFIED_QUOTE_CURRENCY_KEY, String(quote.currency || "JMD").toUpperCase());
 }
 
 export function currentVerifiedQuoteContext() {
-  if (typeof window === "undefined") return { quoteId: "", mode: undefined as "account" | "guest" | undefined };
+  if (typeof window === "undefined") return { quoteId: "", mode: undefined as "account" | "guest" | undefined, currency: "JMD" };
   const quoteId = window.sessionStorage.getItem(VERIFIED_QUOTE_ID_KEY) || "";
   const rawMode = window.sessionStorage.getItem(VERIFIED_QUOTE_MODE_KEY);
   const mode = rawMode === "account" || rawMode === "guest" ? rawMode : undefined;
-  return { quoteId, mode };
+  const rawCurrency = window.sessionStorage.getItem(VERIFIED_QUOTE_CURRENCY_KEY) || "JMD";
+  const currency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "JMD";
+  return { quoteId, mode, currency };
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
