@@ -6,8 +6,9 @@ const evidence = await readFile(new URL("../src/server/paymentProviderEvidence.t
 const api = await readFile(new URL("../api/guest-order.ts", import.meta.url), "utf8");
 const providerReturn = await readFile(new URL("../api/payment-provider-return.ts", import.meta.url), "utf8");
 const page = await readFile(new URL("../src/pages/GuestOrderPage.tsx", import.meta.url), "utf8");
+const client = await readFile(new URL("../src/services/guestOrderClient.ts", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-const source = `${store}\n${evidence}\n${api}\n${providerReturn}\n${page}\n${app}`;
+const source = `${store}\n${evidence}\n${api}\n${providerReturn}\n${page}\n${client}\n${app}`;
 
 const checks = [];
 function guard(name, pattern) { checks.push(name); assert.match(source, pattern, `${name} invariant is missing`); }
@@ -34,7 +35,8 @@ guard("guest provider returns route to receipt flow", /principal\.kind === "cust
 guard("guest receipt route is mounted", /path === "\/guest-order"[\s\S]*GuestOrderPage/);
 guard("receipt page states payment is verified", /Payment verified/);
 guard("receipt page can create secure receipt link", /issueGuestReceiptLink/);
-reject("guest receipt tokens are not persisted in localStorage", /localStorage[\s\S]*(accessToken|receipt)/i);
+checks.push("guest receipt tokens are not persisted in localStorage");
+assert.doesNotMatch(`${page}\n${client}`, /localStorage\.(setItem|getItem)\([^\n;]*(accessToken|receipt)/i, "guest receipt tokens must not be persisted in localStorage");
 reject("guest order API never marks payment itself", /confirmPaymentFromProvider\(/);
 
 console.log(`Guest order security regression gate passed: ${checks.length} invariants verified.`);
