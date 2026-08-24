@@ -36,6 +36,7 @@ const CustomerOrdersPage = lazy(() => import("./pages/CustomerOrdersPage"));
 const RefundReconciliationPage = lazy(() => import("./pages/RefundReconciliationPage"));
 const CommercialCreditReconciliationPage = lazy(() => import("./pages/CommercialCreditReconciliationPage"));
 const PaymentReconciliationPage = lazy(() => import("./pages/PaymentReconciliationPage"));
+const GuestOrderPage = lazy(() => import("./pages/GuestOrderPage"));
 
 const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const WISHLIST_KEY = "smartcommerce_guest_wishlist_v1";
@@ -141,6 +142,7 @@ export default function App() {
   else if (path === "/account/notifications") page = <DeliveryNotificationPreferencesPage />;
   else if (path === "/account/returns") page = <ReturnsPage />;
   else if (path === "/checkout") page = <CheckoutPage guestCart={cart} />;
+  else if (path === "/guest-order") page = <GuestOrderPage orderId={route.query.get("order") || undefined} attemptId={route.query.get("attemptId") || undefined} accessToken={route.query.get("access") || undefined} />;
   else if (path === "/operations/delivery-reviews") page = <DeliveryReviewPage />;
   else if (path === "/operations/delivery-dispatch") page = <DeliveryOperationsPage />;
   else if (path === "/operations/notification-health") page = <DeliveryNotificationHealthPage />;
