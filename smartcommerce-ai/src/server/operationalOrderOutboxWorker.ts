@@ -15,8 +15,9 @@ function sql() {
 const DEFAULT_LEASE_SECONDS = 90;
 const DEFAULT_MAX_ATTEMPTS = 8;
 const MAX_BATCH = 25;
+const ALL_DESTINATIONS = ["pos_order_write", "inventory_commitment", "fulfilment_activation"] as const;
 
-export type OperationalOutboxDestination = "pos_order_write" | "inventory_commitment" | "fulfilment_activation";
+export type OperationalOutboxDestination = (typeof ALL_DESTINATIONS)[number];
 export type OperationalOutboxJob = {
   id: string;
   order_id: string;
@@ -56,25 +57,32 @@ function clampLease(seconds?: number) {
   return Math.max(30, Math.min(600, Math.trunc(seconds || DEFAULT_LEASE_SECONDS)));
 }
 
+function normalizeDestinations(destinations?: OperationalOutboxDestination[]) {
+  const requested = new Set((destinations || []).filter((value): value is OperationalOutboxDestination => ALL_DESTINATIONS.includes(value)));
+  return requested.size ? Array.from(requested) : [...ALL_DESTINATIONS];
+}
+
 function retryDelaySeconds(attempts: number) {
   const exponent = Math.max(0, Math.min(8, attempts - 1));
   return Math.min(3600, 15 * 2 ** exponent);
 }
 
-export async function claimOperationalOutboxJobs(input: { limit?: number; leaseSeconds?: number } = {}) {
+export async function claimOperationalOutboxJobs(input: { limit?: number; leaseSeconds?: number; destinations?: OperationalOutboxDestination[] } = {}) {
   await ensureOperationalOutboxWorkerSchema();
   const limit = clampBatch(input.limit);
   const leaseSeconds = clampLease(input.leaseSeconds);
+  const destinations = normalizeDestinations(input.destinations);
   const leaseToken = `lease_${randomBytes(18).toString("hex")}`;
 
   const rows = await sql()`
     WITH claimable AS (
       SELECT id
       FROM operational_order_outbox
-      WHERE (
-        (status='pending' AND next_attempt_at <= NOW())
-        OR (status='processing' AND lease_until IS NOT NULL AND lease_until <= NOW())
-      )
+      WHERE destination = ANY(${destinations}::text[])
+        AND (
+          (status='pending' AND next_attempt_at <= NOW())
+          OR (status='processing' AND lease_until IS NOT NULL AND lease_until <= NOW())
+        )
       ORDER BY next_attempt_at ASC, created_at ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -214,7 +222,7 @@ export async function failOperationalOutboxJob(input: { jobId: string; leaseToke
 
 export async function processOperationalOutboxBatch(
   processor: (job: OperationalOutboxJob) => Promise<OperationalOutboxProcessorResult>,
-  input: { limit?: number; leaseSeconds?: number; maxAttempts?: number } = {},
+  input: { limit?: number; leaseSeconds?: number; maxAttempts?: number; destinations?: OperationalOutboxDestination[] } = {},
 ) {
   const claimed = await claimOperationalOutboxJobs(input);
   const results: Array<{ jobId: string; outcome: string }> = [];
