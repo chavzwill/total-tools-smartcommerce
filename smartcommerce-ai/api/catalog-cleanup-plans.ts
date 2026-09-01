@@ -68,7 +68,7 @@ async function inspectDependencies(productIds: string[]) {
   const safeFetch = createHardenedServerFetch({ timeoutMs: 7000, maxResponseBytes: 1_000_000 });
   const snapshots=[];
   for (const productId of productIds) {
-    const response = await safeFetch(`${base}/api/catalog-cleanup-dependencies/${encodeURIComponent(productId)}`, {
+    const response = await safeFetch(`${base}/api/commerce-sync/catalog-cleanup-dependencies/${encodeURIComponent(productId)}`, {
       method:"GET", headers:{ Accept:"application/json", "X-API-Key":apiKey },
     });
     const payload = await response.json().catch(()=>null);
