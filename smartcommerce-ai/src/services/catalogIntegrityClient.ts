@@ -53,6 +53,25 @@ export type CatalogIntegrityReview={
   first_reviewed_at:string;
   updated_at:string;
 };
+export type CatalogCleanupPlan={
+  id:string;
+  issue_key:string;
+  action_type:'archive'|'merge';
+  source_product_ids:string[];
+  target_product_id:string|null;
+  dependency_snapshot:unknown[];
+  status:'awaiting_second_approval'|'approved_not_executable'|string;
+  prepared_by_employee_id:string;
+  prepared_by_username:string;
+  prepared_note:string;
+  prepared_at:string;
+  approved_by_employee_id:string|null;
+  approved_by_username:string|null;
+  approval_note:string|null;
+  approved_at:string|null;
+  execution_enabled:boolean;
+  updated_at:string;
+};
 
 async function json<T>(res:Response,fallback:string){
   const payload=await res.json().catch(()=>({})) as T&{error?:{code?:string;message?:string}};
@@ -70,12 +89,19 @@ export async function loadCatalogIntegrityReviews(){
 export async function saveCatalogIntegrityReview(input:{issue:CatalogIntegrityIssue;classification:CatalogReviewClassification;note:string;evidenceReference?:string}){
   const res=await fetch('/api/catalog-integrity-reviews',{
     method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({
-      issueKey:input.issue.issueKey,
-      classification:input.classification,
-      note:input.note,
-      evidenceReference:input.evidenceReference||undefined,
-    }),
+    body:JSON.stringify({issueKey:input.issue.issueKey,classification:input.classification,note:input.note,evidenceReference:input.evidenceReference||undefined}),
   });
   return json<{review:CatalogIntegrityReview}>(res,'Catalog remediation review could not be saved.');
+}
+export async function loadCatalogCleanupPlans(){
+  const res=await fetch('/api/catalog-cleanup-plans',{credentials:'same-origin',headers:{Accept:'application/json'}});
+  return json<{plans:CatalogCleanupPlan[]}>(res,'Catalog cleanup plans could not be loaded.');
+}
+export async function prepareCatalogCleanupPlan(input:{issueKey:string;actionType:'archive'|'merge';targetProductId?:string;note:string}){
+  const res=await fetch('/api/catalog-cleanup-plans',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({action:'prepare',issueKey:input.issueKey,actionType:input.actionType,targetProductId:input.targetProductId,note:input.note})});
+  return json<{plan:CatalogCleanupPlan}>(res,'Catalog cleanup plan could not be prepared.');
+}
+export async function approveCatalogCleanupPlan(input:{planId:string;note:string}){
+  const res=await fetch('/api/catalog-cleanup-plans',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({action:'approve',planId:input.planId,note:input.note})});
+  return json<{plan:CatalogCleanupPlan}>(res,'Catalog cleanup plan could not be approved.');
 }
