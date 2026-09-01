@@ -37,6 +37,34 @@ function trustedContext(): PosAdapterContext {
   };
 }
 
+function hasUsableTimestamp(product: CommerceProduct) {
+  const metadata = product.metadata || {};
+  for (const key of [
+    "updatedAt",
+    "updated_at",
+    "lastSyncedAt",
+    "last_synced_at",
+    "syncedAt",
+    "synced_at",
+    "modifiedAt",
+    "modified_at",
+  ]) {
+    const value = metadata[key];
+    if (typeof value === "string" && Number.isFinite(Date.parse(value))) return true;
+  }
+  return false;
+}
+
+function stalenessEvidence(products: CommerceProduct[]) {
+  const active = products.filter((product) => product.active);
+  const withTimestamp = active.filter(hasUsableTimestamp).length;
+  return {
+    activeProducts: active.length,
+    timestampedActiveProducts: withTimestamp,
+    coveragePercent: active.length ? Math.round((withTimestamp / active.length) * 100) : 100,
+  };
+}
+
 async function loadCatalog() {
   const adapter = createConfiguredTotalToolsAdapter();
   const context = trustedContext();
@@ -97,6 +125,7 @@ export default async function handler(request: any, response: any) {
         staleDays,
         truncated: catalog.truncated,
         scanLimit: MAX_PRODUCTS,
+        stalenessEvidence: stalenessEvidence(catalog.products),
       },
     });
   } catch (error) {
