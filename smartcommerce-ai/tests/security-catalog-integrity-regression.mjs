@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const load=(path)=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
-const [api,reviewApi,engine,page,client,app,guardAdapter,runtime]=await Promise.all([
+const [api,reviewApi,cleanupPlanApi,engine,page,client,app,guardAdapter,runtime]=await Promise.all([
   load('api/catalog-integrity.ts'),
   load('api/catalog-integrity-reviews.ts'),
+  load('api/catalog-cleanup-plans.ts'),
   load('src/server/catalogIntegrity.ts'),
   load('src/pages/CatalogIntegrityPage.tsx'),
   load('src/services/catalogIntegrityClient.ts'),
@@ -58,8 +59,19 @@ guard('explicit integrity scans may include inactive rows',guardAdapter,/query\?
 guard('direct inactive product reads fail closed',guardAdapter,/PRODUCT_INACTIVE[\s\S]*getProductById/);
 guard('inactive products cannot pass availability checks',guardAdapter,/getInventoryAvailability[\s\S]*product\.data\.active\s*===\s*false/);
 guard('configured Total Tools adapter is wrapped',runtime,/withActiveCatalogGuard\(createTotalToolsPosWriteAdapter/);
+guard('cleanup planning requires inventory delete authority',cleanupPlanApi,/canStaff\(session,"inventory_delete"\)/);
+guard('cleanup planning requires approved cleanup candidate',cleanupPlanApi,/classification!=="cleanup_candidate"[\s\S]*approved_for_cleanup/);
+guard('cleanup planning requires fresh scan',cleanupPlanApi,/24\*60\*60\*1000[\s\S]*FRESH_SCAN_REQUIRED/);
+guard('cleanup planning snapshots provider dependencies',cleanupPlanApi,/inspectDependencies\(productIds\)/);
+guard('cleanup planning allows only archive or merge',cleanupPlanApi,/\["archive","merge"\]/);
+guard('merge plan requires surviving affected product',cleanupPlanApi,/MERGE_TARGET_REQUIRED/);
+guard('second approval requires security authority',cleanupPlanApi,/canStaff\(session,"security_manage"\)/);
+guard('second approval must be independent',cleanupPlanApi,/INDEPENDENT_APPROVER_REQUIRED/);
+guard('approved cleanup remains non executable',cleanupPlanApi,/approved_not_executable[\s\S]*execution_enabled=FALSE/);
+guard('cleanup planning keeps event ledger',cleanupPlanApi,/catalog_cleanup_plan_events[\s\S]*second_approved/);
 reject('diagnostic endpoint cannot mutate products',api,/createProduct|updateProduct|deleteProduct/);
 reject('review endpoint cannot mutate provider products',reviewApi,/createProduct|updateProduct|deleteProduct|\/api\/products/);
+reject('cleanup plan endpoint cannot execute product mutation',cleanupPlanApi,/action==="execute"|DELETE FROM products|UPDATE products SET active|archiveProduct|mergeProduct/);
 reject('workspace has no destructive cleanup action',page,/delete product|merge products|auto[- ]?merge|auto[- ]?delete|archive product/i);
 
 console.log(`Catalog integrity regression gate passed (${checks.length} invariants).`);
