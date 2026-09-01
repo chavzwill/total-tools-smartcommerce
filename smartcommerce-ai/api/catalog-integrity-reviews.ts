@@ -9,17 +9,6 @@ const CLASSIFICATIONS = new Set([
   "cleanup_candidate",
   "needs_investigation",
 ]);
-const ISSUE_TYPES = new Set([
-  "duplicate_sku",
-  "duplicate_barcode",
-  "probable_duplicate_product",
-  "missing_identifier",
-  "missing_price",
-  "invalid_price",
-  "conflicting_price",
-  "stale_record",
-  "inactive_but_purchasable",
-]);
 let sqlClient: ReturnType<typeof neon> | undefined;
 let schemaReady = false;
 
@@ -42,9 +31,13 @@ function send(response: any, status: number, payload: unknown) {
 function stringValue(value: unknown, max = 500) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
-function safeProductIds(value: unknown) {
-  if (!Array.isArray(value)) return [] as string[];
-  return Array.from(new Set(value.map((item) => stringValue(item, 120)).filter(Boolean))).slice(0, 20);
+function bodyObject(request: any) {
+  if (request.body && typeof request.body === "object") return request.body as Record<string, unknown>;
+  if (typeof request.body === "string") {
+    try { const parsed = JSON.parse(request.body); return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {}; }
+    catch { return {}; }
+  }
+  return {};
 }
 function reviewState(classification: string) {
   if (classification === "false_positive") return "dismissed";
@@ -55,6 +48,15 @@ function reviewState(classification: string) {
 }
 async function ensureSchema() {
   if (schemaReady) return;
+  await sql()`CREATE TABLE IF NOT EXISTS catalog_integrity_findings (
+    issue_key TEXT PRIMARY KEY,
+    issue_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    product_ids JSONB NOT NULL,
+    evidence JSONB,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
   await sql()`CREATE TABLE IF NOT EXISTS catalog_integrity_reviews (
     issue_key TEXT PRIMARY KEY,
     issue_type TEXT NOT NULL,
@@ -81,6 +83,7 @@ async function ensureSchema() {
     reviewer_username TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql()`CREATE INDEX IF NOT EXISTS idx_catalog_integrity_findings_seen ON catalog_integrity_findings(last_seen_at DESC)`;
   await sql()`CREATE INDEX IF NOT EXISTS idx_catalog_integrity_reviews_state ON catalog_integrity_reviews(review_state, updated_at DESC)`;
   await sql()`CREATE INDEX IF NOT EXISTS idx_catalog_integrity_review_events_issue ON catalog_integrity_review_events(issue_key, created_at DESC)`;
   schemaReady = true;
@@ -88,7 +91,7 @@ async function ensureSchema() {
 
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
-  if (!['GET', 'POST'].includes(method)) {
+  if (!["GET", "POST"].includes(method)) {
     response.setHeader("Allow", "GET, POST");
     return send(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "GET or POST is required." } });
   }
@@ -100,36 +103,37 @@ export default async function handler(request: any, response: any) {
 
   try {
     await ensureSchema();
-    if (method === 'GET') {
+    if (method === "GET") {
       const rows = await sql()`SELECT issue_key, issue_type, severity, product_ids, classification, review_state,
         note, evidence_reference, reviewer_employee_id, reviewer_username, first_reviewed_at, updated_at
         FROM catalog_integrity_reviews ORDER BY updated_at DESC LIMIT 500`;
       return send(response, 200, { reviews: rows });
     }
 
-    const body = request.body && typeof request.body === 'object' ? request.body : {};
+    const body = bodyObject(request);
     const issueKey = stringValue(body.issueKey, 80).toLowerCase();
-    const issueType = stringValue(body.issueType, 80);
-    const severity = stringValue(body.severity, 20);
     const classification = stringValue(body.classification, 80);
-    const productIds = safeProductIds(body.productIds);
     const note = stringValue(body.note, 1000) || null;
     const evidenceReference = stringValue(body.evidenceReference, 300) || null;
     if (!/^[a-f0-9]{64}$/.test(issueKey)) return send(response, 400, { error: { code: "INVALID_ISSUE_KEY", message: "A valid catalog finding key is required." } });
-    if (!ISSUE_TYPES.has(issueType)) return send(response, 400, { error: { code: "INVALID_ISSUE_TYPE", message: "The catalog finding type is invalid." } });
-    if (!['critical', 'warning', 'info'].includes(severity)) return send(response, 400, { error: { code: "INVALID_SEVERITY", message: "The catalog finding severity is invalid." } });
     if (!CLASSIFICATIONS.has(classification)) return send(response, 400, { error: { code: "INVALID_CLASSIFICATION", message: "Choose a supported remediation classification." } });
-    if (!productIds.length) return send(response, 400, { error: { code: "PRODUCT_IDS_REQUIRED", message: "At least one affected product is required." } });
-    if (classification !== 'false_positive' && !note) return send(response, 400, { error: { code: "REVIEW_NOTE_REQUIRED", message: "Add a review note explaining this decision." } });
+    if (classification !== "false_positive" && !note) return send(response, 400, { error: { code: "REVIEW_NOTE_REQUIRED", message: "Add a review note explaining this decision." } });
+
+    const observed = await sql()`SELECT issue_key, issue_type, severity, product_ids
+      FROM catalog_integrity_findings WHERE issue_key=${issueKey} LIMIT 1` as unknown as Array<{
+        issue_key: string; issue_type: string; severity: string; product_ids: string[];
+      }>;
+    const finding = observed[0];
+    if (!finding) return send(response, 409, { error: { code: "FINDING_NOT_REGISTERED", message: "Run a fresh catalog integrity scan before reviewing this finding." } });
 
     const state = reviewState(classification);
-    const productIdsJson = JSON.stringify(productIds);
+    const productIdsJson = JSON.stringify(finding.product_ids || []);
     const result = await sql()`WITH current_review AS (
       INSERT INTO catalog_integrity_reviews (
         issue_key, issue_type, severity, product_ids, classification, review_state, note, evidence_reference,
         reviewer_employee_id, reviewer_username
       ) VALUES (
-        ${issueKey}, ${issueType}, ${severity}, ${productIdsJson}::jsonb, ${classification}, ${state}, ${note}, ${evidenceReference},
+        ${finding.issue_key}, ${finding.issue_type}, ${finding.severity}, ${productIdsJson}::jsonb, ${classification}, ${state}, ${note}, ${evidenceReference},
         ${session.employeeId}, ${session.username}
       )
       ON CONFLICT (issue_key) DO UPDATE SET
