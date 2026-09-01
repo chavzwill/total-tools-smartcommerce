@@ -21,6 +21,7 @@ guard('inventory permission required',api,/canStaff\(session,\s*"inventory"\)[\s
 guard('inactive products included in scan',api,/includeInactive:\s*true/);
 guard('scan is bounded by max pages',api,/MAX_PAGES\s*=\s*20[\s\S]*MAX_PRODUCTS/);
 guard('stale threshold is bounded',api,/Math\.max\(30,\s*Math\.min\(730/);
+guard('staleness evidence coverage is calculated',api,/timestampedActiveProducts[\s\S]*coveragePercent/);
 guard('duplicate SKU detection exists',engine,/duplicate_sku/);
 guard('duplicate barcode detection exists',engine,/duplicate_barcode/);
 guard('probable duplicate detection exists',engine,/probable_duplicate_product/);
@@ -30,6 +31,7 @@ guard('stale record detection exists',engine,/stale_record/);
 guard('inactive purchasable contradiction exists',engine,/inactive_but_purchasable/);
 guard('operations route mounted',app,/\/operations\/catalog-integrity[\s\S]*CatalogIntegrityPage/);
 guard('workspace declares diagnostic-only behavior',page,/diagnostic only[\s\S]*does not delete, merge or rewrite provider inventory/i);
+guard('workspace warns when timestamp evidence is incomplete',page,/Staleness checks had timestamp evidence[\s\S]*cannot be declared fresh or stale/);
 guard('normal product search filters inactive rows',guardAdapter,/query\?\.includeInactive[\s\S]*product\.active\s*!==\s*false/);
 guard('explicit integrity scans may include inactive rows',guardAdapter,/query\?\.includeInactive\) return result/);
 guard('direct inactive product reads fail closed',guardAdapter,/PRODUCT_INACTIVE[\s\S]*getProductById/);
