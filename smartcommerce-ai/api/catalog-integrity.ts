@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { analyzeCatalogIntegrity } from "../src/server/catalogIntegrity.js";
 import { createConfiguredTotalToolsAdapter } from "../src/integrations/totalToolsPlatformRuntime.js";
 import type { CommerceProduct, PosAdapterContext } from "../src/platform/index.js";
@@ -65,6 +66,23 @@ function stalenessEvidence(products: CommerceProduct[]) {
   };
 }
 
+function stableEvidence(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => ["string", "number", "boolean"].includes(typeof item) || item === null)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return JSON.stringify(entries);
+}
+
+function findingKey(issue: { type: string; productIds: string[]; evidence?: Record<string, unknown> }) {
+  const canonical = [
+    issue.type,
+    [...issue.productIds].map(String).sort().join(","),
+    stableEvidence(issue.evidence),
+  ].join("|");
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
 async function loadCatalog() {
   const adapter = createConfiguredTotalToolsAdapter();
   const context = trustedContext();
@@ -117,7 +135,11 @@ export default async function handler(request: any, response: any) {
     }
 
     const staleDays = boundedStaleDays(request);
-    const report = analyzeCatalogIntegrity(catalog.products, { staleDays });
+    const rawReport = analyzeCatalogIntegrity(catalog.products, { staleDays });
+    const report = {
+      ...rawReport,
+      issues: rawReport.issues.map((issue) => ({ ...issue, issueKey: findingKey(issue) })),
+    };
     return send(response, 200, {
       report,
       source: {
