@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure";
 
 const COOKIE_NAME = "sc_session";
