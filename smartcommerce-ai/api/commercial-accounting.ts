@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { createHash } from "node:crypto";
 import { getCommercialLedgerStatement } from "../src/server/commercialAccountingLedger.js";
 import { getCommercialReceivablesSummary } from "../src/server/commercialReceivables.js";
+import { getCommercialMemberAuthority, hasCommercialPermission } from "../src/server/commercialMemberAuthorization.js";
 
 const COOKIE_NAME = "sc_session";
 const FINANCIAL_VIEW_ROLES = new Set(["owner", "admin", "approver", "buyer"]);
@@ -103,9 +104,10 @@ export default async function handler(request: any, response: any) {
       response.setHeader("Content-Type", "application/json");
       return send(response, 404, { error: { code: "COMMERCIAL_ACCOUNT_NOT_FOUND", message: "That commercial account is not available to you." } });
     }
-    if (!FINANCIAL_VIEW_ROLES.has(membership.role)) {
+    const memberAuthority = await getCommercialMemberAuthority(sql(), customerId, accountId);
+    if (!FINANCIAL_VIEW_ROLES.has(membership.role) || !hasCommercialPermission(memberAuthority, "view_invoices")) {
       response.setHeader("Content-Type", "application/json");
-      return send(response, 403, { error: { code: "COMMERCIAL_FINANCIAL_ROLE_REQUIRED", message: "Your commercial role is not authorised to view financial account activity." } });
+      return send(response, 403, { error: { code: "COMMERCIAL_FINANCIAL_PERMISSION_REQUIRED", message: "Your company access does not permit viewing invoices or statements." } });
     }
 
     const now = new Date();
