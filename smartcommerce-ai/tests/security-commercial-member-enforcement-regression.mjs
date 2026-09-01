@@ -10,7 +10,7 @@ const policy=read("api/commercial-financial-policy.ts");
 const checks=[
  ["central permission allowlist",/COMMERCIAL_PERMISSIONS[\s\S]*use_company_credit[\s\S]*rental_authority[\s\S]*repair_service_authority/],
  ["active membership required",/m\.status='active'/],
- ["role defaults merged with overrides",/permissions:\\{\.\.\.commercialRoleDefaults\\(row\\.role\\),\.\.\.overrides\\}/],
+ ["role defaults merged with overrides",/permissions:\{\.\.\.commercialRoleDefaults\(row\.role\),\.\.\.overrides\}/],
  ["per-order limit",/spendLimitOrderMinor[\s\S]*member_order_limit_exceeded/],
  ["daily spend aggregation",/date_trunc\('day',NOW\(\)\)[\s\S]*member_daily_limit_exceeded/],
  ["monthly spend aggregation",/date_trunc\('month',NOW\(\)\)[\s\S]*member_monthly_limit_exceeded/],
