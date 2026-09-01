@@ -1,6 +1,7 @@
 import { AlertTriangle, BriefcaseBusiness, Building2, CheckCircle2, FolderKanban, Loader2, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
+import CommercialTeamPanel from "../components/CommercialTeamPanel";
 import { createSmartCommercePlatformApi } from "../apiClient";
 import { getCustomerAccount } from "../lib/customerAccount";
 import { go, routeHref } from "../lib/router";
@@ -352,6 +353,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
               {accountDetails.projects.length ? <div className="sc-commercial-capabilities">{accountDetails.projects.map((project) => <article key={project.id}><strong>{project.name}</strong><p>{project.reference_code ? `${project.reference_code} · ` : ""}{project.status}</p></article>)}</div> : null}
             </> : null}
 
+            {accountDetails ? <CommercialTeamPanel accountId={selectedAccountId} onAccepted={refreshAccount} /> : null}
             {workspaceMessage ? <p className="sc-flow-status" role="status">{workspaceMessage}</p> : null}
           </> : null}
         </section>
