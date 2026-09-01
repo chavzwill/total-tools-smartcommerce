@@ -1,3 +1,4 @@
+import "../styles/commercial-team.css";
 import { FormEvent, useEffect, useState } from "react";
 import { Copy, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import {
