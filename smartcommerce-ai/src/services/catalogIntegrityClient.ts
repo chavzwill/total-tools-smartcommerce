@@ -18,7 +18,17 @@ export type CatalogIntegrityReport = {
 };
 export type CatalogIntegrityResponse = {
   report:CatalogIntegrityReport;
-  source:{providerId:string;staleDays:number;truncated:boolean;scanLimit:number};
+  source:{
+    providerId:string;
+    staleDays:number;
+    truncated:boolean;
+    scanLimit:number;
+    stalenessEvidence:{
+      activeProducts:number;
+      timestampedActiveProducts:number;
+      coveragePercent:number;
+    };
+  };
   error?:{code?:string;message?:string};
 };
 
