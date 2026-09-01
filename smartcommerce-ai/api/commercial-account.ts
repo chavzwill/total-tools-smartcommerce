@@ -5,6 +5,7 @@ import {
   recordSecurityEvent,
   requestIp,
 } from "../src/server/securityInfrastructure";
+import { getCommercialMemberAuthority, hasCommercialPermission } from "../src/server/commercialMemberAuthorization.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 24_000;
@@ -328,7 +329,8 @@ export default async function handler(request: any, response: any) {
     if (action === "create_site") {
       const accountId = String(input.accountId || "");
       const member = await membership(customerId, accountId);
-      if (!member || !["owner", "admin"].includes(member.role)) return send(response, 403, { error: { code: "COMMERCIAL_PERMISSION_DENIED", message: "You do not have permission to add job sites." } });
+      const authority = await getCommercialMemberAuthority(sql(), customerId, accountId);
+      if (!member || !hasCommercialPermission(authority, "manage_job_sites")) return send(response, 403, { error: { code: "COMMERCIAL_PERMISSION_DENIED", message: "Your company access does not permit managing job sites." } });
       const name = String(input.name || "").trim();
       if (name.length < 2 || name.length > 160) return send(response, 400, { error: { code: "INVALID_SITE", message: "Enter a valid site name." } });
       const id = `site_${randomBytes(16).toString("hex")}`;
@@ -340,7 +342,8 @@ export default async function handler(request: any, response: any) {
     if (action === "create_project") {
       const accountId = String(input.accountId || "");
       const member = await membership(customerId, accountId);
-      if (!member || !["owner", "admin", "buyer", "approver"].includes(member.role)) return send(response, 403, { error: { code: "COMMERCIAL_PERMISSION_DENIED", message: "You do not have permission to create projects." } });
+      const authority = await getCommercialMemberAuthority(sql(), customerId, accountId);
+      if (!member || !hasCommercialPermission(authority, "manage_job_sites")) return send(response, 403, { error: { code: "COMMERCIAL_PERMISSION_DENIED", message: "Your company access does not permit managing projects." } });
       const name = String(input.name || "").trim();
       if (name.length < 2 || name.length > 180) return send(response, 400, { error: { code: "INVALID_PROJECT", message: "Enter a valid project name." } });
       const siteId = String(input.siteId || "").trim() || null;
