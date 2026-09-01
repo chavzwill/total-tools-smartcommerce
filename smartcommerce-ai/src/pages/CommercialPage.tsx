@@ -353,7 +353,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
               {accountDetails.projects.length ? <div className="sc-commercial-capabilities">{accountDetails.projects.map((project) => <article key={project.id}><strong>{project.name}</strong><p>{project.reference_code ? `${project.reference_code} · ` : ""}{project.status}</p></article>)}</div> : null}
             </> : null}
 
-            {accountDetails ? <CommercialTeamPanel accountId={selectedAccountId} onAccepted={refreshAccount} /> : null}
+            <CommercialTeamPanel accountId={selectedAccountId} onAccepted={refreshAccount} />
             {workspaceMessage ? <p className="sc-flow-status" role="status">{workspaceMessage}</p> : null}
           </> : null}
         </section>
