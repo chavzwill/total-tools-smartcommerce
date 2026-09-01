@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const load=(path)=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
-const [api,engine,page,app]=await Promise.all([
+const [api,engine,page,app,guardAdapter,runtime]=await Promise.all([
   load('api/catalog-integrity.ts'),
   load('src/server/catalogIntegrity.ts'),
   load('src/pages/CatalogIntegrityPage.tsx'),
   load('src/App.tsx'),
+  load('src/integrations/activeCatalogGuardAdapter.ts'),
+  load('src/integrations/totalToolsPlatformRuntime.ts'),
 ]);
 
 const checks=[];
@@ -28,6 +30,11 @@ guard('stale record detection exists',engine,/stale_record/);
 guard('inactive purchasable contradiction exists',engine,/inactive_but_purchasable/);
 guard('operations route mounted',app,/\/operations\/catalog-integrity[\s\S]*CatalogIntegrityPage/);
 guard('workspace declares diagnostic-only behavior',page,/diagnostic only[\s\S]*does not delete, merge or rewrite provider inventory/i);
+guard('normal product search filters inactive rows',guardAdapter,/query\?\.includeInactive[\s\S]*product\.active\s*!==\s*false/);
+guard('explicit integrity scans may include inactive rows',guardAdapter,/query\?\.includeInactive\) return result/);
+guard('direct inactive product reads fail closed',guardAdapter,/PRODUCT_INACTIVE[\s\S]*getProductById/);
+guard('inactive products cannot pass availability checks',guardAdapter,/getInventoryAvailability[\s\S]*product\.data\.active\s*===\s*false/);
+guard('configured Total Tools adapter is wrapped',runtime,/withActiveCatalogGuard\(createTotalToolsPosWriteAdapter/);
 reject('endpoint cannot mutate products',api,/createProduct|updateProduct|deleteProduct/);
 reject('workspace has no destructive cleanup action',page,/delete product|merge products|auto[- ]?merge|auto[- ]?delete/i);
 
