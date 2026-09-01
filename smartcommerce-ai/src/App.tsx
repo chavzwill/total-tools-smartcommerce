@@ -9,6 +9,7 @@ const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const CommercialPage = lazy(() => import("./pages/CommercialPage"));
 const CommercialAccountingPage = lazy(() => import("./pages/CommercialAccountingPage"));
 const CommercialAccountReviewsPage = lazy(() => import("./pages/CommercialAccountReviewsPage"));
+const CatalogIntegrityPage = lazy(() => import("./pages/CatalogIntegrityPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
 const CategoriesPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoriesPage })));
 const CategoryPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoryPage })));
@@ -150,6 +151,7 @@ export default function App() {
   else if (path === "/operations/notification-health") page = <DeliveryNotificationHealthPage />;
   else if (path === "/operations/pos-readiness") page = <PosReadinessPage />;
   else if (path === "/operations/commercial-accounts") page = <CommercialAccountReviewsPage />;
+  else if (path === "/operations/catalog-integrity") page = <CatalogIntegrityPage />;
   else if (path === "/operations/returns") page = <ReturnOperationsPage />;
   else if (path === "/operations/refund-reconciliation") page = <RefundReconciliationPage />;
   else if (path === "/operations/commercial-credit-reconciliation") page = <CommercialCreditReconciliationPage />;
