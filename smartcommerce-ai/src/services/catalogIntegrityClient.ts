@@ -72,9 +72,6 @@ export async function saveCatalogIntegrityReview(input:{issue:CatalogIntegrityIs
     method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify({
       issueKey:input.issue.issueKey,
-      issueType:input.issue.type,
-      severity:input.issue.severity,
-      productIds:input.issue.productIds,
       classification:input.classification,
       note:input.note,
       evidenceReference:input.evidenceReference||undefined,
