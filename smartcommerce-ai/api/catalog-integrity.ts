@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { neon } from "@neondatabase/serverless";
 import { analyzeCatalogIntegrity } from "../src/server/catalogIntegrity.js";
 import { createConfiguredTotalToolsAdapter } from "../src/integrations/totalToolsPlatformRuntime.js";
 import type { CommerceProduct, PosAdapterContext } from "../src/platform/index.js";
@@ -7,7 +8,17 @@ import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../s
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 const MAX_PRODUCTS = PAGE_SIZE * MAX_PAGES;
+let sqlClient: ReturnType<typeof neon> | undefined;
+let findingsSchemaReady = false;
 
+function sql() {
+  if (!sqlClient) {
+    const url = process.env.SMARTCOMMERCE_DATABASE_URL || process.env.DATABASE_URL;
+    if (!url) throw new Error("CATALOG_INTEGRITY_DATABASE_NOT_CONFIGURED");
+    sqlClient = neon(url);
+  }
+  return sqlClient;
+}
 function firstHeader(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -83,6 +94,48 @@ function findingKey(issue: { type: string; productIds: string[]; evidence?: Reco
   return createHash("sha256").update(canonical).digest("hex");
 }
 
+async function ensureFindingsSchema() {
+  if (findingsSchemaReady) return;
+  await sql()`CREATE TABLE IF NOT EXISTS catalog_integrity_findings (
+    issue_key TEXT PRIMARY KEY,
+    issue_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    product_ids JSONB NOT NULL,
+    evidence JSONB,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql()`CREATE INDEX IF NOT EXISTS idx_catalog_integrity_findings_seen ON catalog_integrity_findings(last_seen_at DESC)`;
+  findingsSchemaReady = true;
+}
+
+async function registerFindings(issues: Array<{ issueKey: string; type: string; severity: string; productIds: string[]; evidence?: Record<string, unknown> }>) {
+  await ensureFindingsSchema();
+  if (!issues.length) return;
+  const payload = JSON.stringify(issues.map((issue) => ({
+    issue_key: issue.issueKey,
+    issue_type: issue.type,
+    severity: issue.severity,
+    product_ids: issue.productIds,
+    evidence: issue.evidence || null,
+  })));
+  await sql()`INSERT INTO catalog_integrity_findings (issue_key, issue_type, severity, product_ids, evidence)
+    SELECT item.issue_key, item.issue_type, item.severity, item.product_ids, item.evidence
+    FROM jsonb_to_recordset(${payload}::jsonb) AS item(
+      issue_key TEXT,
+      issue_type TEXT,
+      severity TEXT,
+      product_ids JSONB,
+      evidence JSONB
+    )
+    ON CONFLICT (issue_key) DO UPDATE SET
+      issue_type=EXCLUDED.issue_type,
+      severity=EXCLUDED.severity,
+      product_ids=EXCLUDED.product_ids,
+      evidence=EXCLUDED.evidence,
+      last_seen_at=NOW()`;
+}
+
 async function loadCatalog() {
   const adapter = createConfiguredTotalToolsAdapter();
   const context = trustedContext();
@@ -136,10 +189,9 @@ export default async function handler(request: any, response: any) {
 
     const staleDays = boundedStaleDays(request);
     const rawReport = analyzeCatalogIntegrity(catalog.products, { staleDays });
-    const report = {
-      ...rawReport,
-      issues: rawReport.issues.map((issue) => ({ ...issue, issueKey: findingKey(issue) })),
-    };
+    const issues = rawReport.issues.map((issue) => ({ ...issue, issueKey: findingKey(issue) }));
+    await registerFindings(issues);
+    const report = { ...rawReport, issues };
     return send(response, 200, {
       report,
       source: {
