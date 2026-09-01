@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { createConfiguredTotalToolsPlatformService } from "../src/integrations/totalToolsPlatformRuntime.js";
 import { enforceDurableRateLimit, recordSecurityEvent, requestIp } from "../src/server/securityInfrastructure.js";
 import { recordCommercialLedgerEntry } from "../src/server/commercialAccountingLedger.js";
+import { evaluateCommercialSpend, getCommercialMemberAuthority, hasCommercialPermission } from "../src/server/commercialMemberAuthorization.js";
 
 const COOKIE_NAME = "sc_session";
 const MAX_BODY_BYTES = 16_000;
@@ -179,7 +180,8 @@ export default async function handler(request: any, response: any) {
       LIMIT 1
     ` as TrustRow[];
     const trust = trustRows[0];
-    if (!trust || !PURCHASING_ROLES.has(trust.role) || trust.authority_status !== "verified" || trust.verification_status !== "verified" || trust.privilege_status !== "enabled" || trust.mapping_status !== "verified" || !trust.provider_id || !trust.provider_account_id) {
+    const memberAuthority = await getCommercialMemberAuthority(sql(), session.customer_id, commercialAccountId);
+    if (!trust || !memberAuthority || !PURCHASING_ROLES.has(trust.role) || trust.authority_status !== "verified" || trust.verification_status !== "verified" || trust.privilege_status !== "enabled" || trust.mapping_status !== "verified" || !trust.provider_id || !trust.provider_account_id) {
       await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "commercial_not_verified", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id });
       return send(response, 403, { error: { code: "COMMERCIAL_CREDIT_NOT_APPROVED", message: "This organisation is not currently approved for account-credit checkout." } });
     }
@@ -199,6 +201,19 @@ export default async function handler(request: any, response: any) {
     const termsCode = control?.payment_terms_code || trust.mapping_terms_code || null;
     const creditLimitMinor = Number(control?.credit_limit_minor || 0);
     const currencyMatches = !control?.credit_currency || String(control.credit_currency).toUpperCase() === quoteCurrency;
+
+    if (!hasCommercialPermission(memberAuthority, "place_orders") || !hasCommercialPermission(memberAuthority, "use_company_credit")) {
+      await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "member_permission_denied", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, role: memberAuthority.role } });
+      return send(response, 403, { error: { code: "COMMERCIAL_MEMBER_PERMISSION_DENIED", message: "Your company access does not permit placing orders on company credit." } });
+    }
+    if (purchaseOrderReference && !hasCommercialPermission(memberAuthority, "submit_purchase_orders")) {
+      return send(response, 403, { error: { code: "COMMERCIAL_PURCHASE_ORDER_PERMISSION_DENIED", message: "Your company access does not permit submitting purchase orders." } });
+    }
+    const memberSpend = await evaluateCommercialSpend(sql(), memberAuthority, session.customer_id, commercialAccountId, totalMinor, quoteCurrency);
+    if (!memberSpend.allowed) {
+      await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: memberSpend.reason, riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, totalMinor, quoteCurrency, memberId: memberAuthority.memberId } });
+      return send(response, 403, { error: { code: "COMMERCIAL_MEMBER_SPEND_LIMIT", message: "This purchase exceeds your assigned company spending authority and requires an authorised approver." } });
+    }
 
     if (!control || control.control_status !== "approved" || !control.credit_enabled || !termsCode || !Number.isFinite(creditLimitMinor) || creditLimitMinor <= 0 || totalMinor > creditLimitMinor || !currencyMatches) {
       await recordSecurityEvent({ request, eventType: "commercial_credit_checkout_blocked", eventStatus: "financial_control_blocked", riskLevel: "high", customerId: session.customer_id, commercialAccountId, sessionId: session.id, metadata: { quoteId, totalMinor, quoteCurrency, controlId: control?.id || null } });
@@ -250,6 +265,9 @@ export default async function handler(request: any, response: any) {
         purchaseOrderReference: purchaseOrderReference || null,
         checkoutQuoteId: quoteId,
         approvedCreditLimitMinor: String(control.credit_limit_minor || ""),
+        commercialMemberId: memberAuthority.memberId,
+        commercialMemberRole: memberAuthority.role,
+        memberSpendDecision: memberSpend.reason,
         creditCurrency: control.credit_currency || quoteCurrency,
       },
     });
