@@ -28,6 +28,7 @@ export default function CommercialTeamPanel({accountId,onAccepted}:{accountId:st
     setAcceptUrl(result.invitation.acceptUrl);setEmail("");setMessage("Invitation created. The secure link expires in 72 hours.");setTeam(await getCommercialTeam(accountId));
   }catch(e){setMessage(e instanceof Error?e.message:"Invitation could not be created.")}finally{setBusy(false)}}
   async function status(memberId:string,action:"suspend_member"|"revoke_member"|"reactivate_member"){setBusy(true);try{const result=await changeCommercialMemberStatus(accountId,memberId,action);setTeam(result.team);setMessage(action==="reactivate_member"?"Member access restored.":action==="suspend_member"?"Member access suspended.":"Member access revoked.")}catch(e){setMessage(e instanceof Error?e.message:"Member access could not be changed.")}finally{setBusy(false)}}
+  if(!accountId&&!token)return null;
   return <section className="sc-commercial-team" aria-labelledby="commercial-team-title">
     <div className="sc-commercial-team__heading"><Users size={24}/><div><span className="sc-flow-kicker">Company team</span><h3 id="commercial-team-title">Individual access, clear authority</h3><p>Every person signs in with their own SmartCommerce account. Shared company passwords are never required.</p></div></div>
     {token?<div className="sc-commercial-team__invite"><ShieldCheck size={20}/><p>{message}</p><button type="button" onClick={accept} disabled={busy}>{busy?<><Loader2 size={16}/>Accepting…</>:"Accept invitation"}</button></div>:null}
