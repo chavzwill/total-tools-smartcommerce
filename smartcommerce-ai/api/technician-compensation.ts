@@ -1,3 +1,4 @@
+import { staffDecisionRequiresPos, POS_APPROVAL_MESSAGE } from "../src/server/staffApprovalAuthority.js";
 import { neon } from "@neondatabase/serverless";
 import { randomBytes } from "node:crypto";
 import { firstHeader, recordSecurityEvent } from "../src/server/securityInfrastructure.js";
@@ -201,6 +202,7 @@ export default async function handler(req: any, res: any) {
 
     const input: any = await body(req);
     const action = String(input.action || "");
+    if (staffDecisionRequiresPos('compensation', action)) return send(res, 409, {error:{code:'STAFF_POS_AUTHORITY_REQUIRED',message:POS_APPROVAL_MESSAGE}});
 
     if (action === "set_rate") {
       if (!isAdmin(session)) return send(res, 403, { error: { code: "TECHNICIAN_COMPENSATION_ADMIN_REQUIRED", message: "Administrator permission is required." } });

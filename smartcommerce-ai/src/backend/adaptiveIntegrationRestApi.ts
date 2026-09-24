@@ -122,6 +122,7 @@ export async function handleAdaptiveIntegrationRestRequest(
   ) {
     const capability = decodeURIComponent(segments[4]) as SmartCommerceCapability;
     const decision = segments[5];
+    if (["approve", "reject", "revoke"].includes(decision)) return errorResponse("STAFF_POS_AUTHORITY_REQUIRED", "Staff approval decisions must be completed in the POS. Decision synchronization is pending.", 409);
     const body = await readJson<{ reason?: string }>(request);
 
     if (decision === "approve") {

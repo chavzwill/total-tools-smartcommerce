@@ -33,7 +33,7 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
   const [notes, setNotes] = useState(String(workOrder.estimate_notes || ""));
   const [auths, setAuths] = useState<Authorization[]>([]);
   const [scope, setScope] = useState("");
-  const [decisionNote, setDecisionNote] = useState("");
+
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [customerLink, setCustomerLink] = useState("");
@@ -99,15 +99,6 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
     }
   }
 
-  async function decide(decision: "approved" | "declined") {
-    if (!latest || latest.status !== "pending" || busy) return;
-    setBusy(decision); setError("");
-    try {
-      await authorizationRequest(`/api/repair-authorizations?workOrderId=${encodeURIComponent(String(workOrder.id))}`, { method: "POST", body: JSON.stringify({ action: "record_decision", authorizationId: latest.id, decision, channel: "staff_recorded", note: decisionNote.trim() || null }) });
-      setDecisionNote(""); setCustomerLink(""); await loadAuthorizations();
-    } catch (e) { setError(e instanceof Error ? e.message : "Decision could not be recorded."); }
-    finally { setBusy(null); }
-  }
 
   async function confirmParts() {
     if (!partsConfirmable || busy) return;
@@ -151,11 +142,7 @@ export default function ServiceAdvisorPanel({ workOrder, staffEmployeeId, canAss
       {customerLink ? <div className="sc-service-advisor__link-row"><input readOnly value={customerLink} aria-label="Customer repair authorization link"/><button type="button" onClick={()=>void copyCustomerLink()}><Copy size={15}/>{copied ? "Copied" : "Copy link"}</button></div> : <button type="button" onClick={()=>void reissueCustomerLink()} disabled={busy === "reissue-link"}><Link2 size={15}/>{busy === "reissue-link" ? "Issuing…" : "Generate new secure link"}</button>}
     </div> : null}
 
-    {latest?.status === "pending" && canAssess ? <div className="sc-service-advisor__decision">
-      <strong>Record customer decision manually</strong><input value={decisionNote} onChange={(e)=>setDecisionNote(e.target.value)} placeholder="Channel/reference/note (optional)"/>
-      <button className="is-approve" type="button" onClick={()=>void decide("approved")} disabled={Boolean(busy)}><CheckCircle2 size={15}/>Approved</button>
-      <button className="is-decline" type="button" onClick={()=>void decide("declined")} disabled={Boolean(busy)}><XCircle size={15}/>Declined</button>
-    </div> : null}
+    <p>Staff-recorded repair decisions must be completed in the POS. Customers can still use their secure approval link.</p>
 
     <div className="sc-service-advisor__parts"><div><PackageCheck size={17}/><div><strong>Parts sourcing</strong><span>Confirming converts unresolved branch sources into transfers or purchase requests using the POS engine.</span></div></div><button type="button" onClick={()=>void confirmParts()} disabled={!partsConfirmable || busy === "parts"}><PackageCheck size={15}/>{busy === "parts" ? "Confirming…" : "Confirm parts sourcing"}</button></div>
   </section>;

@@ -83,7 +83,7 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
+export async function createAccount(input: { email: string; password: string; fullName: string; phone?: string }) {
   const db = sql();
   const existing = (await db`SELECT id FROM customer_accounts WHERE email = ${input.email} LIMIT 1`) as Record<string, unknown>[];
   if (existing.length) return undefined;
@@ -99,7 +99,7 @@ async function createAccount(input: { email: string; password: string; fullName:
   return rows[0] ? accountFromRow(rows[0]) : undefined;
 }
 
-async function authenticate(email: string, password: string) {
+export async function authenticate(email: string, password: string) {
   const rows = (await sql()`
     SELECT id, email, password_hash, full_name, phone, email_verified, created_at, updated_at
     FROM customer_accounts

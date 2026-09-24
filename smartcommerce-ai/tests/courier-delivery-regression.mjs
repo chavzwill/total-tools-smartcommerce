@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const dataUrl=s=>`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
+async function moduleUrl(path,replacements={}){let code=ts.transpileModule(await readFile(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;for(const[a,b]of Object.entries(replacements))code=code.replaceAll(JSON.stringify(a),JSON.stringify(b)).replaceAll("'"+a+"'",JSON.stringify(b));return dataUrl(code);}
+const policy=await moduleUrl('../src/server/couriers/policy.ts');
+const privateData=await moduleUrl('../src/server/couriers/privateData.ts');
+const {validateDeliveryCommand,prepareDeliveryCommand}=await import(await moduleUrl('../src/server/couriers/deliveryValidation.ts',{'./policy.js':policy,'./privateData.js':privateData}));
+const c={action:'update_status',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),expectedVersion:0,status:'in_transit'};
+assert.equal(validateDeliveryCommand(c).status,'in_transit');
+for(const changes of [{expectedVersion:-1},{expectedVersion:undefined},{customerId:'forged'},{status:'paid'},{id:'bad'},{reportedAt:'yesterday'},{status:'delayed'},{proof:{data:'bad'}}])assert.throws(()=>validateDeliveryCommand({...c,...changes}));
+const secret=Buffer.alloc(32,17).toString('base64');
+const proof={recipient:'Test recipient',mime:'image/png',data:Buffer.from([137,80,78,71,13,10,26,10,1,2,3]).toString('base64')};
+const delivered={...c,status:'delivered',proof};
+assert.throws(()=>validateDeliveryCommand({...delivered,proof:undefined}));
+const prepared=prepareDeliveryCommand(validateDeliveryCommand(delivered),secret);
+assert.equal(prepared.proof.data,undefined);assert.equal(prepared.proof.recipient,undefined);
+assert.equal(prepared.proof.fingerprint.length,64);
+const {unseal}=await import(privateData);
+assert.equal(JSON.parse(unseal(prepared.proof.encrypted,secret).toString()).recipient,'Test recipient');
+assert.equal(prepareDeliveryCommand(delivered,secret).proof.fingerprint,prepared.proof.fingerprint);
+assert.throws(()=>prepareDeliveryCommand(delivered,''));
+for(const changes of [{recipient:''},{mime:'application/pdf'},{data:'garbage'},{data:Buffer.alloc(2*1024*1024+1).toString('base64')},{data:'<svg/>'},{encrypted:{body:'forged'}}])assert.throws(()=>prepareDeliveryCommand(validateDeliveryCommand({...delivered,proof:{...proof,...changes}}),secret));
+console.log('Delivery command validation, image limits, recipient requirement and encrypted deterministic proof fingerprints passed.');

@@ -1,3 +1,4 @@
+import { staffDecisionRequiresPos, POS_APPROVAL_MESSAGE } from "../src/server/staffApprovalAuthority.js";
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
 import { firstHeader, recordSecurityEvent } from "../src/server/securityInfrastructure.js";
@@ -54,6 +55,7 @@ export default async function handler(req:any,res:any){
     if(!sameOrigin(req))return send(res,403,{error:{code:"ORIGIN_REJECTED",message:"This request was rejected."}});
     if(!canStaff(session,"wo_assess"))return send(res,403,{error:{code:"ASSESSMENT_PERMISSION_REQUIRED",message:"Assessment permission is required."}});
     const input=await readBody(req);const action=String(input.action||"");
+    if (staffDecisionRequiresPos('repair', action)) return send(res, 409, {error:{code:'STAFF_POS_AUTHORITY_REQUIRED',message:POS_APPROVAL_MESSAGE}});
 
     if(action==="request_authorization"){
       const latestRows=await sql()`SELECT * FROM repair_authorizations WHERE work_order_id=${workOrderId} ORDER BY version DESC LIMIT 1` as Row[];const latest=latestRows[0]||null;

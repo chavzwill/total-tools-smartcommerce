@@ -1,6 +1,7 @@
 import { BriefcaseBusiness, CheckCircle2, CreditCard, Loader2, PackageCheck, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
+import CheckoutPayment from "../components/shared/CheckoutPayment";
 import { createCheckoutQuote, createGuestCheckoutQuote, type CheckoutQuote, type GuestCheckoutItem } from "../lib/customerCommerce";
 import { go, routeHref } from "../lib/router";
 import { listCommercialAccounts, type CommercialAccountSummary } from "../services/commercialAccountClient";
@@ -54,6 +55,7 @@ const canUseCredit = (account: CommercialAccountSummary) =>
   ["owner", "admin", "buyer", "approver"].includes(account.role);
 
 export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutItem[] }) {
+  const paymentQuote=new URLSearchParams(window.location.hash.split('?')[1]||window.location.search).get('paymentQuote');
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -69,6 +71,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
   useEffect(() => {
     let active = true;
     async function prepareCheckout() {
+      if(paymentQuote){setLoading(false);return;}
       try {
         const value = await createCheckoutQuote();
         if (active) setQuote(value);
@@ -90,7 +93,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
     }
     void prepareCheckout();
     return () => { active = false; };
-  }, [guestCart]);
+  }, [guestCart,paymentQuote]);
 
   const guest = quote?.checkoutMode === "guest";
 
@@ -140,7 +143,8 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
     }
   }
 
-  if (loading) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Secure checkout</span><h1>Verifying every line.</h1><p>SmartCommerce is checking current provider pricing, product status and tax before showing your order.</p></section></Container></div>;
+  if(paymentQuote)return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><h1>Payment status</h1><CheckoutPayment quoteId={paymentQuote} returning/><button type="button" onClick={()=>go('/account')}>View my account</button></section></Container></div>;
+  if (loading) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Secure checkout</span><h1>Checking your order…</h1><p>We’re checking prices, product availability and tax.</p></section></Container></div>;
 
   if (!quote) return <div className="demo-page sc-checkout-page"><Container className="demo-checkout"><section className="sc-checkout-intro"><span>Checkout unavailable</span><h1>We couldn’t prepare this order.</h1><p>{authRequired ? "Sign in to continue with your saved cart. Your cart will still be here when you return." : error}</p>{authRequired ? <><button onClick={() => go("/account?intent=checkout")}>Sign in or create account</button><button onClick={() => go("/cart")}>Return to cart</button></> : <button onClick={() => go("/cart")}>Return to cart</button>}</section></Container></div>;
 
@@ -149,7 +153,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
       <Container className="demo-checkout sc-checkout-premium">
         <section className="sc-checkout-intro">
           <span>{guest ? "Guest checkout" : "Secure checkout"}</span>
-          <h1>Review the order we just verified.</h1>
+          <h1>Review your order.</h1>
           <p>{guest ? "No account required. " : ""}This quote comes from current provider data and expires at {expiresLabel}. Prices are never trusted from browser state.</p>
           <div className="sc-checkout-assurance-grid">
             <div><ShieldCheck size={20} /><strong>Provider verified</strong><span>Products and pricing rechecked server-side.</span></div>
@@ -172,7 +176,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
             <div className="sc-checkout-settlement__options">
               <button type="button" className={settlementMode === "standard" ? "is-active" : ""} onClick={() => setSettlementMode("standard")}>
                 <CreditCard size={19} />
-                <span><strong>Standard payment</strong><small>Card/payment processor connection required.</small></span>
+                <span><strong>Standard payment</strong><small>Secure card checkout.</small></span>
               </button>
               {!guest ? <button type="button" className={settlementMode === "commercial-credit" ? "is-active" : ""} onClick={() => setSettlementMode("commercial-credit")}>
                 <BriefcaseBusiness size={19} />
@@ -182,8 +186,7 @@ export default function CheckoutPage({ guestCart }: { guestCart: GuestCheckoutIt
           </div>
 
           {settlementMode === "standard" ? <>
-            <div className="sc-checkout-trust"><ShieldCheck size={22} /><div><strong>Payment capture is not connected yet.</strong><span>SmartCommerce will not collect card data or claim an order is paid until a real processor and webhook-confirmed paid-order flow are connected.</span></div></div>
-            <button disabled>Payment setup required</button>
+            {guest?<p>Sign in to use secure online payment for a saved order.</p>:<CheckoutPayment quoteId={quote.id}/>}
           </> : null}
 
           {settlementMode === "commercial-credit" && !guest ? (

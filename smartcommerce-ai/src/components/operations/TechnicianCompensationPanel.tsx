@@ -117,14 +117,6 @@ export default function TechnicianCompensationPanel() {
     finally { setSaving(false); }
   }
 
-  async function periodAction(action: "approve_period" | "finalize_period", periodId: string) {
-    setError("");
-    try {
-      await request("/api/technician-compensation", { method: "POST", body: JSON.stringify({ action, periodId }) });
-      await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "The pay period could not be updated."); }
-  }
-
   async function inspectEvidence(event: FormEvent) {
     event.preventDefault();
     if (!evidenceEmployeeId.trim() || evidenceLoading) return;
@@ -208,8 +200,7 @@ export default function TechnicianCompensationPanel() {
               <div className="sc-tech-comp__period-metrics"><div><small>Score</small><strong>{pct(result.performanceScore)}</strong></div><div><small>Incentive</small><strong>{pct(result.incentivePercent)}</strong></div><div><small>Incentive pay</small><strong>{money(result.incentiveAmount)}</strong></div><div><small>Total</small><strong>{money(result.totalPay)}</strong></div></div>
               {failures.length ? <div className="sc-tech-comp__gates"><AlertCircle size={14} /><span>Quality gate: {failures.join(", ")}</span></div> : <div className="sc-tech-comp__gates is-clear"><ShieldCheck size={14} /><span>Quality gates passed</span></div>}
               <div className="sc-tech-comp__period-actions">
-                {data.canReview && period.status === "review" ? <button type="button" onClick={() => void periodAction("approve_period", period.id)}><CheckCircle2 size={15} />Approve</button> : null}
-                {data.canAdminister && period.status === "approved" ? <button type="button" onClick={() => void periodAction("finalize_period", period.id)}><LockKeyhole size={15} />Finalize payroll</button> : null}
+                <p>Payroll approval and finalization are performed in the POS. Synchronization is pending.</p>
                 {period.status === "finalized" ? <span><LockKeyhole size={14} />Finalized and immutable</span> : null}
               </div>
             </article>

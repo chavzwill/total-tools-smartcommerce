@@ -40,6 +40,7 @@ function continueAccountIntent(state: CustomerAccountState) {
   if (path !== "/account") return;
 
   const intent = new URLSearchParams(queryString).get("intent");
+  if (intent === "courier") { window.location.hash = "/couriers"; return; }
   if (intent === "repair") {
     window.location.hash = "/repairs";
     return;

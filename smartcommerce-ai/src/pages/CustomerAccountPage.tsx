@@ -1,3 +1,4 @@
+import CourierDeliveryPanel from '../components/couriers/CourierDeliveryPanel';
 import { BadgeCheck, Bot, BriefcaseBusiness, ChevronRight, KeyRound, LayoutDashboard, LockKeyhole, LogIn, LogOut, MailCheck, PackageCheck, ReceiptText, ShieldCheck, ShoppingBag, UserRound, UserRoundPlus, Wrench } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import Container from "../components/shared/Container";
@@ -143,6 +144,8 @@ export default function CustomerAccountPage() {
             <button className="sc-signout-button" type="button" disabled={submitting} onClick={handleLogout}><LogOut size={17} /> Sign out</button>
           </header>
 
+          <nav aria-label="Courier account" className="sc-account-courier-entry"><strong>Deliver with Total Tools</strong><a href={routeHref("/couriers/account?mode=signup")}>Sign up as a courier</a><a href={routeHref("/couriers/account")}>Courier sign in</a></nav>
+
           {!customer.emailVerified && <section className="sc-account-alert"><MailCheck size={21} /><div><strong>Verify your email</strong><span>Verify your address to unlock sensitive account and commercial features.</span></div><button type="button" disabled={submitting} onClick={handleVerificationRequest}>{submitting ? "Sending…" : "Send verification email"}</button></section>}
 
           <div className="sc-account-workspace">
@@ -196,7 +199,7 @@ export default function CustomerAccountPage() {
                 </section>
               )}
 
-              {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
+              {accountTab === "orders" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Orders</span><h2>Your purchases</h2><p>Track purchases, fulfilment and order history from one place.</p></div><div className="sc-account-placeholder"><PackageCheck size={28} /><h3>Order history is coming online</h3><p>When provider-backed orders are connected, current and past purchases will appear here automatically.</p></div><CourierDeliveryPanel audience="customer"/><div className="sc-account-real__actions"><a href={routeHref("/products")}>Continue shopping</a></div></section>}
 
               {accountTab === "rentals" && <section className="sc-account-tab-panel"><div className="sc-account-section__heading"><span className="sc-eyebrow">Rentals</span><h2>Your rentals</h2><p>Manage active equipment, return deadlines, extensions and rental history without leaving your account.</p></div><AccountRentalsPanel /></section>}
 
@@ -233,6 +236,7 @@ export default function CustomerAccountPage() {
   return (
     <div className="demo-page sc-account-page">
       <Container className="demo-account sc-account-real sc-account-real--signed-out">
+        <nav aria-label="Courier account" className="sc-account-courier-entry"><strong>Deliver with Total Tools</strong><a href={routeHref("/couriers/account?mode=signup")}>Sign up as a courier</a><a href={routeHref("/couriers/account")}>Courier sign in</a></nav>
         <div className="sc-account-real__intro">
           {mode === "reset" ? <KeyRound size={42} /> : <LockKeyhole size={42} />}
           <span className="sc-eyebrow">SmartCommerce account</span>

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createPlatformBackendService } from "./src/backend/platformBackendService.js";
@@ -146,6 +146,35 @@ export default defineConfig({
     {
       name: "smartcommerce-platform-rest",
       configureServer(server) {
+        // Load server-only values for the same handlers used in deployment.
+        // Vite exposes only VITE_* values to browser modules.
+        const environment = loadEnv(server.config.mode, server.config.envDir, "");
+        for (const [key, value] of Object.entries(environment)) {
+          if (process.env[key] === undefined) process.env[key] = value;
+        }
+          const accountRoutes = new Set([
+            "checkout-payment", "handypay-webhook",
+            "courier-dispatch", "staff-dispatch",
+          "courier-deliveries", "customer-deliveries", "staff-deliveries", "courier-private", "courier-review", "courier-account", "couriers", "courier-approvals", "staff-session", "account", "account-security", "account-sessions", "account-step-up",
+          "account-mfa", "account-passkeys", "commerce", "commercial-account",
+          "commercial-accounting", "commercial-financial-policy",
+        ]);
+        server.middlewares.use(async (request, response, next) => {
+          const url = new URL(request.url || "/", "http://localhost");
+          const name = url.pathname.replace(/^\/api\//, "");
+          if (!url.pathname.startsWith("/api/") || !accountRoutes.has(name)) return next();
+          try {
+            const module = await server.ssrLoadModule(`/api/${name}.ts`);
+            Object.assign(request, { query: Object.fromEntries(url.searchParams) });
+            await module.default(request, response);
+          } catch {
+            if (response.writableEnded) return;
+            response.statusCode = 503;
+            response.setHeader("Content-Type", "application/json");
+            response.setHeader("Cache-Control", "no-store");
+            response.end(JSON.stringify({ error: { code: "ACCOUNT_SERVICE_UNAVAILABLE", message: "Account services are unavailable. Please try again later." } }));
+          }
+        });
         server.middlewares.use(async (request, response, next) => {
           if (!isPlatformRoute(request.url)) return next();
 

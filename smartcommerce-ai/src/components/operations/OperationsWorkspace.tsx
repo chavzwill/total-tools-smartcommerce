@@ -19,7 +19,9 @@ export type OperationsSection =
   | "inventory"
   | "purchasing"
   | "quotes"
-  | "reports";
+  | "reports"
+  | "couriers"
+  | "courier-security";
 
 type OperationsWorkspaceProps = {
   section: OperationsSection;
@@ -45,6 +47,8 @@ const sections: Array<{
   { id: "inventory", label: "Inventory", icon: Boxes },
   { id: "purchasing", label: "Purchasing", icon: PackageSearch },
   { id: "quotes", label: "Quotes", icon: ClipboardList },
+  { id: "courier-security", label: "Courier verification & pickup", icon: UsersRound },
+  { id: "couriers", label: "Courier approvals", icon: UsersRound },
   { id: "reports", label: "Reports", icon: ReceiptText },
 ];
 

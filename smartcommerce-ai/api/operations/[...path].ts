@@ -1,3 +1,4 @@
+import { operationsReadOnly, POS_APPROVAL_MESSAGE } from "../../src/server/staffApprovalAuthority.js";
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../../src/server/hardenedOutboundFetch.js";
 import { firstHeader, recordSecurityEvent } from "../../src/server/securityInfrastructure.js";
 import { canStaff, parseCookie, readStaffSession, STAFF_COOKIE_NAME } from "../../src/server/staffSession.js";
@@ -134,6 +135,8 @@ export default async function handler(request: any, response: any) {
   if (!staff) {
     return send(response, 401, { success: false, error: { code: "STAFF_AUTH_REQUIRED", message: "Staff sign-in is required." } });
   }
+
+  if (operationsReadOnly(method)) return send(response, 409, {success:false,error:{code:'STAFF_POS_AUTHORITY_REQUIRED',message:POS_APPROVAL_MESSAGE}});
 
   const permission = requiredPermission(method, rule, segments);
   if (!hasRequiredPermission(staff, permission)) {

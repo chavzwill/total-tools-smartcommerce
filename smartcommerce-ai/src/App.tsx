@@ -12,6 +12,8 @@ import {
 import HomePageV3 from "./pages/HomePageV3";
 
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
+const CourierAccountPage = lazy(() => import("./pages/CourierAccountPage"));
+const CourierPortalPage = lazy(() => import("./pages/CourierPortalPage"));
 const CommercialPage = lazy(() => import("./pages/CommercialPage"));
 const CommercialAccountingPage = lazy(() => import("./pages/CommercialAccountingPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
@@ -180,6 +182,8 @@ export default function App() {
   else if (path === "/rentals") page = <RentalsPage key={`rentals:${branchRouteKey}`} />;
   else if (path.startsWith("/rental/")) page = <OperationalRentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
+  else if (path === "/couriers/account") page = <CourierAccountPage />;
+  else if (path === "/couriers") page = <CourierPortalPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
   else if (path === "/commercial/accounting") page = <CommercialAccountingPage />;
   else if (path === "/deals") page = <DealsPage />;

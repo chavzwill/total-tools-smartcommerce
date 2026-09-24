@@ -8,7 +8,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export default function Button({ children, className = "", variant = "primary", size = "medium", ...props }: ButtonProps) {
   return (
-    <button className={`tt-button tt-button--${variant} tt-button--${size} ${className}`.trim()} {...props}>
+    <button className={`tt-button tt-button--${variant} tt-button--${size} sc-button sc-button--${variant === "ghost" ? "secondary" : variant} ${className}`.trim()} {...props}>
       {children}
     </button>
   );

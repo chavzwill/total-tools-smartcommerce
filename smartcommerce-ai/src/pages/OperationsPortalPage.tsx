@@ -2,6 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, LogIn, LogOut, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import GuidedMode from "../components/guidance/GuidedMode";
 import OperationsWorkspace, { type OperationsSection } from "../components/operations/OperationsWorkspace";
+import CourierSecurityPanel from "../components/operations/CourierSecurityPanel";
+import CourierApprovalsPanel from "../components/operations/CourierApprovalsPanel";
 import TechnicianLiveBoard from "../components/operations/TechnicianLiveBoard";
 import WorkOrderBoard, { type WorkOrderRow } from "../components/operations/WorkOrderBoard";
 import WorkOrderDetailPanel from "../components/operations/WorkOrderDetailPanel";
@@ -38,7 +40,9 @@ function hasPermission(staff: StaffIdentity, key: string, parent?: string) {
 
 function can(staff: StaffIdentity, section: OperationsSection) {
   if (section === "overview") return true;
-  const key: Record<Exclude<OperationsSection, "overview">, string> = {
+  if (section === "courier-security") return ["couriers_verify", "couriers_payments", "couriers_pickup"].some(p => staff.permissions[p] === true);
+  if (section === "couriers") return staff.permissions.couriers_manage === true;
+  const key: Record<Exclude<OperationsSection, "overview" | "couriers" | "courier-security">, string> = {
     pos: "pos", repairs: "work_orders", technicians: "work_orders", inventory: "inventory",
     purchasing: "purchasing", quotes: "quotations", reports: "reports",
   };
@@ -64,7 +68,7 @@ export default function OperationsPortalPage() {
   const [pin, setPin] = useState("");
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [section, setSection] = useState<OperationsSection>("overview");
+  const [section, setSection] = useState<OperationsSection>(window.location.hash.startsWith("#/operations/courier-security") ? "courier-security" : window.location.hash.startsWith("#/operations/couriers") ? "couriers" : "overview");
   const [resource, setResource] = useState<ResourceState>({ loading: false });
   const [dashboard, setDashboard] = useState<DashboardState>(emptyDashboard);
   const [dashboardError, setDashboardError] = useState("");
@@ -77,7 +81,7 @@ export default function OperationsPortalPage() {
 
   const allowedSections = useMemo(() => {
     if (!staff) return ["overview"] as OperationsSection[];
-    return (["overview", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reports"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
+    return (["overview", "pos", "repairs", "technicians", "inventory", "purchasing", "quotes", "reports", "couriers", "courier-security"] as OperationsSection[]).filter((candidate) => can(staff, candidate));
   }, [staff]);
 
   const loadSession = useCallback(async () => {
@@ -89,6 +93,7 @@ export default function OperationsPortalPage() {
   }, []);
 
   useEffect(() => { void loadSession(); }, [loadSession]);
+  useEffect(() => { if (staff && !can(staff, section)) setSection("overview"); }, [staff, section]);
 
   const loadDashboard = useCallback(async () => {
     if (!staff || !can(staff, "repairs")) return;
@@ -104,7 +109,7 @@ export default function OperationsPortalPage() {
     }
   }, [staff]);
 
-  useEffect(() => { if (staff) void loadDashboard(); }, [staff, loadDashboard]);
+  useEffect(() => { if (staff && !section.startsWith("courier")) void loadDashboard(); }, [staff, section, loadDashboard]);
 
   const loadResource = useCallback(async (nextSection: OperationsSection) => {
     const path = sectionResource[nextSection];
@@ -129,7 +134,7 @@ export default function OperationsPortalPage() {
     try {
       const state = await loginStaff({ username: username.trim(), ...(password ? { password } : { pin }) });
       if (!state.staff) throw new Error("Staff sign-in failed.");
-      setStaff(state.staff); setPassword(""); setPin(""); setSection("overview");
+      setStaff(state.staff); setPassword(""); setPin(""); setSection(window.location.hash.startsWith("#/operations/courier-security") && can(state.staff, "courier-security") ? "courier-security" : window.location.hash.startsWith("#/operations/couriers") && can(state.staff, "couriers") ? "couriers" : "overview");
     } catch (error) { setAuthError((error as OperationsApiError).message || "Staff sign-in failed."); }
     finally { setSubmitting(false); }
   }
@@ -167,7 +172,7 @@ export default function OperationsPortalPage() {
   const title: Record<OperationsSection, string> = {
     overview: "Operations command center", pos: "Point of sale", repairs: "Repair work orders",
     technicians: "Technician workspace", inventory: "Inventory control", purchasing: "Purchasing",
-    quotes: "Quotations", reports: "Reports & transactions",
+    quotes: "Quotations", reports: "Reports & transactions", couriers: "Courier approvals", "courier-security": "Courier verification & pickup",
   };
   const overdue = dashboard.activeWorkOrders.filter((row) => Number(row?.days_past_pickup_due || 0) > 0).length;
 
@@ -181,6 +186,7 @@ export default function OperationsPortalPage() {
         onNavigate={setSection}
         actions={<button type="button" className="sc-ops-signout" onClick={logout}><LogOut size={16} />Sign out</button>}
       >
+        <p role="note">Staff approvals are managed in the POS. This operations gateway is read-only; approval synchronization is pending.</p>
         {section === "overview" ? (
           <>
             <div className="sc-ops-metrics">
@@ -196,16 +202,20 @@ export default function OperationsPortalPage() {
             </div>
           </>
         ) : section === "pos" ? (
-          <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>The protected operations gateway is ready for the existing checkout, drawer and transaction workflows. No duplicate payment engine is being created.</p></div>
+          <div className="sc-ops-empty"><strong>POS transaction workspace</strong><p>Complete checkout, drawer and transaction changes in the POS. SmartCommerce displays permitted records only.</p></div>
         ) : selectedWorkOrder && section === "repairs" ? (
           <WorkOrderDetailPanel
             workOrderId={selectedWorkOrder}
             onClose={() => setSelectedWorkOrder(null)}
             staffEmployeeId={staff.employeeId}
-            canManageTasks={hasPermission(staff, "wo_technician", "work_orders")}
+            canManageTasks={false}
             canAssess={hasPermission(staff, "wo_assess", "work_orders")}
-            canAssignParts={hasPermission(staff, "wo_assign_parts", "work_orders")}
+            canAssignParts={false}
           />
+        ) : section === "courier-security" ? (
+          can(staff, "courier-security") ? <CourierSecurityPanel /> : <p>You do not have access to courier verification or pickup.</p>
+        ) : section === "couriers" ? (
+          can(staff, "couriers") ? <CourierApprovalsPanel /> : <p>You do not have access to courier approvals.</p>
         ) : resource.loading ? (
           <div className="sc-ops-auth-state"><Loader2 className="sc-ops-spin" size={22} /><strong>Loading live POS data…</strong></div>
         ) : resource.error ? (
