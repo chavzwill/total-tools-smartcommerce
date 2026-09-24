@@ -31,7 +31,7 @@ const invariants = [
 
 for (const [description, fragment] of invariants) {
   assert.ok(
-    repairPage.includes(fragment),
+    repairPage.replace(/\r\n/g, "\n").includes(fragment),
     `Missing repair authentication continuity invariant: ${description}`,
   );
 }

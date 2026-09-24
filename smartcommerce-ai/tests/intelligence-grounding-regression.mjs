@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 
 const assistantEngine = await readFile(new URL("../src/backend/assistantIntelligenceEngine.ts", import.meta.url), "utf8");
 const comparisonEngine = await readFile(new URL("../src/backend/assistantComparisonEngine.ts", import.meta.url), "utf8");
-const repairGuidance = await readFile(new URL("../src/backend/assistantRepairGuidance.ts", import.meta.url), "utf8");
+// Source formatting must not make this invariant depend on Git's line endings.
+const repairGuidance = (await readFile(new URL("../src/backend/assistantRepairGuidance.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const backendTypes = await readFile(new URL("../src/backend/platformBackendTypes.ts", import.meta.url), "utf8");
 const platformBackendService = await readFile(new URL("../src/backend/platformBackendService.ts", import.meta.url), "utf8");
 const totalToolsRuntime = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
