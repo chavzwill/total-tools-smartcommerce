@@ -7,7 +7,7 @@ import {unseal} from './privateData.js';
 export type DeliveryAudience='courier'|'customer'|'staff';
 function safeError(error:unknown):never{
   const code=String((error as Error)?.message);
-  const statuses:Record<string,number>={COURIER_NOT_FOUND:404,COURIER_FORBIDDEN:403,COURIER_STATE_CONFLICT:409,COURIER_IDEMPOTENCY_CONFLICT:409,COURIER_VERIFICATION_REQUIRED:409,COURIER_POS_VERIFICATION_PENDING:409,COURIER_INVALID_COMMAND:400,COURIER_REASON_REQUIRED:400,COURIER_PROOF_REQUIRED:400};
+  const statuses:Record<string,number>={COURIER_NOT_FOUND:404,COURIER_FORBIDDEN:403,COURIER_STATE_CONFLICT:409,COURIER_IDEMPOTENCY_CONFLICT:409,COURIER_VERIFICATION_REQUIRED:409,COURIER_POS_VERIFICATION_PENDING:409,COURIER_RECEIPT_NOT_READY:409,COURIER_INVALID_COMMAND:400,COURIER_REASON_REQUIRED:400,COURIER_PROOF_REQUIRED:400};
   throw new CourierError(statuses[code]?code:'COURIER_UNAVAILABLE',statuses[code]||503);
 }
 export async function readDeliveries(actor:CourierActor,audience:DeliveryAudience,cursor?:string){
@@ -29,4 +29,9 @@ export async function mutateDelivery(actor:CourierActor,audience:DeliveryAudienc
   if(audience!=='courier'||actor.kind!=='owner')throw new CourierError('COURIER_FORBIDDEN',403);
   const prepared=prepareDeliveryCommand(command,secret);
   try{const rows=await courierDb()`SELECT courier_delivery_mutate(${JSON.stringify(actor)}::jsonb,${JSON.stringify(prepared)}::jsonb) AS result`;return {result:rows[0].result};}catch(e){safeError(e);}
+}
+export async function recordDeliveryReceipt(actor:CourierActor,raw:Record<string,unknown>){
+  const command=validateDeliveryCommand(raw);
+  if(actor.kind!=='owner'||!['confirm_receipt','report_problem'].includes(String(command.action)))throw new CourierError('COURIER_FORBIDDEN',403);
+  try{const rows=await courierDb()`SELECT courier_customer_receipt(${JSON.stringify(actor)}::jsonb,${JSON.stringify(command)}::jsonb) AS result`;return {result:rows[0].result};}catch(error){safeError(error);}
 }

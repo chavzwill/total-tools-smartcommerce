@@ -11,6 +11,12 @@ export function validateDeliveryCommand(input:unknown):Record<string,unknown>{
     if(Object.keys(c).some(k=>!['action','id','idempotencyKey'].includes(k)))return invalid();
     return c;
   }
+  if(c.action==='confirm_receipt'||c.action==='report_problem'){
+    if(Object.keys(c).some(k=>!['action','id','idempotencyKey','expectedVersion','reason'].includes(k))||c.expectedVersion!==0)return invalid();
+    if(c.action==='confirm_receipt'&&c.reason!==undefined)return invalid();
+    if(c.action==='report_problem'&&!['damaged','missing_items','wrong_items','not_received','other'].includes(String(c.reason)))return invalid();
+    return c;
+  }
   if(c.action!=='update_status'||!Number.isSafeInteger(c.expectedVersion)||Number(c.expectedVersion)<0||!['in_transit','out_for_delivery','delivered','delayed','failed_attempt'].includes(String(c.status)))return invalid();
   if(c.reportedAt!==undefined&&(typeof c.reportedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(c.reportedAt)||!Number.isFinite(Date.parse(c.reportedAt))))return invalid();
   if(['delayed','failed_attempt'].includes(String(c.status))){if(!['traffic','weather','vehicle_issue','recipient_unavailable','address_issue','other'].includes(String(c.reason)))return invalid();}

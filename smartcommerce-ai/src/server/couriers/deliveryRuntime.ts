@@ -3,7 +3,7 @@ import {createCourierHandler} from './http.js';
 import {courierActor} from './runtime.js';
 import {courierDb} from './repository.js';
 import {parseCookie} from '../staffSession.js';
-import {readDeliveries,mutateDelivery,type DeliveryAudience} from './deliveryRepository.js';
+import {readDeliveries,mutateDelivery,recordDeliveryReceipt,type DeliveryAudience} from './deliveryRepository.js';
 import {validateDeliveryCommand} from './deliveryValidation.js';
 import {enforceDurableRateLimit} from '../securityInfrastructure.js';
 import {courierAuthorityError} from './authority.js';
@@ -18,6 +18,6 @@ export function deliveryHandler(audience:DeliveryAudience){return createCourierH
     return rows[0]?{kind:'owner',customerId:String(rows[0].customer_id)}:null;
   },
   read:async(actor,cursor)=>{const result=await readDeliveries(actor,audience,cursor);return {...result,deliveries:result.deliveries.map((delivery:Record<string,unknown>)=>({...delivery,canUpdate:false}))};},
-  mutate:(actor,command)=>{if(command.action==='update_status')throw new CourierError(courierAuthorityError('update_status')!,409);return mutateDelivery(actor,audience,command);},
+  mutate:(actor,command)=>{if(['confirm_receipt','report_problem'].includes(String(command.action))){if(audience!=='customer')throw new CourierError('COURIER_FORBIDDEN',403);return recordDeliveryReceipt(actor,command);}if(command.action==='update_status')throw new CourierError(courierAuthorityError('update_status')!,409);return mutateDelivery(actor,audience,command);},
   limit:async(request,actor)=>{await enforceDurableRateLimit({request,action:'courier_delivery_'+audience,subject:actor.kind==='staff'?actor.employeeId:actor.customerId,limit:120,windowSeconds:900});},
 },audience==='staff',{validate:validateDeliveryCommand,bodyLimit:3*1024*1024,authorizeStaff:actor=>actor.kind==='staff'&&actor.permissions.couriers_pickup===true});}

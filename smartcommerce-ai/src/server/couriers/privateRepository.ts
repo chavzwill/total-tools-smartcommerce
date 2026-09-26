@@ -28,7 +28,7 @@ export async function readCourierPrivate(actor:CourierActor,cursor?:string){
       UNION ALL SELECT 'bank:'||b.organization_id::text,jsonb_build_object('type','bank','id',b.organization_id,'organizationId',b.organization_id,'name',o.profile->>'businessName','status',b.status,'version',b.version,'masked',b.masked,'reason',b.reason) FROM courier_bank_accounts b JOIN courier_organizations o ON o.id=b.organization_id WHERE ${pay}
       UNION ALL SELECT 'payout:'||p.id::text,jsonb_build_object('type','payout','id',p.id,'organizationId',p.organization_id,'name',o.profile->>'businessName','status',p.status,'version',p.version,'amountMinor',p.amount_minor::text,'currency',p.currency,'transferReference',p.transfer_reference) FROM courier_payouts p JOIN courier_organizations o ON o.id=p.organization_id WHERE ${pay}
     ) records WHERE (${cursor||null}::text IS NULL OR records.cursor>${cursor||null}) ORDER BY cursor LIMIT 51`;
-    return {records:rows.slice(0,50).map(r=>r.record),nextCursor:rows.length>50?rows[49].cursor:null,canScan:actor.permissions.couriers_pickup===true};
+    return {records:rows.slice(0,50).map(r=>r.record),nextCursor:rows.length>50?rows[49].cursor:null,canScan:actor.permissions.couriers_pickup===true,handoverAvailable:false};
   }
   const docs=await db`SELECT id,kind,status,version,reason FROM courier_identity_documents WHERE account_id=${actor.customerId} ORDER BY kind`;
   const orgs=await db`SELECT id FROM courier_organizations WHERE owner_customer_id::text=${actor.customerId}`;

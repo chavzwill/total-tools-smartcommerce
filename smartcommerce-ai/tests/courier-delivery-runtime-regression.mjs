@@ -12,7 +12,7 @@ const http=await moduleUrl('../src/server/couriers/http.ts',{'./policy.js':polic
 globalThis.deliveryCalls=[];
 globalThis.deliveryTestActor={kind:'owner',customerId:'driver'};
 globalThis.deliverySessionValid=true;
-const repo=dataUrl(`export const readDeliveries=async(actor,audience)=>{globalThis.deliveryCalls.push({actor,audience});return {deliveries:[{id:'legacy-delivery',canUpdate:true}]}};export const mutateDelivery=async(actor,audience,command)=>{globalThis.deliveryCalls.push({actor,audience,command});return {result:{}}};`);
+const repo=dataUrl(`export const readDeliveries=async(actor,audience)=>{globalThis.deliveryCalls.push({actor,audience});return {deliveries:[{id:'legacy-delivery',canUpdate:true}]}};export const mutateDelivery=async(actor,audience,command)=>{globalThis.deliveryCalls.push({actor,audience,command});return {result:{}}};export const recordDeliveryReceipt=async(actor,command)=>{globalThis.deliveryCalls.push({actor,command});return {result:{status:'accepted'}}};`);
 const runtime=await import(await moduleUrl('../src/server/couriers/deliveryRuntime.ts',{
  './http.js':http,'./deliveryValidation.js':validation,'./deliveryRepository.js':repo,
  './authority.js':authority,'./policy.js':policy,
@@ -37,6 +37,10 @@ const blockedUpdate=await call('courier',{body:update});
 assert.equal(blockedUpdate.statusCode,409);
 assert.equal(blockedUpdate.body.error.code,'COURIER_POS_VERIFICATION_PENDING');
 assert.equal(globalThis.deliveryCalls.length,callsBeforeUpdate);
+const receipt={action:'confirm_receipt',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),expectedVersion:0};
+assert.equal((await call('customer',{body:receipt})).body.result.status,'accepted');
+assert.equal(globalThis.deliveryCalls.at(-1).actor.customerId,'authenticated-customer');
+assert.equal((await call('courier',{body:receipt})).statusCode,403);
 const proof={action:'read_proof',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID()};
 assert.equal((await call('customer',{body:proof,origin:'https://attacker.test'})).statusCode,403);
 assert.equal((await call('customer',{body:{...proof,customerId:'other'}})).statusCode,400);

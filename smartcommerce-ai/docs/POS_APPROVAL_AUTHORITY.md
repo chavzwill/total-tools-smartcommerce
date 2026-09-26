@@ -15,6 +15,6 @@ SmartCommerce collects applications, documents and requests, and displays record
 
 ## Integration status
 
-No POS approval ingestion contract is implemented or enabled. Requests must not be labelled sent to POS or POS approved. Submitted courier registrations await POS review; the connection is pending. Historical local statuses are not evidence of POS approval. No POS code, production database, payment credentials, deployment or merge was changed.
+No POS approval ingestion contract is implemented or enabled. Requests must not be labelled sent to POS or POS approved. Submitted courier registrations are saved in SmartCommerce for a future POS handoff; they have not reached a POS review queue. Historical local statuses are not evidence of POS approval. No POS code, production database, payment credentials, deployment or merge was changed.
 
 Before live activation, implement the POS review queue and authenticated versioned decision exchange with actor, reason, entity identity, event identity, replay protection and audit records. Replace the fail-closed courier database guards only with that reviewed authority contract. Do not add a browser credential or local override.

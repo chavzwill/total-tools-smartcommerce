@@ -9,6 +9,11 @@ let requested;
 globalThis.fetch=async(url,options)=>{requested={url,options};return Response.json({deliveries:[],nextCursor:null,checkedAt:'2026-09-18T00:00:00Z'});};
 assert.deepEqual((await deliveryRequest('customer')).deliveries,[]);assert.equal(requested.url,'/api/customer-deliveries');assert.equal(requested.options.credentials,'same-origin');
 for(const response of [new Response('<html/>'),Response.json({deliveries:[{}]}),Response.json({error:{message:'SQL private detail'}},{status:503})]){globalThis.fetch=async()=>response;await assert.rejects(()=>deliveryRequest('customer'),e=>!e.message.includes('SQL'));}
+const valid={id:crypto.randomUUID(),orderNumber:'ORDER-1',status:'delivered',version:3,updatedAt:null,canUpdate:false,canConfirm:true,receiptStatus:null,receiptReason:null,receiptAt:null,hasProof:true,items:[],destination:{},events:[]};
+globalThis.fetch=async()=>Response.json({deliveries:[valid],nextCursor:null,checkedAt:'2026-09-18T00:00:00Z'});
+assert.equal((await deliveryRequest('customer')).deliveries[0].canConfirm,true);
+globalThis.fetch=async()=>Response.json({deliveries:[{...valid,receiptStatus:'paid'}],nextCursor:null,checkedAt:'2026-09-18T00:00:00Z'});
+await assert.rejects(()=>deliveryRequest('customer'));
 globalThis.fetch=async()=>Response.json({result:{status:'delivered'}});
 assert.equal((await deliveryRequest('courier',{action:'update_status'})).status,'delivered');
 console.log('Delivery client uses audience endpoints and rejects malformed or leaking responses.');

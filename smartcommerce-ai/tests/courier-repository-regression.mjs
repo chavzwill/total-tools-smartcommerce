@@ -51,6 +51,7 @@ assert.throws(()=>privateRepo.validatePrivateCommand({action:'scan_pass',idempot
 assert.equal((await privateRepo.readCourierPrivate(owner)).documents.length,2);
 const privateStaff={kind:'staff',employeeId:'private-test',permissions:{couriers_verify:true,couriers_payments:true}};
 const reviews=await privateRepo.readCourierPrivate(privateStaff);assert.ok(Array.isArray(reviews.records));assert.ok(reviews.records.every(r=>!r.encrypted&&!r.data));
+assert.equal(reviews.handoverAvailable,false);
 const docId=crypto.randomUUID();
 const uploaded=await privateRepo.mutateCourierPrivate(owner,{action:'upload_document',id:docId,kind:'identity',mime:'application/pdf',data:Buffer.from('%PDF-1.7\nTest only').toString('base64'),expectedVersion:1,idempotencyKey:crypto.randomUUID()});
 assert.equal(uploaded.result.status,'pending');

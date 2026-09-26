@@ -9,7 +9,7 @@ export default function CourierApplicationForm({application,onSaved}:{applicatio
   const mutation=useCourierMutation(courierCommand<CourierApplication>,onSaved);
   const editable=!application||['draft','rejected'].includes(application.status);
   const dirty=!application||Object.entries(input).some(([key,value])=>application[key as keyof CourierApplicationInput]!==value);
-  return <section className="courier-card"><h2>Business details</h2><p>Tell us about your delivery business. Save your details before submitting for review.</p>
+  return <section className="courier-card"><h2>Business details</h2><p>Tell us about your delivery business. Save your details and mark the application ready for POS handoff. The review connection is not active yet.</p>
     <form onSubmit={e=>{e.preventDefault();void mutation.execute({action:application?'save_application':'create_application',id,...(application?{expectedVersion:application.version}:{}),input});}}>
       <fieldset disabled={!editable||mutation.busy||mutation.pending} className="courier-fields">
         <label>Business name<input required maxLength={120} autoComplete="organization" value={input.businessName} onChange={e=>setInput({...input,businessName:e.target.value})}/></label>
@@ -19,7 +19,7 @@ export default function CourierApplicationForm({application,onSaved}:{applicatio
         {editable&&<Button type="submit" disabled={!dirty}>Save details</Button>}
       </fieldset>
     </form>
-    {editable&&application&&<Button type="button" variant="secondary" disabled={dirty||mutation.busy||mutation.pending} onClick={()=>void mutation.execute({action:'submit_application',id,expectedVersion:application.version})}>Submit for POS review</Button>}
+    {editable&&application&&<Button type="button" variant="secondary" disabled={dirty||mutation.busy||mutation.pending} onClick={()=>void mutation.execute({action:'submit_application',id,expectedVersion:application.version})}>Mark ready for POS handoff</Button>}
     {mutation.error&&<p role="alert">{mutation.error}</p>}{mutation.pending&&<Button type="button" disabled={mutation.busy} onClick={()=>void mutation.execute()}>Retry same request</Button>}
     {mutation.busy&&<p role="status">Saving…</p>}
   </section>;

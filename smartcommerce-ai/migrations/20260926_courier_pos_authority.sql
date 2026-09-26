@@ -34,6 +34,7 @@ DROP TRIGGER IF EXISTS courier_bank_pos_authority ON courier_bank_accounts;
 CREATE TRIGGER courier_bank_pos_authority BEFORE INSERT OR UPDATE OF status ON courier_bank_accounts FOR EACH ROW EXECUTE FUNCTION courier_identity_pos_only();
 CREATE OR REPLACE FUNCTION courier_payout_pos_only() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
+ IF TG_OP='INSERT' AND NEW.status='pending_review' THEN RAISE EXCEPTION 'COURIER_POS_VERIFICATION_PENDING'; END IF;
  IF NEW.status <> 'pending_review' AND (TG_OP='INSERT' OR NEW.status IS DISTINCT FROM OLD.status) THEN RAISE EXCEPTION 'COURIER_POS_AUTHORITY_REQUIRED'; END IF;
  IF TG_OP='UPDATE' AND (NEW.transfer_reference IS DISTINCT FROM OLD.transfer_reference OR NEW.paid_at IS DISTINCT FROM OLD.paid_at) THEN RAISE EXCEPTION 'COURIER_POS_AUTHORITY_REQUIRED'; END IF;
  RETURN NEW;
