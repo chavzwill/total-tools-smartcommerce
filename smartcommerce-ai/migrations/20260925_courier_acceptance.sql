@@ -50,10 +50,32 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION courier_dispatch_queue(actor JSONB,after_id UUID DEFAULT NULL) RETURNS JSONB LANGUAGE plpgsql AS $$
-DECLARE result JSONB;
+DECLARE result JSONB; reconciled BIGINT;
 BEGIN
  IF actor->>'kind' NOT IN ('owner','staff') OR actor->>'kind' IS NULL THEN RAISE EXCEPTION 'COURIER_FORBIDDEN'; END IF;
  IF actor->>'kind'='staff' AND actor->'permissions'->'couriers_pickup' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'COURIER_FORBIDDEN'; END IF;
+ -- Reconcile only offers visible to this actor. Row locks and the pending predicate
+ -- make concurrent reads record one terminal expiry, response and audit event.
+ WITH candidates AS (
+   SELECT j.id FROM courier_dispatch_jobs j JOIN courier_organizations o ON o.id=j.organization_id
+   JOIN courier_shipping_quotes q ON q.id=j.quote_id JOIN courier_shipping_contexts c ON c.id=q.context_id
+   WHERE j.status='awaiting_driver' AND j.acceptance='pending' AND j.acceptance_deadline<=now()
+     AND ((actor->>'kind'='owner' AND o.owner_customer_id::text=actor->>'customerId') OR
+          (actor->>'kind'='staff' AND COALESCE(actor->'branchIds','[]'::jsonb)?c.branch_id))
+   ORDER BY j.id LIMIT 100 FOR UPDATE OF j SKIP LOCKED
+ ), expired AS (
+   UPDATE courier_dispatch_jobs j SET acceptance='expired',status='needs_review',reason='acceptance_expired',version=j.version+1,responded_at=now()
+   FROM candidates c WHERE j.id=c.id AND j.status='awaiting_driver' AND j.acceptance='pending'
+   RETURNING j.id,j.organization_id,j.version,j.reason
+ ), recorded AS (
+   INSERT INTO courier_dispatch_responses(job_id,owner_id,decision,reason)
+   SELECT e.id,o.owner_customer_id::text,'expired',e.reason FROM expired e JOIN courier_organizations o ON o.id=e.organization_id
+   ON CONFLICT(job_id) DO NOTHING RETURNING job_id
+ ), audited AS (
+   INSERT INTO courier_private_audit(actor_id,action,subject_id,version,reason)
+   SELECT o.owner_customer_id::text,'dispatch_expired',e.id::text,e.version,e.reason FROM expired e JOIN courier_organizations o ON o.id=e.organization_id
+   RETURNING subject_id
+ ) SELECT count(*) INTO reconciled FROM audited;
  WITH visible AS (
  SELECT j.*,c.branch_id,c.items,
    (j.status='needs_review' OR (j.acceptance='pending' AND j.acceptance_deadline<=now())) AS attention
