@@ -5,15 +5,17 @@ import ts from 'typescript';
 const dataUrl=s=>`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
 async function moduleUrl(path,replacements={}){let code=ts.transpileModule(await readFile(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;for(const[a,b]of Object.entries(replacements))code=code.replaceAll(JSON.stringify(a),JSON.stringify(b)).replaceAll("'"+a+"'",JSON.stringify(b));return dataUrl(code);}
 const policy=await moduleUrl('../src/server/couriers/policy.ts');
+const authority=await moduleUrl('../src/server/couriers/authority.ts');
 const privateData=await moduleUrl('../src/server/couriers/privateData.ts');
 const validation=await moduleUrl('../src/server/couriers/deliveryValidation.ts',{'./policy.js':policy,'./privateData.js':privateData});
 const http=await moduleUrl('../src/server/couriers/http.ts',{'./policy.js':policy});
 globalThis.deliveryCalls=[];
 globalThis.deliveryTestActor={kind:'owner',customerId:'driver'};
 globalThis.deliverySessionValid=true;
-const repo=dataUrl(`export const readDeliveries=async(actor,audience)=>{globalThis.deliveryCalls.push({actor,audience});return {deliveries:[]}};export const mutateDelivery=async(actor,audience,command)=>{globalThis.deliveryCalls.push({actor,audience,command});return {result:{}}};`);
+const repo=dataUrl(`export const readDeliveries=async(actor,audience)=>{globalThis.deliveryCalls.push({actor,audience});return {deliveries:[{id:'legacy-delivery',canUpdate:true}]}};export const mutateDelivery=async(actor,audience,command)=>{globalThis.deliveryCalls.push({actor,audience,command});return {result:{}}};`);
 const runtime=await import(await moduleUrl('../src/server/couriers/deliveryRuntime.ts',{
  './http.js':http,'./deliveryValidation.js':validation,'./deliveryRepository.js':repo,
+ './authority.js':authority,'./policy.js':policy,
  './runtime.js':dataUrl('export const courierActor=async()=>globalThis.deliveryTestActor;'),
  './repository.js':dataUrl("export const courierDb=()=>async()=>globalThis.deliverySessionValid?[{customer_id:'authenticated-customer'}]:[];"),
  '../staffSession.js':dataUrl("export const parseCookie=value=>Object.fromEntries((value||'').split(';').filter(Boolean).map(p=>p.trim().split('=')));"),
@@ -26,6 +28,15 @@ assert.equal((await call('customer',{cookie:'sc_courier_session=driver-cookie'})
 globalThis.deliverySessionValid=false;assert.equal((await call('customer')).statusCode,401);globalThis.deliverySessionValid=true;
 globalThis.deliveryTestActor={kind:'staff',employeeId:'staff',permissions:{couriers_manage:true},branchIds:['branch']};assert.equal((await call('staff')).statusCode,403);
 globalThis.deliveryTestActor.permissions.couriers_pickup=true;assert.equal((await call('staff')).statusCode,200);
+globalThis.deliveryTestActor={kind:'owner',customerId:'driver'};
+const legacyRead=await call('courier');
+assert.equal(legacyRead.body.deliveries[0].canUpdate,false);
+const update={action:'update_status',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),expectedVersion:0,status:'in_transit'};
+const callsBeforeUpdate=globalThis.deliveryCalls.length;
+const blockedUpdate=await call('courier',{body:update});
+assert.equal(blockedUpdate.statusCode,409);
+assert.equal(blockedUpdate.body.error.code,'COURIER_POS_VERIFICATION_PENDING');
+assert.equal(globalThis.deliveryCalls.length,callsBeforeUpdate);
 const proof={action:'read_proof',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID()};
 assert.equal((await call('customer',{body:proof,origin:'https://attacker.test'})).statusCode,403);
 assert.equal((await call('customer',{body:{...proof,customerId:'other'}})).statusCode,400);

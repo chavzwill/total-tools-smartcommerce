@@ -21,6 +21,14 @@ DROP TRIGGER IF EXISTS courier_pass_pos_required ON courier_pickup_passes;
 CREATE TRIGGER courier_pass_pos_required BEFORE INSERT ON courier_pickup_passes FOR EACH ROW EXECUTE FUNCTION courier_pos_connection_required();
 DROP TRIGGER IF EXISTS courier_dispatch_pos_required ON courier_dispatch_jobs;
 CREATE TRIGGER courier_dispatch_pos_required BEFORE INSERT ON courier_dispatch_jobs FOR EACH ROW EXECUTE FUNCTION courier_pos_connection_required();
+-- Existing pickups and locally approved drivers predate POS authority. They cannot
+-- create new delivery state or events until the POS verification feed is connected.
+DROP TRIGGER IF EXISTS courier_delivery_state_pos_required ON courier_delivery_state;
+CREATE TRIGGER courier_delivery_state_pos_required BEFORE INSERT OR UPDATE ON courier_delivery_state FOR EACH ROW EXECUTE FUNCTION courier_pos_connection_required();
+DROP TRIGGER IF EXISTS courier_delivery_events_pos_required ON courier_delivery_events;
+CREATE TRIGGER courier_delivery_events_pos_required BEFORE INSERT ON courier_delivery_events FOR EACH ROW EXECUTE FUNCTION courier_pos_connection_required();
+DROP TRIGGER IF EXISTS courier_delivery_proofs_pos_required ON courier_delivery_proofs;
+CREATE TRIGGER courier_delivery_proofs_pos_required BEFORE INSERT OR UPDATE ON courier_delivery_proofs FOR EACH ROW EXECUTE FUNCTION courier_pos_connection_required();
 -- Bank verification and all staff payout transitions are POS-owned.
 DROP TRIGGER IF EXISTS courier_bank_pos_authority ON courier_bank_accounts;
 CREATE TRIGGER courier_bank_pos_authority BEFORE INSERT OR UPDATE OF status ON courier_bank_accounts FOR EACH ROW EXECUTE FUNCTION courier_identity_pos_only();
