@@ -324,6 +324,61 @@
   margin-bottom: 10px;
 }
 
+.sc-assistant-evidence {
+  background: #f8faf7;
+  border: 1px solid #e2e8e2;
+  border-radius: 11px;
+  display: grid;
+  gap: 7px;
+  margin: 2px 0 11px;
+  padding: 9px 10px;
+}
+
+.sc-assistant-evidence > div > span {
+  color: #08763f;
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .055em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.sc-assistant-evidence ul {
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sc-assistant-evidence li {
+  color: #4d5a51;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.sc-assistant-evidence li::before {
+  color: #08763f;
+  content: "✓";
+  font-weight: 900;
+  margin-right: 6px;
+}
+
+.sc-assistant-evidence p {
+  background: #fffaf0;
+  border-radius: 8px;
+  color: #6c5a2d;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 6px 7px;
+}
+
+.sc-assistant-evidence p strong {
+  color: #57471f;
+}
+
 .sc-assistant-product__actions {
   display: flex;
   flex-wrap: wrap;
@@ -361,7 +416,7 @@
 }
 
 .sc-assistant-rental {
-  align-items: center;
+  align-items: start;
   border: 1px solid #e3e7e3;
   border-radius: 14px;
   display: grid;
@@ -370,9 +425,50 @@
   padding: 13px;
 }
 
-.sc-assistant-rental > svg { color: #08763f; }
+.sc-assistant-rental > svg { color: #08763f; margin-top: 2px; }
 
-.sc-assistant-rental h3 { margin-bottom: 0; }
+.sc-assistant-rental h3 { margin-bottom: 8px; }
+
+.sc-assistant-rental__rates {
+  background: #f7f8f6;
+  border: 1px solid #e5e9e5;
+  border-radius: 10px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 9px;
+  max-width: 520px;
+  overflow: hidden;
+}
+
+.sc-assistant-rental__rates > div {
+  border-right: 1px solid #e0e5e0;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.sc-assistant-rental__rates > div:last-child { border-right: 0; }
+
+.sc-assistant-rental__rates span {
+  color: #6a756d;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.sc-assistant-rental__rates strong {
+  color: #18211c;
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.sc-assistant-rental .sc-assistant-evidence {
+  margin-bottom: 0;
+  max-width: 620px;
+}
 
 .sc-assistant-next__followups {
   display: grid;
@@ -446,6 +542,11 @@
     min-height: 92px;
   }
 
+  .sc-assistant-evidence li,
+  .sc-assistant-evidence p {
+    font-size: 12px;
+  }
+
   .sc-assistant-rental {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -453,6 +554,9 @@
   .sc-assistant-rental > a {
     grid-column: 1 / -1;
   }
+
+  .sc-assistant-rental__rates span { font-size: 11px; }
+  .sc-assistant-rental__rates strong { font-size: 13px; }
 
   .sc-assistant-next__section-heading {
     align-items: start;

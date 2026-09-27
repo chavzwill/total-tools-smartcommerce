@@ -181,3 +181,7 @@
   .sc-account-real__tabs { position: sticky; top: 0; z-index: 2; }
   .sc-account-real__actions { display: grid; }
 }
+
+.sc-account-courier-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--sc-line, #dce4df); }
+.sc-account-courier-entry strong { flex-basis: 100%; }
+.sc-account-courier-entry a { color: var(--sc-green, #08783f); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; padding-block: 10px; }

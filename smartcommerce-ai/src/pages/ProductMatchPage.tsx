@@ -14,7 +14,7 @@ import toolsImage from "../assets/smartcommerce-tools-optimized.jpg";
 import { matchProductPhoto, prepareProductMatchImage } from "../lib/productMatch";
 import { go, routeHref } from "../lib/router";
 import type { CommerceProduct, InventoryAvailability } from "../platform";
-import type { ProductMatchResult } from "../types/productMatch";
+import type { ProductMatchCandidate, ProductMatchResult } from "../types/productMatch";
 
 type Props = { onAdd: (id: string) => void };
 type MatchState = "idle" | "preparing" | "scanning" | "results" | "error";
@@ -65,9 +65,41 @@ function availabilityLabel(
 
 function confidenceLabel(value: number, needsClarification: boolean) {
   if (needsClarification) return "Needs another clue";
-  if (value >= 0.85) return "Strong catalogue match";
-  if (value >= 0.65) return "Good catalogue match";
-  return "Possible catalogue match";
+  if (value >= 0.85) return "Strong catalogue evidence";
+  if (value >= 0.65) return "Good catalogue evidence";
+  return "Possible catalogue evidence";
+}
+
+function evidenceStrength(value: number) {
+  if (value >= 0.85) return "High evidence";
+  if (value >= 0.65) return "Moderate evidence";
+  return "Limited evidence";
+}
+
+function productMatchAdvisorPrompt(
+  result: ProductMatchResult,
+  candidate: ProductMatchCandidate,
+) {
+  const analysis = result.analysis;
+  const visualClues = [
+    analysis.productType ? `product type: ${analysis.productType}` : "",
+    analysis.brand ? `brand clue: ${analysis.brand}` : "",
+    analysis.model ? `model clue: ${analysis.model}` : "",
+    ...analysis.visibleText.slice(0, 6).map((value) => `visible text: ${value}`),
+    ...analysis.attributes.slice(0, 6).map((value) => `visible attribute: ${value}`),
+  ].filter(Boolean);
+  const reasons = candidate.reasons.slice(0, 4);
+  const evidenceState = confidenceLabel(candidate.confidence, result.needsClarification);
+
+  return [
+    "This is a Product Match follow-up. Do not claim you can see or re-analyze the original photo in this chat; use only the supplied visual-analysis clues and connected catalogue facts.",
+    `Catalogue candidate: ${candidate.product.name}.`,
+    `Product Match evidence state: ${evidenceState}.`,
+    visualClues.length ? `Supplied visual clues: ${visualClues.join("; ")}.` : "Supplied visual clues were limited.",
+    reasons.length ? `Why Product Match ranked it: ${reasons.join("; ")}.` : "Product Match returned no additional ranking reasons.",
+    result.clarification ? `Product Match still needs clarification: ${result.clarification}` : "",
+    "Help me assess whether this catalogue candidate is consistent with those supplied clues, explain what supports the match, and tell me the single most useful additional clue that would confirm or rule it out. Use connected catalogue data only and do not invent unseen photo details.",
+  ].filter(Boolean).join("\n").slice(0, 2200);
 }
 
 export default function ProductMatchPage({ onAdd }: Props) {
@@ -77,21 +109,25 @@ export default function ProductMatchPage({ onAdd }: Props) {
   const [state, setState] = useState<MatchState>("idle");
   const [result, setResult] = useState<ProductMatchResult | null>(null);
   const [error, setError] = useState("");
+  const [refining, setRefining] = useState(false);
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
 
+    const priorAnalysis = result?.analysis;
+    const isRefinement = Boolean(priorAnalysis);
+    setRefining(isRefinement);
     setState("preparing");
     setError("");
-    setResult(null);
+    if (!isRefinement) setResult(null);
 
     try {
       const imageDataUrl = await prepareProductMatchImage(file);
       setPreview(imageDataUrl);
       setState("scanning");
-      const response = await matchProductPhoto(imageDataUrl);
+      const response = await matchProductPhoto(imageDataUrl, undefined, priorAnalysis);
       if (!response.success) {
         setError(response.error.message);
         setState("error");
@@ -102,6 +138,8 @@ export default function ProductMatchPage({ onAdd }: Props) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Product Match failed.");
       setState("error");
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -145,12 +183,16 @@ export default function ProductMatchPage({ onAdd }: Props) {
                 <strong>
                   {state === "preparing"
                     ? "Preparing your photo…"
-                    : "Reading visible clues…"}
+                    : refining
+                      ? "Combining the new clues…"
+                      : "Reading visible clues…"}
                 </strong>
                 <span>
                   {state === "preparing"
                     ? "Optimizing the image for secure matching"
-                    : "Checking those clues against the connected catalogue"}
+                    : refining
+                      ? "Refining the existing candidates without discarding the earlier evidence"
+                      : "Checking those clues against the connected catalogue"}
                 </span>
               </div>
             )}
@@ -158,10 +200,11 @@ export default function ProductMatchPage({ onAdd }: Props) {
 
           <div className="sc-match-next__capture-copy">
             <span>Best results</span>
-            <h2>Include the label if you can.</h2>
+            <h2>{result ? "Add a different angle or label." : "Include the label if you can."}</h2>
             <p>
-              Brand names, model numbers, packaging text, fittings, ports, and
-              full-product shape can all improve the match.
+              {result
+                ? "A second photo can refine the same match. Conflicting brand or model clues reduce confidence instead of being ignored."
+                : "Brand names, model numbers, packaging text, fittings, ports, and full-product shape can all improve the match."}
             </p>
           </div>
 
@@ -171,14 +214,14 @@ export default function ProductMatchPage({ onAdd }: Props) {
               onClick={() => cameraRef.current?.click()}
               disabled={state === "preparing" || state === "scanning"}
             >
-              <Camera size={18} /> Use camera
+              <Camera size={18} /> {result ? "Add another photo" : "Use camera"}
             </button>
             <button
               type="button"
               onClick={() => uploadRef.current?.click()}
               disabled={state === "preparing" || state === "scanning"}
             >
-              <ImageUp size={18} /> Upload photo
+              <ImageUp size={18} /> {result ? "Upload another angle" : "Upload photo"}
             </button>
           </div>
 
@@ -232,7 +275,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   </span>
                 </div>
                 {top ? (
-                  <strong>{Math.round(top.confidence * 100)}% match score</strong>
+                  <strong>{evidenceStrength(top.confidence)}</strong>
                 ) : null}
               </header>
 
@@ -241,7 +284,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   <div>
                     <ScanSearch size={19} />
                     <div>
-                      <span>What SmartCommerce could see</span>
+                      <span>What SmartCommerce could see · {result.evidenceImages} photo{result.evidenceImages === 1 ? "" : "s"} combined</span>
                       <strong>{analysisSummary || "Visual product clues"}</strong>
                     </div>
                   </div>
@@ -261,7 +304,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                     <strong>One more clue would help.</strong>
                     <p>{result.clarification}</p>
                     <button type="button" onClick={() => cameraRef.current?.click()}>
-                      <Camera size={16} /> Take another photo
+                      <Camera size={16} /> Add another photo
                     </button>
                   </div>
                 </section>
@@ -298,18 +341,23 @@ export default function ProductMatchPage({ onAdd }: Props) {
                         </button>
                       ) : null}
                       <a href={routeHref(`/product/${top.product.id}`)}>View product</a>
+                      {top.product.rentable ? (
+                        <a href={routeHref(`/rentals?q=${encodeURIComponent(top.product.name)}`)}>
+                          Find rental options
+                        </a>
+                      ) : null}
                       <button
                         type="button"
                         className="is-secondary"
                         onClick={() =>
                           go(
                             `/assistant?prompt=${encodeURIComponent(
-                              `Help me verify whether ${top.product.name} is the right match for my photo.`
+                              productMatchAdvisorPrompt(result, top)
                             )}`
                           )
                         }
                       >
-                        <UserCheck size={16} /> Ask AI to verify
+                        <UserCheck size={16} /> Ask AI about this match
                       </button>
                     </div>
                   </div>
@@ -320,7 +368,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                   <h2>No connected catalogue candidate was strong enough.</h2>
                   <p>{result.clarification || "Try another angle or a closer label photo."}</p>
                   <button type="button" onClick={() => cameraRef.current?.click()}>
-                    <RefreshCw size={17} /> Try another photo
+                    <RefreshCw size={17} /> Add another photo
                   </button>
                 </div>
               )}
@@ -358,7 +406,7 @@ export default function ProductMatchPage({ onAdd }: Props) {
                           )}
                         </div>
                         <span>{candidate.product.name}</span>
-                        <strong>{Math.round(candidate.confidence * 100)}% match</strong>
+                        <strong>{confidenceLabel(candidate.confidence, result.needsClarification)}</strong>
                       </a>
                     ))}
                   </div>

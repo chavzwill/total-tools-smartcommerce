@@ -16,6 +16,24 @@ const toWebRequest = (request: any, id: string) => {
   return new Request(`${proto}://${host}${request.url || "/api/product-match"}`, { method: String(request.method || "POST").toUpperCase(), headers });
 };
 
+function validatePriorAnalysis(input: ProductMatchRequest["priorAnalysis"]) {
+  if (input === undefined) return;
+  if (!input || typeof input !== "object" || JSON.stringify(input).length > 8_000) {
+    throw new RequestGuardError(400, "INVALID_PRIOR_ANALYSIS", "Previous Product Match evidence is invalid.");
+  }
+  const scalarFields = [input.productType, input.brand, input.model, input.notes];
+  if (scalarFields.some((value) => typeof value !== "string" || value.length > 1_000)) {
+    throw new RequestGuardError(400, "INVALID_PRIOR_ANALYSIS", "Previous Product Match evidence is invalid.");
+  }
+  const lists = [input.visibleText, input.attributes, input.searchTerms];
+  if (lists.some((list) => !Array.isArray(list) || list.length > 40 || list.some((value) => typeof value !== "string" || value.length > 500))) {
+    throw new RequestGuardError(400, "INVALID_PRIOR_ANALYSIS", "Previous Product Match evidence is invalid.");
+  }
+  if (typeof input.confidence !== "number" || !Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) {
+    throw new RequestGuardError(400, "INVALID_PRIOR_ANALYSIS", "Previous Product Match confidence is invalid.");
+  }
+}
+
 export default async function handler(request: any, response: any) {
   const id = requestId(request);
   const started = Date.now();
@@ -35,11 +53,20 @@ export default async function handler(request: any, response: any) {
     if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(input.imageDataUrl)) throw new RequestGuardError(415, "IMAGE_TYPE_UNSUPPORTED", "Product Match supports JPEG, PNG, and WebP images.");
     if (input.imageDataUrl.length > 3_500_000) throw new RequestGuardError(413, "IMAGE_TOO_LARGE", "The prepared image is too large. Use a smaller image and retry.");
     if (input.branchId !== undefined && (typeof input.branchId !== "string" || input.branchId.length > 128)) throw new RequestGuardError(400, "INVALID_BRANCH_ID", "The branch identifier is invalid.");
+    validatePriorAnalysis(input.priorAnalysis);
 
     const context = resolveTotalToolsPlatformContext(toWebRequest(request, id));
     if (!context.businessAccountId || !context.providerId) throw new RequestGuardError(401, "PLATFORM_CONTEXT_REQUIRED", "Product Match requires configured business and provider context.");
     const result = await runGroundedProductMatch(createConfiguredTotalToolsAdapter(), context, input);
-    logAiEvent("product_match_complete", { requestId: id, success: result.success, durationMs: Date.now() - started, candidateCount: result.success ? result.data.candidates.length : 0, needsClarification: result.success ? result.data.needsClarification : undefined, errorCode: result.success ? undefined : result.error.code });
+    logAiEvent("product_match_complete", {
+      requestId: id,
+      success: result.success,
+      durationMs: Date.now() - started,
+      candidateCount: result.success ? result.data.candidates.length : 0,
+      evidenceImages: result.success ? result.data.evidenceImages : undefined,
+      needsClarification: result.success ? result.data.needsClarification : undefined,
+      errorCode: result.success ? undefined : result.error.code,
+    });
     if (result.success) {
       response.statusCode = 200;
       response.end(JSON.stringify({ ...result, requestId: result.requestId || id }));

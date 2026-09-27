@@ -6,12 +6,15 @@ export type Product = {
   subcategory?: string;
   department: string;
   price: number;
+  currency?: string;
   stockStatus: string;
   badge: string;
   image: string;
   tags: string[];
   rating: number;
   reviews: number;
+  purchasable?: boolean;
+  purchaseBlockedReason?: string;
   rentable?: boolean;
   description: string;
   specs: Record<string, string>;
@@ -47,6 +50,7 @@ export type RentalItem = {
   dailyRate: number;
   weeklyRate: number;
   monthlyRate: number;
+  currency?: string;
   availability: string;
   branchAvailability: string;
   image: string;

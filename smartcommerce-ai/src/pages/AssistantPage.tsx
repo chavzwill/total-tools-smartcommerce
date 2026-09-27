@@ -5,10 +5,13 @@ import mascot from "../assets/brand/mascot-illustrated.jpeg";
 import {
   advisorPrompts,
   getAdvisorResponse,
+  type AdvisorProductAvailability,
   type AdvisorUiResult,
 } from "../lib/advisor";
 import { routeHref } from "../lib/router";
+import { isShoppingBranch, setShoppingBranch } from "../lib/shoppingBranch";
 import type { CommerceProduct } from "../platform";
+import type { AssistantConversationTurn, AssistantRecommendationEvidence } from "../backend";
 
 const prompts = [
   "I need a generator for my farm.",
@@ -26,23 +29,187 @@ function productImage(product: CommerceProduct) {
   return [...(product.images || [])].sort((a, b) => (a.position || 0) - (b.position || 0))[0]?.url;
 }
 
+function formatMoney(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${currency} ${value.toLocaleString("en-JM")}`;
+  }
+}
+
 function productPrice(product: CommerceProduct) {
   for (const pricing of product.pricing || []) {
     const value = pricing.salePrice ?? pricing.listPrice ?? pricing.commercialPrice;
     if (value === undefined) continue;
-    const currency = pricing.currency || "JMD";
-    try {
-      return new Intl.NumberFormat("en-JM", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
-    } catch {
-      return `${currency} ${value.toLocaleString("en-JM")}`;
-    }
+    return formatMoney(value, pricing.currency || "JMD");
   }
   return "Price confirmed in product details";
+}
+
+function rentalRateFacts(rental: AdvisorUiResult["rentals"][number]) {
+  const ratePlan = (rental.ratePlans || []).find((plan) =>
+    [plan.dailyRate, plan.weeklyRate, plan.monthlyRate].some((value) => typeof value === "number" && Number.isFinite(value)),
+  );
+  if (!ratePlan) return [];
+  const currency = ratePlan.currency || "JMD";
+  return [
+    ["Daily", ratePlan.dailyRate],
+    ["Weekly", ratePlan.weeklyRate],
+    ["Monthly", ratePlan.monthlyRate],
+  ].flatMap(([label, value]) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? [{ label: String(label), value: formatMoney(value, currency) }]
+      : [],
+  );
+}
+
+function readinessLabel(readiness: "needs_input" | "ready_to_continue" | "verification_required") {
+  if (readiness === "verification_required") return "Ready for provider verification";
+  if (readiness === "ready_to_continue") return "Ready to continue";
+  return "More information needed";
+}
+
+function evidenceFor(
+  evidence: AssistantRecommendationEvidence[] | undefined,
+  entityType: "product" | "rental",
+  entityId: string,
+) {
+  return evidence?.find((item) => item.entityType === entityType && String(item.entityId) === entityId);
+}
+
+function RecommendationEvidence({ evidence }: { evidence?: AssistantRecommendationEvidence }) {
+  if (!evidence || (!evidence.fitReasons.length && !evidence.cautions.length)) return null;
+  return (
+    <div className="sc-assistant-evidence">
+      {evidence.fitReasons.length ? (
+        <div>
+          <span>Why it fits</span>
+          <ul>{evidence.fitReasons.slice(0, 2).map((reason) => <li key={reason}>{reason}</li>)}</ul>
+        </div>
+      ) : null}
+      {evidence.cautions[0] ? <p><strong>Verify:</strong> {evidence.cautions[0]}</p> : null}
+    </div>
+  );
+}
+
+function formatAvailabilityDate(value: string | undefined) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return undefined;
+  return new Intl.DateTimeFormat("en-JM", { dateStyle: "medium" }).format(date);
+}
+
+function availabilitySummary(snapshot?: AdvisorProductAvailability) {
+  if (!snapshot) return undefined;
+  const branch = snapshot.branchName || "Selected branch";
+
+  if (snapshot.lookupStatus === "unavailable") {
+    return {
+      title: `${branch}: availability not confirmed`,
+      detail: "The provider inventory lookup did not complete. This is not an out-of-stock result.",
+    };
+  }
+
+  const record = snapshot.records.find((item) => String(item.branchId || "") === snapshot.branchId) || snapshot.records[0];
+  if (!record) {
+    return {
+      title: `${branch}: no inventory status returned`,
+      detail: "The provider returned no branch inventory record for this item.",
+    };
+  }
+
+  const preview = record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue";
+  if (preview || record.status === "unknown") {
+    return {
+      title: `${branch}: live stock not verified`,
+      detail: "The catalogue match is available for evaluation, but live branch inventory still needs provider confirmation.",
+    };
+  }
+
+  const available = typeof record.quantityAvailable === "number" && Number.isFinite(record.quantityAvailable)
+    ? `${record.quantityAvailable} provider-listed available`
+    : undefined;
+  const nextAvailable = formatAvailabilityDate(record.nextAvailableAt);
+
+  if (record.status === "in_stock") {
+    return {
+      title: `${branch}: provider status in stock`,
+      detail: [available, "Final fulfillment is still confirmed at checkout or reservation."].filter(Boolean).join(" · "),
+    };
+  }
+  if (record.status === "low_stock") {
+    return {
+      title: `${branch}: provider status low stock`,
+      detail: [available, "Recheck before relying on pickup or delivery."].filter(Boolean).join(" · "),
+    };
+  }
+  if (record.status === "out_of_stock") {
+    return {
+      title: `${branch}: provider status out of stock`,
+      detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Try another branch or ask SmartCommerce for an alternative.",
+    };
+  }
+  if (record.status === "backordered" || record.status === "reserved") {
+    return {
+      title: `${branch}: ${record.status === "backordered" ? "backordered" : "currently reserved"}`,
+      detail: nextAvailable ? `Next provider-listed availability: ${nextAvailable}.` : "Exact availability needs provider confirmation.",
+    };
+  }
+
+  return {
+    title: `${branch}: provider status ${String(record.status).replace(/_/g, " ")}`,
+    detail: "Final availability still needs provider confirmation.",
+  };
+}
+
+function providerConfirmedOutOfStock(snapshot?: AdvisorProductAvailability) {
+  if (!snapshot || snapshot.lookupStatus !== "confirmed") return false;
+  const record = snapshot.records.find((item) => String(item.branchId || "") === snapshot.branchId) || snapshot.records[0];
+  if (!record) return false;
+  if (record.metadata?.liveVerified === false || record.metadata?.source === "preview_catalogue") return false;
+  return record.status === "out_of_stock";
+}
+
+function ProductAvailability({
+  snapshot,
+  onSwitchBranch,
+}: {
+  snapshot?: AdvisorProductAvailability;
+  onSwitchBranch: (branchName: string) => void;
+}) {
+  const summary = availabilitySummary(snapshot);
+  if (!summary) return null;
+  const alternatives = (snapshot?.alternatives || []).slice(0, 2);
+
+  return (
+    <div className="sc-assistant-evidence sc-assistant-availability">
+      <div>
+        <span>Branch availability</span>
+        <strong>{summary.title}</strong>
+      </div>
+      <p>{summary.detail}</p>
+      {alternatives.length ? (
+        <div className="sc-assistant-availability__alternatives sc-assistant-product__actions">
+          {alternatives.map((item) => {
+            const quantity = typeof item.quantityAvailable === "number" && Number.isFinite(item.quantityAvailable)
+              ? ` · ${item.quantityAvailable} provider-listed available`
+              : "";
+            return (
+              <button type="button" key={item.branchId} onClick={() => onSwitchBranch(item.branchName)}>
+                Switch to {item.branchName} · {item.status.replace(/_/g, " ")}{quantity}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
   const [prompt, setPrompt] = useState(initialPrompt || "");
   const [response, setResponse] = useState<AdvisorUiResult | null>(null);
+  const [history, setHistory] = useState<AssistantConversationTurn[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -51,17 +218,28 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
     if (!clean) return;
     setStatus("loading");
     setError("");
-    const result = await getAdvisorResponse(clean);
+    const context = history.slice(-6);
+    const result = await getAdvisorResponse(clean, context);
 
     if (!result.success) {
       setStatus("error");
-      setResponse(null);
       setError(result.error.message);
       return;
     }
 
     setStatus("idle");
     setResponse(result.data);
+    setHistory((current) => [
+      ...current,
+      { role: "user", content: clean },
+      { role: "assistant", content: result.data.summary },
+    ].slice(-6) as AssistantConversationTurn[]);
+  };
+
+  const switchBranchAndRefresh = (branchName: string) => {
+    if (!isShoppingBranch(branchName) || branchName === "Online") return;
+    setShoppingBranch(branchName);
+    void submitPrompt(prompt);
   };
 
   useEffect(() => {
@@ -94,7 +272,22 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
                 onClick={() => {
                   const next = advisorPrompts[index] || item;
                   setPrompt(next);
-                  void submitPrompt(next);
+                  setHistory([]);
+                  void getAdvisorResponse(next, []).then((result) => {
+                    if (!result.success) {
+                      setStatus("error");
+                      setError(result.error.message);
+                      return;
+                    }
+                    setStatus("idle");
+                    setResponse(result.data);
+                    setHistory([
+                      { role: "user", content: next },
+                      { role: "assistant", content: result.data.summary },
+                    ]);
+                  });
+                  setStatus("loading");
+                  setError("");
                 }}
               >
                 {item}
@@ -135,24 +328,57 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
             ) : null}
           </article>
 
+          {response?.workflowHandoff ? (
+            <section className="sc-assistant-next__followups" aria-label="Continue in the connected workflow">
+              <span>{readinessLabel(response.workflowHandoff.readiness)}</span>
+              <p>
+                SmartCommerce will carry forward the grounded context, but it will not submit anything without the required customer details.
+              </p>
+              {response.workflowHandoff.knownFields.length ? (
+                <p><strong>Already known:</strong> {response.workflowHandoff.knownFields.join(", ")}.</p>
+              ) : null}
+              {response.workflowHandoff.missingFields.length ? (
+                <p><strong>Still required:</strong> {response.workflowHandoff.missingFields.join(", ")}.</p>
+              ) : null}
+              {response.workflowHandoff.verificationNote ? (
+                <p>{response.workflowHandoff.verificationNote}</p>
+              ) : null}
+              <div>
+                <a href={routeHref(response.workflowHandoff.href)}>{response.workflowHandoff.label}</a>
+              </div>
+            </section>
+          ) : null}
+
           {response?.products.length ? (
             <section className="sc-assistant-next__results" aria-labelledby="assistant-products-title">
               <div className="sc-assistant-next__section-heading"><div><span>Products</span><h2 id="assistant-products-title">Options you can act on now</h2></div><a href={routeHref("/products")}>Browse all products</a></div>
               <div className="sc-assistant-next__product-grid">
-                {response.products.map((product) => (
-                  <article key={product.id} className="sc-assistant-product">
-                    <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
-                    <div>
-                      <span>{product.brand || product.sku || "Connected catalogue"}</span>
-                      <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
-                      <strong>{productPrice(product)}</strong>
-                      <div className="sc-assistant-product__actions">
-                        {product.purchasable ? <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button> : null}
-                        <a href={routeHref(`/product/${product.id}`)}>View details</a>
+                {response.products.map((product) => {
+                  const evidence = evidenceFor(response.recommendationEvidence, "product", String(product.id));
+                  const availability = response.productAvailability[String(product.id)];
+                  const outOfStockAtSelectedBranch = providerConfirmedOutOfStock(availability);
+                  return (
+                    <article key={product.id} className="sc-assistant-product">
+                      <a href={routeHref(`/product/${product.id}`)} className="sc-assistant-product__image">{productImage(product) ? <img src={productImage(product)} alt={product.name} /> : <PackageSearch size={30} aria-hidden="true" />}</a>
+                      <div>
+                        <span>{product.brand || product.sku || "Connected catalogue"}</span>
+                        <a href={routeHref(`/product/${product.id}`)}><h3>{product.name}</h3></a>
+                        <strong>{productPrice(product)}</strong>
+                        <ProductAvailability snapshot={availability} onSwitchBranch={switchBranchAndRefresh} />
+                        <RecommendationEvidence evidence={evidence} />
+                        <div className="sc-assistant-product__actions">
+                          {product.purchasable ? (
+                            outOfStockAtSelectedBranch
+                              ? <button type="button" disabled>Out of stock at {availability?.branchName || "selected branch"}</button>
+                              : <button type="button" onClick={() => onAdd(String(product.id), 1)}>Add to cart</button>
+                          ) : null}
+                          <a href={routeHref(`/product/${product.id}`)}>View details</a>
+                          {product.rentable ? <a href={routeHref(`/rentals?q=${encodeURIComponent(product.name)}`)}>Find rental option</a> : null}
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -161,13 +387,26 @@ export default function AssistantPage({ initialPrompt = "", onAdd }: Props) {
             <section className="sc-assistant-next__results" aria-labelledby="assistant-rentals-title">
               <div className="sc-assistant-next__section-heading"><div><span>Rentals</span><h2 id="assistant-rentals-title">Equipment that matches the request</h2></div><a href={routeHref("/rentals")}>Browse rental fleet</a></div>
               <div className="sc-assistant-next__rental-grid">
-                {response.rentals.map((rental) => (
-                  <article key={rental.id} className="sc-assistant-rental">
-                    <Wrench size={20} aria-hidden="true" />
-                    <div><span>Rental option</span><h3>{rental.name || rental.id}</h3></div>
-                    <a href={routeHref(`/rental/${rental.id}`)}>Check dates & availability</a>
-                  </article>
-                ))}
+                {response.rentals.map((rental) => {
+                  const evidence = evidenceFor(response.recommendationEvidence, "rental", String(rental.id));
+                  const rates = rentalRateFacts(rental);
+                  return (
+                    <article key={rental.id} className="sc-assistant-rental">
+                      <Wrench size={20} aria-hidden="true" />
+                      <div>
+                        <span>Rental option</span>
+                        <h3>{rental.name || rental.id}</h3>
+                        {rates.length ? (
+                          <div className="sc-assistant-rental__rates" aria-label="Provider rental rates">
+                            {rates.map((rate) => <div key={rate.label}><span>{rate.label}</span><strong>{rate.value}</strong></div>)}
+                          </div>
+                        ) : null}
+                        <RecommendationEvidence evidence={evidence} />
+                      </div>
+                      <a href={routeHref(`/rental/${rental.id}`)}>Check dates & availability</a>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : null}

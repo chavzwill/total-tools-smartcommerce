@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const source=await readFile(new URL('../src/server/staffApprovalAuthority.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {staffDecisionRequiresPos,operationsReadOnly}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+for(const action of ['approve_period','finalize_period'])assert.equal(staffDecisionRequiresPos('compensation',action),true);
+assert.equal(staffDecisionRequiresPos('repair','record_decision'),true);
+for(const action of ['request_authorization','reissue_customer_link'])assert.equal(staffDecisionRequiresPos('repair',action),false);
+assert.equal(staffDecisionRequiresPos('compensation','create_period'),false);
+for(const method of ['POST','PUT','PATCH','DELETE'])assert.equal(operationsReadOnly(method),true);
+for(const method of ['GET','HEAD'])assert.equal(operationsReadOnly(method),false);
+console.log('Staff decision authority regression passed.');

@@ -26,11 +26,20 @@
     "test:security-secret-hygiene": "node tests/security-secret-hygiene-regression.mjs",
     "test:security-log-hygiene": "node tests/security-log-hygiene-regression.mjs",
     "test:security-api-error-exposure": "node tests/security-api-error-exposure-regression.mjs",
+    "test:intelligence-grounding": "node tests/intelligence-grounding-regression.mjs && node tests/intelligence-cross-currency-regression.mjs && node tests/intelligence-identity-provenance-regression.mjs && node tests/intelligence-commercial-auth-continuity-regression.mjs && node tests/intelligence-rental-auth-continuity-regression.mjs && node tests/intelligence-repair-auth-continuity-regression.mjs && node tests/intelligence-runtime-imports-regression.mjs && node tests/intelligence-preview-catalogue-regression.mjs && node tests/intelligence-decision-support-regression.mjs && node tests/intelligence-product-match-confidence-regression.mjs && node tests/intelligence-rental-only-promotion-regression.mjs && node tests/intelligence-rental-rate-facts-regression.mjs && node tests/intelligence-critical-fit-regression.mjs && node tests/intelligence-branch-availability-regression.mjs && node tests/intelligence-shopping-branch-continuity-regression.mjs && node tests/intelligence-branch-task-preservation-regression.mjs && node tests/intelligence-product-detail-availability-regression.mjs && node tests/intelligence-branch-catalogue-discovery-regression.mjs",
     "test:stability": "node tests/storefront-stability-regression.mjs",
     "test:stability-generated-artifacts": "node tests/stability-generated-artifacts-regression.mjs",
     "test:dependency-audit": "npm audit --audit-level=high --omit=dev",
-    "test:release-gate": "npm run test:security-authz && npm run test:security-session && npm run test:security-session-management && npm run test:security-account-recovery && npm run test:security-authenticated-commerce && npm run test:security-platform-gateway && npm run test:security-assistant-gateway && npm run test:security-integrity-endpoint && npm run test:security-monitor-endpoint && npm run test:security-guest-checkout && npm run test:security-step-up && npm run test:security-commercial-financial-policy && npm run test:security-commercial-account && npm run test:security-mfa && npm run test:security-passkey && npm run test:security-supply-chain && npm run test:security-client-surface && npm run test:security-secret-hygiene && npm run test:security-log-hygiene && npm run test:security-api-error-exposure && npm run test:stability && npm run test:stability-generated-artifacts && npm run test:dependency-audit",
-    "preview": "vite preview"
+    "test:release-gate": "npm run test:staff-pos-authority && npm run test:security-authz && npm run test:security-session && npm run test:security-session-management && npm run test:security-account-recovery && npm run test:security-authenticated-commerce && npm run test:security-platform-gateway && npm run test:security-assistant-gateway && npm run test:security-integrity-endpoint && npm run test:security-monitor-endpoint && npm run test:security-guest-checkout && npm run test:security-step-up && npm run test:security-commercial-financial-policy && npm run test:security-commercial-account && npm run test:security-commercial-team && npm run test:security-commercial-member-enforcement && npm run test:security-mfa && npm run test:security-passkey && npm run test:security-supply-chain && npm run test:security-client-surface && npm run test:security-secret-hygiene && npm run test:security-log-hygiene && npm run test:security-api-error-exposure && npm run test:intelligence-grounding && npm run test:stability && npm run test:stability-generated-artifacts && npm run test:couriers && npm run test:payments && npm run test:pos-commerce-sync && npm run test:dependency-audit",
+    "preview": "vite preview",
+    "test:couriers": "node tests/courier-policy-regression.mjs && node tests/courier-services-regression.mjs && node tests/courier-api-regression.mjs && node tests/courier-retry-regression.mjs && node tests/courier-identity-regression.mjs && node tests/courier-auth-regression.mjs && node tests/courier-signup-entry-regression.mjs && node tests/courier-dispatch-api-regression.mjs && node tests/courier-pos-authority-regression.mjs && node tests/courier-money-regression.mjs && node tests/courier-eligibility-regression.mjs && node tests/courier-delivery-regression.mjs && node tests/courier-delivery-runtime-regression.mjs && node tests/courier-delivery-client-regression.mjs",
+    "test:couriers-database": "node tests/courier-database-regression.mjs && node tests/courier-repository-regression.mjs && node tests/courier-private-database-regression.mjs && node tests/courier-delivery-database-regression.mjs && node tests/courier-dispatch-database-regression.mjs && node tests/payment-database-regression.mjs && node tests/courier-receipt-database-regression.mjs && node tests/courier-pos-authority-database-regression.mjs",
+    "test:payments": "node tests/handypay-regression.mjs && node tests/payment-workflow-regression.mjs && node tests/payment-http-regression.mjs && node tests/payment-client-regression.mjs",
+    "test:staff-pos-authority": "node tests/staff-pos-authority-regression.mjs && node tests/staff-pos-authority-api-regression.mjs",
+    "test:pos-commerce-sync": "node tests/pos-commerce-sync-contract-regression.mjs && node tests/pos-catalog-dependency-regression.mjs && node tests/pos-order-delivery-regression.mjs",
+    "test:pos-order-database": "node tests/pos-order-outbox-database-regression.mjs",
+    "test:security-commercial-team": "node tests/security-commercial-team-regression.mjs",
+    "test:security-commercial-member-enforcement": "node tests/security-commercial-member-enforcement-regression.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
@@ -42,7 +51,8 @@
     "lucide-react": "^1.21.0",
     "react": "latest",
     "react-dom": "latest",
-    "tailwindcss": "^4.3.1"
+    "tailwindcss": "^4.3.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/node": "latest",
@@ -50,6 +60,7 @@
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "@types/qrcode": "^1.5.6"
   }
 }

@@ -1,4 +1,6 @@
 export * from "./contracts";
+export * from "./posOperationsContracts";
+export * from "./posExportRegistry";
 export * from "./posAdapter";
 export * from "./platformApi";
 export * from "./adaptiveIntegration";

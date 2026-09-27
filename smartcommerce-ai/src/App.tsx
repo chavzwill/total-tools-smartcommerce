@@ -3,9 +3,17 @@ import PageShell from "./components/layout/PageShell";
 import { CART_FEEDBACK_EVENT, GUEST_CART_CHANGED_EVENT } from "./lib/commerceEvents";
 import { addPersistentCartItem, type GuestCheckoutItem } from "./lib/customerCommerce";
 import { getRoute } from "./lib/router";
+import {
+  SHOPPING_BRANCH_CHANGED_EVENT,
+  getShoppingBranch,
+  isShoppingBranch,
+  type ShoppingBranch,
+} from "./lib/shoppingBranch";
 import HomePageV3 from "./pages/HomePageV3";
 
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
+const CourierAccountPage = lazy(() => import("./pages/CourierAccountPage"));
+const CourierPortalPage = lazy(() => import("./pages/CourierPortalPage"));
 const CommercialPage = lazy(() => import("./pages/CommercialPage"));
 const CommercialAccountingPage = lazy(() => import("./pages/CommercialAccountingPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
@@ -16,9 +24,11 @@ const SearchPage = lazy(() => import("./pages/CatalogPages").then((module) => ({
 const DealsPage = lazy(() => import("./pages/DealsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 const RepairPage = lazy(() => import("./pages/RepairPage"));
+const RepairAuthorizationPage = lazy(() => import("./pages/RepairAuthorizationPage"));
 const ProductMatchPage = lazy(() => import("./pages/ProductMatchPage"));
 const RentalsPage = lazy(() => import("./pages/RentalPages").then((module) => ({ default: module.RentalsPage })));
 const OperationalRentalDetailPage = lazy(() => import("./pages/OperationalRentalDetailPage"));
+const OperationsPortalPage = lazy(() => import("./pages/OperationsPortalPage"));
 const AccountPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.AccountPage })));
 const CartPage = lazy(() => import("./pages/UtilityPages").then((module) => ({ default: module.CartPage })));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
@@ -64,6 +74,26 @@ function RouteFallback() {
   );
 }
 
+function branchScopedPath(path: string) {
+  return path === "/products" || path === "/search" || path === "/rentals" || path.startsWith("/category/");
+}
+
+function normalizeBranchScopedRoute(current: ReturnType<typeof getRoute>, branch: ShoppingBranch = getShoppingBranch()) {
+  if (!branchScopedPath(current.path)) return current;
+
+  const query = new URLSearchParams(current.query);
+  const currentBranch = query.get("branch");
+  const nextBranch = branch === "Online" ? null : branch;
+  if (currentBranch === nextBranch) return current;
+
+  if (nextBranch) query.set("branch", nextBranch);
+  else query.delete("branch");
+  const queryString = query.toString();
+  const nextHash = `#${current.path}${queryString ? `?${queryString}` : ""}`;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+  return getRoute();
+}
+
 export default function App() {
   const [route, setRoute] = useState(getRoute());
   const [cart, setCart] = useState<GuestCheckoutItem[]>(loadGuestCart);
@@ -74,14 +104,26 @@ export default function App() {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
 
     const update = () => {
-      setRoute(getRoute());
+      setRoute(normalizeBranchScopedRoute(getRoute()));
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       });
     };
 
+    update();
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
+  }, []);
+
+  useEffect(() => {
+    const syncActiveCommerceBranch = (event: Event) => {
+      const branch = (event as CustomEvent<{ branch?: unknown }>).detail?.branch;
+      if (!isShoppingBranch(branch)) return;
+      setRoute(normalizeBranchScopedRoute(getRoute(), branch));
+    };
+
+    window.addEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncActiveCommerceBranch);
+    return () => window.removeEventListener(SHOPPING_BRANCH_CHANGED_EVENT, syncActiveCommerceBranch);
   }, []);
 
   useEffect(() => {
@@ -123,21 +165,31 @@ export default function App() {
   }), [wishlist, compared]);
 
   const path = route.path;
+  if (path === "/operations" || path.startsWith("/operations/")) {
+    return <Suspense fallback={<RouteFallback />}><OperationsPortalPage /></Suspense>;
+  }
+  if (path === "/repair-authorization") {
+    return <Suspense fallback={<RouteFallback />}><RepairAuthorizationPage token={route.query.get("token") || ""} /></Suspense>;
+  }
+
+  const branchRouteKey = route.query.get("branch") || "Online";
   let page = <HomePageV3 {...actions} />;
-  if (path === "/products") page = <ProductsPage actions={actions} />;
+  if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;
   else if (path === "/categories") page = <CategoriesPage />;
-  else if (path.startsWith("/category/")) page = <CategoryPage slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
+  else if (path.startsWith("/category/")) page = <CategoryPage key={`category:${path}:${branchRouteKey}`} slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
   else if (path.startsWith("/product/")) { const id = path.split("/")[2]; page = <ProductDetailPage id={id} wished={wishlist.includes(id)} onWishlist={actions.onWishlist} onAdd={actions.onAdd} />; }
   else if (path === "/compare") page = <ComparePage compared={compared} onCompare={actions.onCompare} onAdd={actions.onAdd} />;
-  else if (path === "/rentals") page = <RentalsPage />;
+  else if (path === "/rentals") page = <RentalsPage key={`rentals:${branchRouteKey}`} />;
   else if (path.startsWith("/rental/")) page = <OperationalRentalDetailPage id={path.split("/")[2]} />;
   else if (path === "/repairs") page = <RepairPage />;
+  else if (path === "/couriers/account") page = <CourierAccountPage />;
+  else if (path === "/couriers") page = <CourierPortalPage />;
   else if (path === "/commercial") page = <CommercialPage quote={route.query.get("mode") === "quote"} />;
   else if (path === "/commercial/accounting") page = <CommercialAccountingPage />;
   else if (path === "/deals") page = <DealsPage />;
   else if (path === "/assistant") page = <AssistantPage initialPrompt={route.query.get("prompt") || ""} onAdd={actions.onAdd} />;
   else if (path === "/product-match") page = <ProductMatchPage onAdd={actions.onAdd} />;
-  else if (path === "/search") page = <SearchPage query={route.query.get("q") || ""} actions={actions} />;
+  else if (path === "/search") page = <SearchPage key={`search:${branchRouteKey}`} query={route.query.get("q") || ""} actions={actions} />;
   else if (path === "/cart") page = <CartPage guestCart={cart} setGuestQuantity={(id, quantity) => setCart((items) => quantity <= 0 ? items.filter((item) => item.productId !== id) : items.map((item) => item.productId === id ? { ...item, quantity: Math.min(999, quantity) } : item))} removeGuest={(id) => setCart((items) => items.filter((item) => item.productId !== id))} />;
   else if (path === "/wishlist") page = <WishlistPage actions={actions} />;
   else if (path === "/account") page = <AccountPage />;

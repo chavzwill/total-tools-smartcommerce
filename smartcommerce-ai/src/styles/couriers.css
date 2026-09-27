@@ -1,0 +1,54 @@
+/* Adapted from 12ui winner, service-editor and staff-review responsive exports.
+   Preserve grouped form + review sidebar while using the existing storefront shell. */
+.courier-page{max-width:1160px;margin:0 auto;padding:clamp(16px,4vw,48px);color:#202823;overflow-wrap:anywhere}
+.courier-page *{box-sizing:border-box;min-width:0}
+.courier-page h1{font-size:clamp(28px,4vw,44px)!important;line-height:1.12!important;margin:8px 0 16px}
+.courier-page h2{font-size:24px!important;line-height:1.25!important;margin:0 0 12px}
+.courier-page h3{font-size:18px!important;margin:0 0 12px}
+.courier-page p{line-height:1.6;margin:10px 0 20px;color:#53615a}
+.courier-eyebrow{color:#08763f;font-weight:750;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.courier-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:24px;align-items:start;margin-top:28px}
+.courier-card{background:#fff;border:1px solid #dfe5e1;border-radius:20px;padding:clamp(18px,3vw,30px);margin-bottom:24px}
+.courier-fields{display:grid;gap:20px;border:0;padding:0;margin:20px 0}
+.courier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.courier-page label{display:grid;gap:8px;font-size:14px;font-weight:600;align-content:start}
+.courier-page input,.courier-page select,.courier-page textarea{width:100%;max-width:100%;min-height:48px;border:1px solid #becbc3;border-radius:10px;padding:10px 12px;background:#fff;color:#202823;font:inherit;font-size:16px}
+.courier-page textarea{resize:vertical}
+.courier-page :focus-visible{outline:3px solid #08763f;outline-offset:3px}
+.courier-page fieldset:disabled{opacity:.75}
+.courier-page .courier-check{display:flex;align-items:center;gap:10px;font-weight:400;min-height:44px}
+.courier-check input{width:20px;min-height:20px;flex:0 0 20px}
+.courier-choices{border:1px solid #dfe5e1;border-radius:12px;padding:12px;max-height:220px;overflow:auto}
+.courier-choices legend{font-weight:650;padding:0 6px}
+.courier-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.courier-page .tt-button{max-width:100%;white-space:normal;height:auto;min-height:48px}
+.courier-status{display:inline-block;border-radius:99px;background:#e8f4ed;color:#075b31;padding:7px 13px;font-weight:650;text-transform:capitalize}
+.courier-note{border-left:3px solid #08763f;padding-left:14px}
+.courier-page [role=alert]{color:#923322}
+.courier-row{border-top:1px solid #e1e6e2;padding:18px 0}
+.courier-history{padding-left:20px;display:grid;gap:16px}
+.courier-history time{display:block;font-size:13px;color:#53615a}
+.courier-page dl{display:grid;gap:8px}.courier-page dt{font-weight:650}.courier-page dd{margin:0 0 12px}
+@media(max-width:760px){.courier-layout{grid-template-columns:minmax(0,1fr)}.courier-page{padding:20px 12px}.courier-grid{grid-template-columns:minmax(0,1fr)}.courier-actions>*{flex:1 1 160px}.courier-card{border-radius:16px}}
+.courier-page [hidden]{display:none!important}
+.courier-page .tt-button{border-radius:999px;padding:12px 22px}.courier-page form>.tt-button{margin-top:16px}
+/* Delivery-detail grouping follows the generated 12ui delivery export. Fluid tracks
+   replace its fixed anchor widths so long addresses and touch controls remain usable. */
+.courier-deliveries{padding:20px 0;container-type:inline-size}
+.courier-delivery-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.courier-delivery-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;margin-top:24px;align-items:start}
+.courier-delivery-layout .courier-delivery-reference{font-size:clamp(22px,3vw,32px)!important}
+.courier-delivery-layout h3{display:flex;align-items:center;gap:10px}
+.courier-delivery-layout h3 svg{flex-shrink:0;color:#08763f}
+.courier-delivery-section{border:1px solid #dfe5e1;border-radius:12px;padding:20px;margin-top:20px}
+.courier-delivery-section ul{padding-left:20px;margin-bottom:24px;line-height:1.7}
+.courier-delivery-section dl{margin-bottom:0}
+.courier-delivery-timeline{list-style:none;margin:24px 0 0;padding:0 0 0 20px;border-left:2px solid #d7e9df}
+.courier-delivery-timeline li{position:relative;padding:0 0 24px 12px}
+.courier-delivery-timeline li:before{content:'';position:absolute;left:-27px;top:5px;width:12px;height:12px;background:#08763f;border:2px solid white;border-radius:50%}
+.courier-delivery-timeline strong{text-transform:capitalize}.courier-delivery-timeline time,.courier-delivery-timeline small{display:block;margin-top:6px;color:#53615a}
+.courier-delivery-timeline p{margin:6px 0!important}
+.courier-delivery-proof-form{background:#f4faf6;padding:20px;border-radius:12px;margin-top:20px}
+.courier-proof-image{display:block;max-width:100%;height:auto;max-height:480px;object-fit:contain;margin-bottom:20px}
+@container(max-width:760px){.courier-delivery-layout{grid-template-columns:minmax(0,1fr)}.courier-delivery-section,.courier-delivery-proof-form{padding:16px}}
+@media(max-width:760px){.courier-delivery-layout{grid-template-columns:minmax(0,1fr)}}

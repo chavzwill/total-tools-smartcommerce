@@ -32,17 +32,45 @@ export type PlatformBackendRuntime = {
   resolveContext(request: Request): PosAdapterContext | Promise<PosAdapterContext>;
 };
 
+export type AssistantConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AssistantWorkflowHandoff = {
+  kind: "rental" | "repair" | "commercial";
+  label: string;
+  href: string;
+  readiness: "needs_input" | "ready_to_continue" | "verification_required";
+  requiresMoreInput: boolean;
+  knownFields: string[];
+  missingFields: string[];
+  verificationNote?: string;
+};
+
+export type AssistantRecommendationEvidence = {
+  entityType: "product" | "rental";
+  entityId: PlatformEntityId;
+  fitReasons: string[];
+  matchingAttributes: string[];
+  cautions: string[];
+  sourceMode: "connected" | "preview";
+};
+
 export type AssistantRequest = {
   prompt: string;
   branchId?: PlatformEntityId;
   customerId?: PlatformEntityId;
+  history?: AssistantConversationTurn[];
 };
 
 export type AssistantResult = {
   response: string;
   recommendedProducts: CommerceProduct[];
   recommendedRentals: RentalAsset[];
+  recommendationEvidence?: AssistantRecommendationEvidence[];
   nextActions: string[];
+  workflowHandoff?: AssistantWorkflowHandoff;
 };
 
 export type CheckoutRequest = {

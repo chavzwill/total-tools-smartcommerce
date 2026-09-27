@@ -1,0 +1,17 @@
+import type {CourierApplication,CourierWorkspace,CourierService,CourierApplicationInput,CourierServiceInput} from '../types/courier';
+export class CourierClientError extends Error {constructor(public status:number,code?:unknown){super(status===409&&code==='COURIER_POS_AUTHORITY_REQUIRED'?'Complete this staff decision in the POS. Approval synchronization is pending.':status===409&&code==='COURIER_POS_VERIFICATION_PENDING'?'POS verification is not connected yet. Delivery access remains unavailable.':status===401?'Sign in to continue.':status===403?'You do not have permission for this action.':status===409?'This record changed. Refresh and review the latest details.':status===400?'Check the entered details and try again.':'Courier services are unavailable. Please try again later.');}}
+async function request(path:string,body?:unknown):Promise<any>{
+  const response=await fetch(path,{method:body?'POST':'GET',credentials:'same-origin',headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  const payload=await response.json().catch(()=>null);
+  if(!response.ok)throw new CourierClientError(response.status,payload?.error?.code);
+  if(!payload||typeof payload!=='object'||payload.error)throw new CourierClientError(503);
+  return payload;
+}
+export async function getCourierWorkspace():Promise<CourierWorkspace>{const data=await request('/api/couriers');if(!Object.hasOwn(data,'application')||!Array.isArray(data.services)||!data.references||data.bookingAvailable!==false)throw new CourierClientError(503);return data;}
+export async function courierCommand<T=CourierApplication|CourierService>(command:Record<string,unknown>):Promise<T>{const data=await request('/api/couriers',command);if(!data.result?.id||!Number.isInteger(data.result.version))throw new CourierClientError(503);return data.result;}
+export const createCourierApplication=(id:string,input:CourierApplicationInput,key:string)=>courierCommand<CourierApplication>({action:'create_application',id,input,idempotencyKey:key});
+export const saveCourierApplication=(id:string,expectedVersion:number,input:CourierApplicationInput,key:string)=>courierCommand<CourierApplication>({action:'save_application',id,expectedVersion,input,idempotencyKey:key});
+export const submitCourierApplication=(id:string,expectedVersion:number,key:string)=>courierCommand<CourierApplication>({action:'submit_application',id,expectedVersion,idempotencyKey:key});
+export const saveCourierService=(id:string,organizationId:string,expectedVersion:number,input:CourierServiceInput,key:string)=>courierCommand<CourierService>({action:'save_service',id,organizationId,expectedVersion,input,idempotencyKey:key});
+export async function getCourierApprovalQueue(cursor?:string):Promise<{applications:CourierApplication[];nextCursor:string|null}>{const data=await request('/api/courier-approvals'+(cursor?'?cursor='+encodeURIComponent(cursor):''));if(!Array.isArray(data.applications))throw new CourierClientError(503);return data;}
+export async function decideCourierApplication(id:string,expectedVersion:number,action:string,reason:string,key:string):Promise<CourierApplication>{const data=await request('/api/courier-approvals',{id,expectedVersion,action,reason,idempotencyKey:key});if(!data.result?.id||!Number.isInteger(data.result.version))throw new CourierClientError(503);return data.result;}

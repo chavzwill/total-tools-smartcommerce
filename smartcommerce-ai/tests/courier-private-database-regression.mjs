@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {readFile} from 'node:fs/promises';
+const exec=promisify(execFile),url=process.env.COURIER_TEST_DATABASE_URL,parsed=new URL(url);
+assert.ok(['localhost','127.0.0.1'].includes(parsed.hostname)&&parsed.pathname==='/courier_test');
+async function sql(query){return (await exec(process.env.PSQL_PATH||'psql',['-X','-q','-t','-A','-w','-v','ON_ERROR_STOP=1','-c',query,'-d',url],{timeout:15000})).stdout.trim();}
+await sql(await readFile(new URL('../migrations/20260917_courier_identity_payments.sql',import.meta.url),'utf8'));
+const account=crypto.randomUUID(),org=crypto.randomUUID(),driverAccount=crypto.randomUUID(),driver=crypto.randomUUID();
+await sql(`INSERT INTO customer_accounts(id) VALUES ('${account}'),('${driverAccount}');INSERT INTO courier_organizations(id,owner_customer_id,profile) VALUES ('${org}','${account}','{}');`);
+const owner={kind:'owner',customerId:account},staff={kind:'staff',employeeId:'private-reviewer',permissions:{couriers_manage:true,couriers_verify:true,couriers_payments:true,couriers_pickup:true}};
+async function mutate(actor,command){const c={...command,idempotencyKey:command.idempotencyKey||crypto.randomUUID()};return JSON.parse(await sql(`SELECT courier_private_mutate('${JSON.stringify(actor).replaceAll("'","''")}'::jsonb,'${JSON.stringify(c).replaceAll("'","''")}'::jsonb);`));}
+await assert.rejects(()=>sql(`UPDATE courier_organizations SET status='approved' WHERE id='${org}'`));
+for(const kind of ['identity','business']){
+  const doc=await mutate(owner,{action:'upload_document',id:crypto.randomUUID(),kind,mime:'image/jpeg',encrypted:{body:'encrypted-test-fixture'},fingerprint:kind});
+  await assert.rejects(()=>mutate({...staff,permissions:{couriers_manage:true}},{action:'review_document',id:doc.id,expectedVersion:doc.version,status:'verified',reason:'Reviewed'}));
+  await mutate(staff,{action:'review_document',id:doc.id,expectedVersion:doc.version,status:'verified',reason:'Reviewed'});
+}
+await sql(`UPDATE courier_organizations SET status='approved' WHERE id='${org}';INSERT INTO courier_drivers(id,organization_id,account_id) VALUES ('${driver}','${org}','${driverAccount}');`);
+await assert.rejects(()=>mutate({kind:'owner',customerId:driverAccount},{action:'issue_pass',tokenHash:'a'.repeat(64)}));
+const driverDoc=await mutate({kind:'owner',customerId:driverAccount},{action:'upload_document',id:crypto.randomUUID(),kind:'identity',mime:'image/jpeg',encrypted:{body:'encrypted'},fingerprint:'driver'});
+await mutate(staff,{action:'review_document',id:driverDoc.id,expectedVersion:1,status:'verified',reason:'Reviewed driver'});
+const passHash=crypto.randomUUID().replaceAll('-','').repeat(2);
+const passCommand={action:'issue_pass',tokenHash:passHash,idempotencyKey:crypto.randomUUID()};
+const pass=await mutate({kind:'owner',customerId:driverAccount},passCommand);assert.deepEqual(await mutate({kind:'owner',customerId:driverAccount},passCommand),pass);
+assert.equal((await mutate(staff,{action:'scan_pass',tokenHash:passHash})).handoverAvailable,false);
+const pickup=crypto.randomUUID();
+await sql(`INSERT INTO courier_pickups(id,driver_id,organization_id,order_id,order_number,branch_id,items,destination,source_reference) VALUES ('${pickup}','${driver}','${org}','test-order-${pickup}','TEST-1001','test-branch','[{"sku":"TEST-SKU","name":"Test parcel","quantity":2}]','{"address":"Test address"}','test-only-authoritative-fixture');`);
+const branchStaff={...staff,branchIds:['test-branch']};
+assert.equal((await mutate(staff,{action:'scan_pass',tokenHash:passHash})).orders.length,0);
+const scan=await mutate(branchStaff,{action:'scan_pass',tokenHash:passHash});
+assert.equal(scan.orders[0].orderNumber,'TEST-1001');assert.equal(scan.orders[0].items[0].quantity,2);
+await assert.rejects(()=>mutate(staff,{action:'confirm_pickup',id:pickup,expectedVersion:1,tokenHash:passHash}));
+const handover={action:'confirm_pickup',id:pickup,expectedVersion:1,tokenHash:passHash,idempotencyKey:crypto.randomUUID()};
+const receipt=await mutate(branchStaff,handover);assert.equal(receipt.status,'collected');assert.deepEqual(await mutate(branchStaff,handover),receipt);
+await assert.rejects(()=>mutate(branchStaff,{...handover,idempotencyKey:crypto.randomUUID()}));
+await mutate(staff,{action:'review_document',id:driverDoc.id,expectedVersion:2,status:'revoked',reason:'Verification revoked'});
+await assert.rejects(()=>mutate(staff,{action:'scan_pass',tokenHash:passHash}));
+const bank=await mutate(owner,{action:'save_bank',organizationId:org,expectedVersion:0,encrypted:{body:'encrypted-bank'},masked:'Bank **1234',currency:'JMD',fingerprint:'bank'});
+await mutate(staff,{action:'review_bank',organizationId:org,expectedVersion:bank.version,status:'verified',reason:'Confirmed'});
+await assert.rejects(()=>mutate(owner,{action:'request_payout',organizationId:org,currency:'JMD',id:crypto.randomUUID()}));
+const earning=crypto.randomUUID();await sql(`INSERT INTO courier_earnings(id,organization_id,booking_id,payment_reference,delivery_reference,currency,amount_minor,status) VALUES ('${earning}','${org}','test-${earning}','test-paid','test-delivered','JMD',150000,'payable');`);
+const request={action:'request_payout',organizationId:org,currency:'JMD',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID()};
+const payout=await mutate(owner,request);assert.equal(payout.amountMinor,150000);assert.deepEqual(await mutate(owner,request),payout);
+await assert.rejects(()=>mutate(owner,{...request,id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID()}));
+let p=await mutate(staff,{action:'payout_status',id:payout.id,expectedVersion:1,status:'approved',reason:'Approved'});
+p=await mutate(staff,{action:'payout_status',id:p.id,expectedVersion:p.version,status:'transfer_pending',reason:'Bank transfer being arranged'});
+await assert.rejects(()=>mutate(staff,{action:'payout_status',id:p.id,expectedVersion:p.version,status:'paid',reason:'Done'}));
+p=await mutate(staff,{action:'payout_status',id:p.id,expectedVersion:p.version,status:'paid',reason:'Bank confirmed',transferReference:'test-bank-'+p.id});assert.equal(p.status,'paid');
+assert.equal(await sql(`SELECT status FROM courier_earnings WHERE id='${earning}'`),'paid');
+console.log('Verification gates, private review permissions, pass revocation, payout reservation and bank-reference requirements passed.');

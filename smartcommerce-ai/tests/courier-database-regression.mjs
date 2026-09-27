@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {readFile} from 'node:fs/promises';
+const exec=promisify(execFile);
+const url=process.env.COURIER_TEST_DATABASE_URL;
+assert.ok(url,'Set COURIER_TEST_DATABASE_URL to a disposable localhost database');
+const parsed=new URL(url);
+assert.ok(['127.0.0.1','localhost'].includes(parsed.hostname) && parsed.pathname==='/courier_test','Only localhost/courier_test is permitted');
+const psql=process.env.PSQL_PATH || 'psql';
+async function sql(query){const r=await exec(psql,['-X','-q','-t','-A','-w','-v','ON_ERROR_STOP=1','-c',query,'-d',url],{timeout:15000});return r.stdout.trim();}
+const migration=await readFile(new URL('../migrations/20260916_courier_onboarding.sql',import.meta.url),'utf8');
+await sql('CREATE TABLE IF NOT EXISTS customer_accounts(id UUID PRIMARY KEY);');
+await sql(migration);await sql(migration);
+await sql(await readFile(new URL("../migrations/20260917_courier_identity_payments.sql",import.meta.url),"utf8"));
+await sql("ALTER TABLE customer_accounts ADD COLUMN IF NOT EXISTS full_name TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;");
+const owner=crypto.randomUUID(),other=crypto.randomUUID(), id=crypto.randomUUID();
+await sql(`INSERT INTO customer_accounts(id) VALUES ('${owner}'),('${other}');`);
+await sql(`INSERT INTO courier_identity_documents(id,account_id,kind,mime,encrypted,status) VALUES ('${crypto.randomUUID()}','${owner}','identity','image/jpeg','{}','verified'),('${crypto.randomUUID()}','${owner}','business','image/jpeg','{}','verified');`);
+const input={businessName:'Test courier',contactName:'Test owner',email:'courier@example.test',phone:'+18765551234',description:'Test only'};
+const create={action:'create_application',id,input,idempotencyKey:crypto.randomUUID()};
+async function mutate(actor,command){return JSON.parse(await sql(`SELECT courier_mutate('${JSON.stringify(actor).replaceAll("'","''")}'::jsonb,'${JSON.stringify(command).replaceAll("'","''")}'::jsonb);`));}
+const actor={kind:'owner',customerId:owner},staff={kind:'staff',employeeId:'test-reviewer',permissions:{couriers_manage:true}};
+const first=await mutate(actor,create);
+assert.equal(first.status,'draft');assert.equal(first.version,1);
+assert.deepEqual(await mutate(actor,create),first);
+await assert.rejects(()=>mutate(actor,{...create,input:{...input,businessName:'Changed'}}));
+await assert.rejects(()=>mutate({kind:'owner',customerId:other},{action:'save_application',id,expectedVersion:1,input,idempotencyKey:crypto.randomUUID()}));
+const submitted=await mutate(actor,{action:'submit_application',id,expectedVersion:1,idempotencyKey:crypto.randomUUID()});
+assert.equal(submitted.status,'submitted');assert.equal(submitted.version,2);
+await assert.rejects(()=>mutate({...staff,permissions:{reports:true}},{action:'approve',id,expectedVersion:2,reason:'Reviewed',idempotencyKey:crypto.randomUUID()}));
+const decisions=await Promise.allSettled(['approve','reject'].map(action=>mutate(staff,{action,id,expectedVersion:2,reason:'Reviewed',idempotencyKey:crypto.randomUUID()})));
+assert.equal(decisions.filter(x=>x.status==='fulfilled').length,1);
+assert.equal(Number(await sql(`SELECT count(*) FROM courier_events WHERE organization_id='${id}';`)),3);
+assert.equal(Number(await sql(`SELECT version FROM courier_organizations WHERE id='${id}';`)),3);
+console.log('Courier migration replay, ownership, idempotency, concurrent decisions and audit atomicity passed.');
+const serviceId=crypto.randomUUID();
+async function serviceMutation(customerId,command){return JSON.parse(await sql(`SELECT courier_service_mutate('${customerId}','${JSON.stringify(command).replaceAll("'","''")}'::jsonb);`));}
+const serviceCommand={action:'save_service',id:serviceId,organizationId:id,expectedVersion:0,input:{name:'Test service',available:true},idempotencyKey:crypto.randomUUID()};
+const service=await serviceMutation(owner,serviceCommand);
+assert.equal(service.version,1);assert.equal(service.published,false);
+assert.deepEqual(await serviceMutation(owner,serviceCommand),service);
+await assert.rejects(()=>serviceMutation(other,{...serviceCommand,idempotencyKey:crypto.randomUUID()}));
+// Reconcile the winning review to approved through legitimate transitions.
+let current=JSON.parse(await sql(`SELECT courier_application_json(o) FROM courier_organizations o WHERE id='${id}';`));
+if(current.status==='rejected') {current=await mutate(actor,{action:'submit_application',id,expectedVersion:current.version,idempotencyKey:crypto.randomUUID()});current=await mutate(staff,{action:'approve',id,expectedVersion:current.version,reason:'Reviewed',idempotencyKey:crypto.randomUUID()});}
+const published=await serviceMutation(owner,{action:'publish_service',id:serviceId,organizationId:id,expectedVersion:1,idempotencyKey:crypto.randomUUID()});
+assert.equal(published.published,true);
+await mutate(staff,{action:'suspend',id,expectedVersion:current.version,reason:'Review required',idempotencyKey:crypto.randomUUID()});
+await assert.rejects(()=>serviceMutation(owner,{action:'publish_service',id:serviceId,organizationId:id,expectedVersion:2,idempotencyKey:crypto.randomUUID()}));
+assert.equal(Number(await sql(`SELECT count(*) FROM courier_available_services WHERE id='${serviceId}';`)),0);
+const saved=await serviceMutation(owner,{...serviceCommand,expectedVersion:2,input:{name:'Changed service',available:false},idempotencyKey:crypto.randomUUID()});
+assert.equal(saved.version,3);assert.equal(saved.published,false);
+assert.equal(Number(await sql(`SELECT count(*) FROM courier_service_versions WHERE service_id='${serviceId}';`)),3);
+console.log('Courier service ownership, immutable versions, publication and suspension filtering passed.');
+const draftId=crypto.randomUUID(),draftServiceId=crypto.randomUUID();
+await mutate({kind:'owner',customerId:other},{...create,id:draftId,idempotencyKey:crypto.randomUUID()});
+await serviceMutation(other,{...serviceCommand,id:draftServiceId,organizationId:draftId,idempotencyKey:crypto.randomUUID()});
+await assert.rejects(()=>serviceMutation(other,{action:'publish_service',id:draftServiceId,organizationId:draftId,expectedVersion:1,idempotencyKey:crypto.randomUUID()}));
+assert.equal(Number(await sql(`SELECT version FROM courier_services WHERE id='${draftServiceId}';`)),1);
+console.log('Pending courier publication rejected without partial state change.');

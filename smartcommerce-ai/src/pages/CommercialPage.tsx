@@ -1,6 +1,7 @@
 import { AlertTriangle, BriefcaseBusiness, Building2, CheckCircle2, FolderKanban, Loader2, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
+import CommercialTeamPanel from "../components/CommercialTeamPanel";
 import { createSmartCommercePlatformApi } from "../apiClient";
 import { getCustomerAccount } from "../lib/customerAccount";
 import { go, routeHref } from "../lib/router";
@@ -17,6 +18,8 @@ import { company } from "../styles/theme";
 
 const SHOPPING_BRANCH_KEY = "smartcommerce_shopping_branch_v1";
 const COMMERCIAL_DRAFT_KEY = "smartcommerce_commercial_request_draft_v1";
+const MAX_HANDOFF_ITEM_LENGTH = 180;
+const MAX_HANDOFF_DETAILS_LENGTH = 700;
 
 type CommercialDraft = {
   businessName: string;
@@ -24,12 +27,27 @@ type CommercialDraft = {
   email: string;
   need: string;
   details: string;
+  handoffItem?: string;
+  handoffDetails?: string;
+  handoffQuantity?: number;
+  handoffMode?: string;
+  handoffBranch?: string;
 };
 
 const getProviderContext = () => {
   const businessAccountId = import.meta.env.VITE_SMARTCOMMERCE_BUSINESS_ID;
   const providerId = import.meta.env.VITE_SMARTCOMMERCE_PROVIDER_ID;
   return businessAccountId && providerId ? { businessAccountId, providerId } : undefined;
+};
+
+const boundedHandoffText = (value: string | null | undefined, limit: number) =>
+  String(value || "").trim().slice(0, limit);
+
+const boundedHandoffQuantity = (value: string | number | null | undefined) => {
+  if (typeof value === "number") return Number.isInteger(value) && value >= 1 && value <= 9999 ? value : undefined;
+  if (!value || !/^\d{1,4}$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 9999 ? parsed : undefined;
 };
 
 const getRequestContext = () => {
@@ -43,8 +61,10 @@ const getRequestContext = () => {
     branch = "";
   }
   return {
-    item: query.get("item") || "",
-    mode: query.get("mode") || "",
+    item: boundedHandoffText(query.get("item"), MAX_HANDOFF_ITEM_LENGTH),
+    details: boundedHandoffText(query.get("details"), MAX_HANDOFF_DETAILS_LENGTH),
+    quantity: boundedHandoffQuantity(query.get("qty")),
+    mode: boundedHandoffText(query.get("mode"), 32),
     branch,
   };
 };
@@ -69,13 +89,22 @@ function verificationLabel(status?: string) {
 }
 
 export default function CommercialPage({ quote = false }: { quote?: boolean }) {
-  const requestContext = useMemo(getRequestContext, []);
   const savedDraft = useMemo(getSavedCommercialDraft, []);
+  const requestContext = useMemo(() => {
+    const routeContext = getRequestContext();
+    return {
+      item: routeContext.item || boundedHandoffText(savedDraft.handoffItem, MAX_HANDOFF_ITEM_LENGTH),
+      details: routeContext.details || boundedHandoffText(savedDraft.handoffDetails, MAX_HANDOFF_DETAILS_LENGTH),
+      quantity: routeContext.quantity ?? boundedHandoffQuantity(savedDraft.handoffQuantity),
+      mode: routeContext.mode || boundedHandoffText(savedDraft.handoffMode, 32),
+      branch: routeContext.branch || boundedHandoffText(savedDraft.handoffBranch, 120),
+    };
+  }, [savedDraft]);
   const [businessName, setBusinessName] = useState(() => savedDraft.businessName || "");
   const [contactName, setContactName] = useState(() => savedDraft.contactName || "");
   const [email, setEmail] = useState(() => savedDraft.email || "");
   const [need, setNeed] = useState(() => savedDraft.need || (quote || requestContext.mode === "quote" ? "Bulk product pricing" : requestContext.mode === "maintenance" ? "Project support" : "Project support"));
-  const [details, setDetails] = useState(() => savedDraft.details || (requestContext.item ? `I need commercial support for: ${requestContext.item}` : ""));
+  const [details, setDetails] = useState(() => savedDraft.details || requestContext.details || (requestContext.item ? `I need commercial support for: ${requestContext.quantity ? `${requestContext.quantity} × ` : ""}${requestContext.item}` : ""));
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [accounts, setAccounts] = useState<CommercialAccountSummary[]>([]);
@@ -123,7 +152,18 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
   }, [selectedAccountId]);
 
   function saveCommercialDraft() {
-    const draft: CommercialDraft = { businessName, contactName, email, need, details };
+    const draft: CommercialDraft = {
+      businessName,
+      contactName,
+      email,
+      need,
+      details,
+      handoffItem: requestContext.item || undefined,
+      handoffDetails: requestContext.details || undefined,
+      handoffQuantity: requestContext.quantity,
+      handoffMode: requestContext.mode || undefined,
+      handoffBranch: requestContext.branch || undefined,
+    };
     try {
       window.localStorage.setItem(COMMERCIAL_DRAFT_KEY, JSON.stringify(draft));
     } catch {
@@ -239,11 +279,20 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
       businessAccountId: providerContext.businessAccountId,
       customerAccountId,
       companyName: businessName,
+      requestedItems: requestContext.item
+        ? [{
+            name: requestContext.item,
+            ...(requestContext.quantity ? { quantity: requestContext.quantity } : {}),
+            notes: "Grounded assistant handoff; customer reviewed the editable commercial request before submission.",
+          }]
+        : undefined,
       requestDetails: `${need}: ${details}`,
       customerNotes: [
         `Contact: ${contactName} · ${email}`,
         requestContext.branch ? `Shopping branch: ${requestContext.branch}` : "",
         requestContext.item ? `Source item: ${requestContext.item}` : "",
+        requestContext.quantity ? `Requested quantity: ${requestContext.quantity}` : "",
+        requestContext.details ? "Request context was prefilled from a bounded SmartCommerce AI handoff and remained customer-editable before submission." : "",
       ].filter(Boolean).join("\n"),
     });
     if (!result.success) {
@@ -285,7 +334,8 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
           <BriefcaseBusiness size={30} />
           <span className="sc-flow-kicker">Commercial request</span>
           <h2>{quote || requestContext.mode === "quote" ? "Request commercial pricing" : "What does the business need?"}</h2>
-          {requestContext.item ? <p className="sc-commercial-request__context"><strong>From your product:</strong> {requestContext.item}</p> : null}
+          {requestContext.item ? <p className="sc-commercial-request__context"><strong>Grounded item:</strong> {requestContext.quantity ? `${requestContext.quantity} × ` : ""}{requestContext.item}</p> : null}
+          {requestContext.details ? <p className="sc-commercial-request__context"><strong>SmartCommerce prefill:</strong> Review and edit the requirement below before sending. Nothing has been quoted or submitted yet.</p> : null}
           {requestContext.branch ? <p className="sc-commercial-request__context"><MapPin size={15} /> Shopping from {requestContext.branch}</p> : null}
           <label>Business or organisation<input required value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
           <label>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
@@ -352,6 +402,7 @@ export default function CommercialPage({ quote = false }: { quote?: boolean }) {
               {accountDetails.projects.length ? <div className="sc-commercial-capabilities">{accountDetails.projects.map((project) => <article key={project.id}><strong>{project.name}</strong><p>{project.reference_code ? `${project.reference_code} · ` : ""}{project.status}</p></article>)}</div> : null}
             </> : null}
 
+            <CommercialTeamPanel accountId={selectedAccountId} onAccepted={refreshAccount} />
             {workspaceMessage ? <p className="sc-flow-status" role="status">{workspaceMessage}</p> : null}
           </> : null}
         </section>

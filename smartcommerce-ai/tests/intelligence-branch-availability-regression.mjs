@@ -1,0 +1,39 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const advisor = await readFile(new URL("../src/lib/advisor.ts", import.meta.url), "utf8");
+const page = await readFile(new URL("../src/pages/AssistantPage.tsx", import.meta.url), "utf8");
+
+const invariants = [
+  [advisor.includes("InventoryAvailability"), "advisor uses the platform inventory contract"],
+  [advisor.includes("resolveSelectedBranchContext"), "advisor resolves selected shopping branch context"],
+  [advisor.includes("/platform/inventory/availability?productId=") && advisor.includes("branchId="), "availability lookup is scoped to product and selected branch"],
+  [advisor.includes("lookupStatus: result.success ? \"confirmed\" : \"unavailable\""), "lookup failure is represented separately from stock status"],
+  [advisor.includes("const records = result.success ? inventoryRecordsForBranch(result.data, branch.id!) : []"), "failed lookup yields no records and successful lookup keeps only exact selected-branch inventory"],
+  [advisor.includes('records.filter((item) => String(item.branchId || "") === branchId)'), "advisor enforces exact provider branch identity before exposing availability"],
+  [!advisor.includes('records.find((item) => String(item.branchId || "") === branchId) || records[0]'), "advisor never borrows another branch inventory record when the selected branch is absent"],
+  [advisor.includes("productAvailability") && advisor.includes("selectedBranchName"), "advisor response carries branch availability snapshot"],
+  [page.includes("The provider inventory lookup did not complete. This is not an out-of-stock result."), "failed inventory read is explicitly not treated as out of stock"],
+  [page.includes("live stock not verified") && page.includes("liveVerified === false"), "preview or unverified inventory remains visibly unverified"],
+  [page.includes("provider status in stock") && page.includes("provider status low stock"), "positive provider statuses are presented as provider facts"],
+  [page.includes("provider status out of stock"), "out-of-stock is only presented from an explicit provider status"],
+  [page.includes("Final fulfillment is still confirmed at checkout or reservation."), "in-stock status does not imply guaranteed fulfillment"],
+  [page.includes("Next provider-listed availability"), "next availability is labeled as provider-listed rather than promised"],
+  [advisor.includes("selectedRecord.status !== \"out_of_stock\""), "alternate branch search only starts after explicit selected-branch out-of-stock"],
+  [advisor.includes("selectedRecord.metadata?.liveVerified === false") && advisor.includes("selectedRecord.metadata?.source === \"preview_catalogue\""), "preview/unverified selected-branch data cannot trigger live alternate claims"],
+  [advisor.includes("record.status !== \"in_stock\" && record.status !== \"low_stock\""), "alternate branches must return explicit provider in-stock or low-stock status"],
+  [advisor.includes("record.metadata?.liveVerified === false") && advisor.includes("record.metadata?.source === \"preview_catalogue\""), "preview/unverified alternate branch records are discarded"],
+  [advisor.includes("filter(Boolean).slice(0, 3)"), "alternate branch suggestions are bounded"],
+  [page.includes("const alternatives = (snapshot?.alternatives || []).slice(0, 2)") && page.includes("Switch to {item.branchName}"), "out-of-stock cards surface bounded actionable provider-listed branch alternatives"],
+  [page.includes("onClick={() => onSwitchBranch(item.branchName)}"), "alternate branch action switches through the validated branch callback"],
+  [page.includes("ProductAvailability snapshot={availability}"), "product cards render the independent availability snapshot"],
+  [page.includes("sc-assistant-evidence sc-assistant-availability"), "availability reuses the canonical evidence surface rather than adding a new CSS layer"],
+  [page.includes("function providerConfirmedOutOfStock") && page.includes('snapshot.lookupStatus !== "confirmed"'), "cart blocking requires a completed provider inventory lookup"],
+  [page.includes('record.metadata?.liveVerified === false') && page.includes('record.metadata?.source === "preview_catalogue"') && page.includes('return record.status === "out_of_stock"'), "preview/unverified inventory cannot block the cart as confirmed out of stock"],
+  [page.includes("const outOfStockAtSelectedBranch = providerConfirmedOutOfStock(availability)"), "product actions derive cart availability from the independent selected-branch snapshot"],
+  [page.includes("Out of stock at {availability?.branchName || \"selected branch\"}") && page.includes("<button type=\"button\" disabled>"), "confirmed selected-branch out-of-stock disables the immediate cart action"],
+  [page.includes("onClick={() => onAdd(String(product.id), 1)}>Add to cart</button>"), "purchasable products remain addable when no confirmed out-of-stock fact exists"],
+];
+
+for (const [ok, label] of invariants) assert.equal(ok, true, label);
+console.log(`Branch-availability intelligence regression gate passed (${invariants.length} invariants).`);

@@ -1,10 +1,5 @@
 import type { CommerceProduct, InventoryAvailability } from "../platform";
 
-export type ProductMatchRequest = {
-  imageDataUrl: string;
-  branchId?: string;
-};
-
 export type ProductVisualAnalysis = {
   productType: string;
   brand: string;
@@ -14,6 +9,12 @@ export type ProductVisualAnalysis = {
   searchTerms: string[];
   confidence: number;
   notes: string;
+};
+
+export type ProductMatchRequest = {
+  imageDataUrl: string;
+  branchId?: string;
+  priorAnalysis?: ProductVisualAnalysis;
 };
 
 export type ProductMatchCandidate = {
@@ -27,6 +28,7 @@ export type ProductMatchResult = {
   analysis: ProductVisualAnalysis;
   candidates: ProductMatchCandidate[];
   branchNames: Record<string, string>;
+  evidenceImages: number;
   needsClarification: boolean;
   clarification?: string;
 };

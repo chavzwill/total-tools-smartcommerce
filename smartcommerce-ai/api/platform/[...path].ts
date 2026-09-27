@@ -122,11 +122,13 @@ const toRequest = async (request: any, privileged: boolean, maxBodyBytes = MAX_B
     if (headerValue !== undefined) headers.set(key, headerValue);
   });
 
+  const preview = !process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL &&
+    (process.env.VERCEL_ENV === "preview" || process.env.SMARTCOMMERCE_ENABLE_PREVIEW_CATALOGUE === "1");
   const configuredBusinessAccountId = process.env.SMARTCOMMERCE_BUSINESS_ACCOUNT_ID?.trim();
   const configuredProviderId = process.env.SMARTCOMMERCE_PROVIDER_ID?.trim();
-  const trustedBusinessAccountId = configuredBusinessAccountId || (!privileged ? "public-catalog" : undefined);
+  const trustedBusinessAccountId = configuredBusinessAccountId || (!privileged ? (preview ? "preview-total-tools" : "public-catalog") : undefined);
   const trustedProviderId = configuredProviderId || (!privileged
-    ? (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : "public-unsupported")
+    ? (process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_URL ? "total-tools-pos" : preview ? "preview-catalogue" : "public-unsupported")
     : undefined);
   if (trustedBusinessAccountId) headers.set("x-business-account-id", trustedBusinessAccountId);
   if (trustedProviderId) headers.set("x-provider-id", trustedProviderId);

@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import ts from 'typescript';
+const source=await readFile(new URL('../src/server/couriers/dispatchValidation.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {validateDispatchCommand}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const command={action:'accept',id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),expectedVersion:1};
+assert.deepEqual(validateDispatchCommand(command),command);
+for(const invalid of [{...command,customerId:'spoof'},{...command,expectedVersion:-1},{...command,id:'bad'},{...command,action:'decline'},{...command,action:'assign'},{...command,action:'refund'}])assert.throws(()=>validateDispatchCommand(invalid));
+assert.equal(validateDispatchCommand({...command,action:'decline',reason:'capacity'}).reason,'capacity');
+assert.equal(validateDispatchCommand({...command,action:'assign',driverId:crypto.randomUUID()}).action,'assign');
+console.log('Dispatch command ownership fields, versions, decision reasons and driver IDs validated.');

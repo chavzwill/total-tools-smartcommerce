@@ -215,9 +215,53 @@ export function createPlatformBackendService(
 
     async createRentalReservation(request, input) {
       const context = await getContext(request);
+      const requestId = context.requestId || requestIdFrom(request);
+      const { verification: _untrustedClientVerification, ...reservationInput } = input;
+
+      let providerVerification;
+      if (runtime.adapter.verifyRental) {
+        const verificationResult = await runtime.adapter.verifyRental(context, {
+          rentalAssetId: reservationInput.rentalAssetId,
+          productId: reservationInput.productId,
+          branchId: reservationInput.branchId,
+          customerAccountId: reservationInput.customerAccountId,
+          startDate: reservationInput.startDate,
+          endDate: reservationInput.endDate,
+          quantity: reservationInput.quantity,
+          requireIdentityVerification: true,
+          requireAccountStanding: true,
+          requireCertificationCheck: true,
+          requireInsuranceCheck: true,
+          metadata: withRequestMetadata(reservationInput.metadata, requestId),
+        });
+
+        if (!verificationResult.success) return verificationResult;
+        providerVerification = verificationResult.data;
+
+        if (providerVerification.decision === "rejected") {
+          return {
+            success: false,
+            error: {
+              code: "RENTAL_VERIFICATION_REJECTED",
+              message: "The connected rental provider did not approve this reservation request.",
+              details: {
+                reasons: providerVerification.reasons || [],
+                outstandingRequirements: providerVerification.outstandingRequirements || [],
+              },
+              retryable: false,
+            },
+            requestId,
+          };
+        }
+      }
+
       return runtime.adapter.createRentalReservation(context, {
-        ...input,
-        metadata: withRequestMetadata(input.metadata, context.requestId || requestIdFrom(request)),
+        ...reservationInput,
+        ...(providerVerification ? { verification: providerVerification } : {}),
+        metadata: {
+          ...withRequestMetadata(reservationInput.metadata, requestId),
+          rentalVerificationSource: providerVerification ? "provider_native" : "not_available",
+        },
       });
     },
 
