@@ -1,5 +1,7 @@
 # Environment and Setup Instructions
 
+> **Current handoff note:** The old TS6307 build warning below is historical. The consolidated September 27 handoff candidate passed `npm run build`, including the release gate, TypeScript checks, and Vite production build. See `../HANDOFF_RELEASE_2026-09-27.md` for current acceptance status.
+
 ## Repository path
 
 `/home/runner/work/total-tools-smartcommerce/total-tools-smartcommerce/smartcommerce-ai`

@@ -1,5 +1,7 @@
 # Production Readiness Checklist
 
+> **Current handoff source:** The September 27, 2026 release was consolidated and locally certified. Use `../HANDOFF_RELEASE_2026-09-27.md` plus issue #42 for the authoritative remaining acceptance items. The checklist below is retained as a historical/general readiness framework.
+
 ## Non-negotiables
 
 - [ ] SmartCommerce remains provider/POS agnostic.

@@ -1,5 +1,7 @@
 # Feature Status Matrix (Repository-Derived)
 
+> **Historical baseline notice:** This matrix predates the September 2026 handoff consolidation and should not be used as the current readiness verdict. See `../HANDOFF_RELEASE_2026-09-27.md` and issue #42 for current status.
+
 Status legend:
 
 - **Yes**: clearly present
