@@ -1,5 +1,7 @@
 # SmartCommerce Developer Handoff
 
+> **September 27, 2026 handoff note:** This document contains historical architecture/onboarding context. For current release scope, certification, and remaining acceptance work, use `HANDOFF_RELEASE_2026-09-27.md` and GitHub issue #42. `main` is the canonical code line.
+
 This package is the canonical onboarding set for SmartCommerce-AI in this repository.
 
 ## What is SmartCommerce?
