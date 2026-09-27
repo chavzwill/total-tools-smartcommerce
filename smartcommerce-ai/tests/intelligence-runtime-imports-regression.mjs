@@ -8,6 +8,7 @@ const files = [
   "src/backend/assistantIntelligenceEngine.ts",
   "src/backend/assistantRepairGuidance.ts",
   "src/backend/productMatchEngine.ts",
+  "src/platform/posExportRegistry.ts",
 ];
 
 let checks = 0;

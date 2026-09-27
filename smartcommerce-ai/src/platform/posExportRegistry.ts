@@ -1,5 +1,5 @@
 import type { SmartCommercePosExportManifest } from "./posOperationsContracts";
-import { TECHNICIAN_EVIDENCE_EXPORT_CONTRACTS } from "./technicianEvidenceContracts";
+import { TECHNICIAN_EVIDENCE_EXPORT_CONTRACTS } from "./technicianEvidenceContracts.js";
 
 export const POS_EXPORT_SCHEMA_VERSION = "1.0" as const;
 
