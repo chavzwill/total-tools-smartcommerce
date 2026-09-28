@@ -11,6 +11,7 @@ The September 2026 handoff release has been consolidated into `main`. Start with
 - `smartcommerce-ai/docs/POS_COMMERCE_SYNC_ARCHITECTURE.md` — POS synchronization design.
 - `smartcommerce-ai/docs/POS_ORDER_DELIVERY.md` — retry-safe POS order delivery.
 - `smartcommerce-ai/docs/POS_APPROVAL_AUTHORITY.md` — staff authority boundary.
+- `smartcommerce-ai/docs/POS_INTEGRATION_AND_APPROVAL_DASHBOARD_SETUP.md` — receiving-team runbook for POS endpoints, credentials, synchronization, approval dashboards, decision return flow, rollout and acceptance tests. **John/receiving AI should start here for POS setup.**
 
 Historical feature branches and old PRs are not the source of truth.
 
