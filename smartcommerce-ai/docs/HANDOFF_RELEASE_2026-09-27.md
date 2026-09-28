@@ -6,6 +6,8 @@ Canonical branch: `main`
 
 SmartCommerce handoff code is consolidated on `main`. Historical feature and preview branches are retained only for audit/history and are not alternate sources of truth.
 
+The receiving POS team must follow `POS_INTEGRATION_AND_APPROVAL_DASHBOARD_SETUP.md` when connecting its POS, implementing required endpoints, building POS-owned approval workspaces, and returning approval decisions to SmartCommerce.
+
 Current accepted SmartCommerce production line includes the customer commerce platform, courier operations, POS authority boundaries, durable POS commerce synchronization, commercial-team lifecycle, payments, security hardening, grounded intelligence and the production ESM fix found during final live smoke testing.
 
 ## Included handoff-critical capabilities
