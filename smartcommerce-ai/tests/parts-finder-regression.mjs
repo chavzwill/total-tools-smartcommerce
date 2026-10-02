@@ -9,6 +9,7 @@ const mobile = await readFile(new URL("../src/components/layout/MobileCommerceNa
 const branches = await readFile(new URL("../src/lib/shoppingBranch.ts", import.meta.url), "utf8");
 const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url), "utf8");
 const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
+const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
@@ -30,6 +31,8 @@ const invariants = [
   [header.includes('/\\b(part|parts|spare|spares|replacement)\\b/.test(normalized)'), "global search routes explicit spare-part intent into the finder"],
   [mobile.includes('path === "/parts"'), "mobile navigation keeps parts finder represented as Shop rather than adding a sixth nav destination"],
   [shell.includes('@import "./parts-finder.css";'), "parts finder styles are loaded through the canonical SmartCommerce shell"],
+  [partsStyles.includes(".sc-parts-finder__hero>.tt-container") && partsStyles.includes("font-size:36px!important"), "mobile finder hero is compacted specifically to preserve fixed-control clearance"],
+  [partsStyles.includes(".sc-parts-finder__search-row form") && partsStyles.includes("display:flex"), "narrow finder search stays one row so fixed mobile controls do not cover its submit action"],
   [partsStyles.includes(".sc-parts-finder__hero{padding:36px 0}"), "mobile parts finder keeps primary search clear of fixed navigation controls"],
 ];
 
