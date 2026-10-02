@@ -22,10 +22,18 @@
   .sc-parts-finder.demo-page .sc-parts-finder__hero .sc-data-mode strong{font-size:12px!important}
   .sc-parts-finder.demo-page .sc-parts-finder__hero .sc-data-mode small{font-size:10px!important;line-height:1.35!important}
   .sc-parts-finder__workspace{padding-top:20px}
+  .sc-parts-finder__search-row{min-width:0;width:100%}
   .sc-parts-finder__search-row form{
     align-items:center;
     display:flex;
     grid-template-columns:none;
+    min-width:0;
+    width:100%;
+  }
+  .sc-parts-finder__search-row input{
+    flex:1 1 0;
+    min-width:0;
+    width:0;
   }
   .sc-parts-finder__search-row form button{grid-column:auto}
   .sc-parts-finder__search-row>a{min-height:40px;padding:0 13px}
