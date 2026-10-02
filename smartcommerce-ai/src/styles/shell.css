@@ -4,7 +4,7 @@
  * normalized here into one coherent visual system. Do not add versioned patch files.
  */
 @import "./experience-upgrade.css";
-@import "./catalog-upgrade.css";
+@import "./catalog-upgrade.css";\n@import "./parts-finder.css";
 @import "./service-upgrade.css";
 @import "./experience-v2.css";
 @import "./experience-v3.css";
