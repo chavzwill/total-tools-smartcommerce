@@ -9,6 +9,7 @@ import {
   Sparkles,
   Store,
   UserRound,
+  Wrench,
   X,
 } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -38,7 +39,7 @@ const GUEST_CART_KEY = "smartcommerce_guest_cart_v1";
 const GUEST_CART_CHANGED_EVENT = "smartcommerce:guest-cart-changed";
 
 const navigation = [
-  { label: "Shop", href: "/products", match: ["/products", "/product/", "/category/", "/categories", "/search", "/compare"] },
+  { label: "Shop", href: "/products", match: ["/products", "/parts", "/product/", "/category/", "/categories", "/search", "/compare"] },
   { label: "Rent", href: "/rentals", match: ["/rentals", "/rental/"] },
   { label: "Repair", href: "/repairs", match: ["/repairs", "/repair-"] },
   { label: "Commercial", href: "/commercial", match: ["/commercial"] },
@@ -47,6 +48,7 @@ const navigation = [
 
 const exploreLinks = [
   { title: "All products", description: "Search the complete product catalogue", href: "/products", icon: ShoppingBag },
+  { title: "Equipment & parts finder", description: "Choose a brand and exact model to find governed parts", href: "/parts", icon: Wrench },
   { title: "Equipment rentals", description: "Plan equipment by job, date, and branch", href: "/rentals", icon: Compass },
   { title: "Repairs", description: "Start a repair or service request", href: "/repairs", icon: Bot },
   { title: "Commercial", description: "Business, contractor, and quote support", href: "/commercial", icon: ShoppingCart },
@@ -199,6 +201,7 @@ export default function Header() {
     const branchQuery = branch === "Online" ? "" : `&branch=${encodeURIComponent(branch)}`;
     if (!value) return go(branch === "Online" ? "/products" : `/products?branch=${encodeURIComponent(branch)}`);
     if (matchTerms.some((term) => normalized.includes(term))) return go("/product-match");
+    if (/\b(part|parts|spare|spares|replacement)\b/.test(normalized)) return go(`/parts?q=${encodeURIComponent(value)}${branchQuery}`);
     if (normalized.includes("repair")) return go(`/repairs?equipment=${encodeURIComponent(value)}`);
     if (normalized.includes("rental") || normalized.startsWith("rent ")) return go(`/rentals?q=${encodeURIComponent(value)}${branchQuery}`);
     go(`/search?q=${encodeURIComponent(value)}${branchQuery}`);
@@ -273,7 +276,7 @@ export default function Header() {
         <div className="v2-command-overlay" role="presentation" onClick={closeLauncher}>
           <section ref={launcherDialogRef} id="v2-explore-dialog" className="v2-command-palette" role="dialog" aria-modal="true" aria-labelledby="v2-explore-title" onKeyDown={trapLauncherFocus} onClick={(event) => event.stopPropagation()}>
             <button className="v2-command-palette__close" type="button" onClick={closeLauncher} aria-label="Close Explore"><X size={18} aria-hidden="true" /></button>
-            <div className="v2-command-palette__top"><span>SmartCommerce</span><h2 id="v2-explore-title">What do you need to do?</h2><p>Jump to shopping, rentals, repairs, commercial support, product matching, or guided AI help.</p></div>
+            <div className="v2-command-palette__top"><span>SmartCommerce</span><h2 id="v2-explore-title">What do you need to do?</h2><p>Jump to shopping, equipment parts, rentals, repairs, commercial support, product matching, or guided AI help.</p></div>
             <div className="v2-command-palette__search"><Search size={19} aria-hidden="true" /><label className="tt-sr-only" htmlFor="v2-explore-search">Search SmartCommerce destinations</label><input id="v2-explore-search" ref={launcherInputRef} value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Search destinations and categories" /></div>
             <div className="v2-command-palette__results">
               {filteredLauncherItems.map((item) => {
