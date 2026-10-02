@@ -5,7 +5,8 @@ import Container from "../shared/Container";
 import SocialIcons from "./SocialIcons";
 
 const services = [
-  ["Shop Products", "/products"],\n  ["Equipment & Parts Finder", "/parts"],
+  ["Shop Products", "/products"],
+  ["Equipment & Parts Finder", "/parts"],
   ["Equipment Rentals", "/rentals"],
   ["Repairs", "/repairs"],
   ["Product Match AI", "/product-match"],
