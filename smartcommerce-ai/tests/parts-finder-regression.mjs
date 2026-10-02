@@ -9,7 +9,6 @@ const mobile = await readFile(new URL("../src/components/layout/MobileCommerceNa
 const branches = await readFile(new URL("../src/lib/shoppingBranch.ts", import.meta.url), "utf8");
 const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url), "utf8");
 const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
-const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
