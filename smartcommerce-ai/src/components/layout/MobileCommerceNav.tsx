@@ -19,7 +19,7 @@ const items = [
 function isActive(path: string, href: string) {
   if (href === "/") return path === "/";
   if (href === "/products") {
-    return path === "/products" || path.startsWith("/product/") || path.startsWith("/category/") || path.startsWith("/search");
+    return path === "/products" || path === "/parts" || path.startsWith("/product/") || path.startsWith("/category/") || path.startsWith("/search");
   }
   return path.startsWith(href);
 }
