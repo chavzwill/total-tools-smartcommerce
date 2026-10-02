@@ -37,7 +37,7 @@ export function branchDescription(branch: ShoppingBranch) {
 
 export function branchAwareHref(href: string, branch: ShoppingBranch) {
   const [path, rawQuery = ""] = href.split("?", 2);
-  const isBranchScoped = path === "/products" || path === "/search" || path === "/rentals" || path.startsWith("/category/");
+  const isBranchScoped = path === "/products" || path === "/search" || path === "/rentals" || path === "/parts" || path.startsWith("/category/");
   if (!isBranchScoped) return href;
 
   const query = new URLSearchParams(rawQuery);
