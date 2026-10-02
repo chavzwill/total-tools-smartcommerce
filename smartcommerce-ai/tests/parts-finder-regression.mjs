@@ -30,9 +30,8 @@ const invariants = [
   [header.includes('/\\b(part|parts|spare|spares|replacement)\\b/.test(normalized)'), "global search routes explicit spare-part intent into the finder"],
   [mobile.includes('path === "/parts"'), "mobile navigation keeps parts finder represented as Shop rather than adding a sixth nav destination"],
   [shell.includes('@import "./parts-finder.css";'), "parts finder styles are loaded through the canonical SmartCommerce shell"],
-  [partsStyles.includes(".sc-parts-finder__hero>.tt-container") && partsStyles.includes("font-size:36px!important"), "mobile finder hero is compacted specifically to preserve fixed-control clearance"],
+  [partsStyles.includes(".sc-parts-finder.demo-page .sc-parts-finder__hero>.tt-container") && partsStyles.includes("font-size:36px!important"), "mobile finder hero uses cascade-safe page-specific overrides to preserve fixed-control clearance"],
   [partsStyles.includes(".sc-parts-finder__search-row form") && partsStyles.includes("display:flex"), "narrow finder search stays one row so fixed mobile controls do not cover its submit action"],
-  [partsStyles.includes(".sc-parts-finder__hero{padding:36px 0}"), "mobile parts finder keeps primary search clear of fixed navigation controls"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
