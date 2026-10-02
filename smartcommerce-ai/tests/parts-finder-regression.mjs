@@ -8,6 +8,7 @@ const header = await readFile(new URL("../src/components/layout/Header.tsx", imp
 const mobile = await readFile(new URL("../src/components/layout/MobileCommerceNav.tsx", import.meta.url), "utf8");
 const branches = await readFile(new URL("../src/lib/shoppingBranch.ts", import.meta.url), "utf8");
 const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url), "utf8");
+const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
@@ -29,6 +30,7 @@ const invariants = [
   [header.includes('/\\b(part|parts|spare|spares|replacement)\\b/.test(normalized)'), "global search routes explicit spare-part intent into the finder"],
   [mobile.includes('path === "/parts"'), "mobile navigation keeps parts finder represented as Shop rather than adding a sixth nav destination"],
   [shell.includes('@import "./parts-finder.css";'), "parts finder styles are loaded through the canonical SmartCommerce shell"],
+  [partsStyles.includes(".sc-parts-finder__hero{padding:36px 0}"), "mobile parts finder keeps primary search clear of fixed navigation controls"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);
