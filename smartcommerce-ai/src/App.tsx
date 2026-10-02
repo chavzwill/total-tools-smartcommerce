@@ -19,7 +19,8 @@ const CommercialAccountingPage = lazy(() => import("./pages/CommercialAccounting
 const ComparePage = lazy(() => import("./pages/ComparePage"));
 const CategoriesPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoriesPage })));
 const CategoryPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.CategoryPage })));
-const ProductsPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.ProductsPage })));\nconst PartsFinderPage = lazy(() => import("./pages/PartsFinderPage"));
+const ProductsPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.ProductsPage })));
+const PartsFinderPage = lazy(() => import("./pages/PartsFinderPage"));
 const SearchPage = lazy(() => import("./pages/CatalogPages").then((module) => ({ default: module.SearchPage })));
 const DealsPage = lazy(() => import("./pages/DealsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
@@ -174,7 +175,8 @@ export default function App() {
 
   const branchRouteKey = route.query.get("branch") || "Online";
   let page = <HomePageV3 {...actions} />;
-  if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;\n  else if (path === "/parts") page = <PartsFinderPage key={`parts:${branchRouteKey}`} actions={actions} />;
+  if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;
+  else if (path === "/parts") page = <PartsFinderPage key={`parts:${branchRouteKey}`} actions={actions} />;
   else if (path === "/categories") page = <CategoriesPage />;
   else if (path.startsWith("/category/")) page = <CategoryPage key={`category:${path}:${branchRouteKey}`} slug={path.split("/")[2]} subcategory={route.query.get("sub") || undefined} actions={actions} />;
   else if (path.startsWith("/product/")) { const id = path.split("/")[2]; page = <ProductDetailPage id={id} wished={wishlist.includes(id)} onWishlist={actions.onWishlist} onAdd={actions.onAdd} />; }
