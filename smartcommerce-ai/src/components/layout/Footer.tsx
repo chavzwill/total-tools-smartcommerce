@@ -6,6 +6,7 @@ import SocialIcons from "./SocialIcons";
 
 const services = [
   ["Shop Products", "/products"],
+  ["Equipment & Parts Finder", "/parts"],
   ["Equipment Rentals", "/rentals"],
   ["Repairs", "/repairs"],
   ["Product Match AI", "/product-match"],
