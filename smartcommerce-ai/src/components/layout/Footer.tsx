@@ -1,6 +1,6 @@
 import { routeHref } from "../../lib/router";
 import { company } from "../../styles/theme";
-import totalToolsLogo from "../../assets/brand/total-tools-logo-transparent.png";
+import totalToolsLogo from "../../assets/brand/total-tools-logo-optimized.png";
 import Container from "../shared/Container";
 import SocialIcons from "./SocialIcons";
 
@@ -37,7 +37,7 @@ export default function Footer() {
         <Container size="wide">
           <div className="tt-footer__lead">
             <a href={routeHref("/")} className="tt-footer__brand" aria-label="Total Tools Jamaica home">
-              <img src={totalToolsLogo} alt="Total Tools Jamaica" width="1600" height="912" loading="lazy" decoding="async" />
+              <img src={totalToolsLogo} alt="Total Tools Jamaica" width="520" height="208" loading="lazy" decoding="async" />
             </a>
             <p>{company.subtitle}</p>
           </div>

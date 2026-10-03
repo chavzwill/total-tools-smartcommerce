@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import logo from "../../assets/brand/total-tools-logo-transparent.png";
+import logo from "../../assets/brand/total-tools-logo-optimized.png";
 import { getCategories } from "../../data/products";
 import { slugify } from "../../lib/format";
 import { getRoute, go, routeHref } from "../../lib/router";
@@ -239,7 +239,7 @@ export default function Header() {
         </div>
 
         <a className="v2-brand" href={routeHref("/")} aria-label="Total Tools Jamaica home">
-          <img src={logo} alt="Total Tools Jamaica" width="900" height="249" />
+          <img src={logo} alt="Total Tools Jamaica" width="520" height="208" />
         </a>
 
         <nav className="v2-header__nav" aria-label="Primary commerce navigation">
