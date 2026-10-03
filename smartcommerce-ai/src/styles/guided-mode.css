@@ -1,7 +1,8 @@
 .tt-guided-launcher {
   position: fixed;
-  top: 16px;
+  top: auto;
   right: 18px;
+  bottom: 24px;
   z-index: 1200;
   display: inline-flex;
   align-items: center;
@@ -46,8 +47,9 @@
 
 .tt-guided-panel {
   position: fixed;
-  top: 74px;
+  top: auto;
   right: 20px;
+  bottom: 76px;
   z-index: 1252;
   width: min(430px, calc(100vw - 32px));
   max-height: calc(100vh - 94px);
@@ -247,6 +249,17 @@
     top: auto;
     right: 14px;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    width: 46px;
+    height: 46px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    border-radius: 50%;
+    backdrop-filter: none;
+  }
+
+  .tt-guided-launcher span {
+    display: none;
   }
 
   .tt-guided-panel,
