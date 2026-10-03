@@ -9,7 +9,7 @@ import {
   isShoppingBranch,
   type ShoppingBranch,
 } from "./lib/shoppingBranch";
-import HomePageV3 from "./pages/HomePageV3";
+import HomePageV4 from "./pages/HomePageV4";
 
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const CourierAccountPage = lazy(() => import("./pages/CourierAccountPage"));
@@ -174,7 +174,7 @@ export default function App() {
   }
 
   const branchRouteKey = route.query.get("branch") || "Online";
-  let page = <HomePageV3 {...actions} />;
+  let page = <HomePageV4 {...actions} />;
   if (path === "/products") page = <ProductsPage key={`products:${branchRouteKey}`} actions={actions} />;
   else if (path === "/parts") page = <PartsFinderPage key={`parts:${branchRouteKey}`} actions={actions} />;
   else if (path === "/categories") page = <CategoriesPage />;
