@@ -1,4 +1,4 @@
-/* Homepage refinement: keep mobile commerce dense, joyful, and action-first. */
+/* Homepage refinement: remove navigation dead-space, use recognizable category icons, and tighten mobile rhythm. */
 
 .v3-category-section--compact {
   padding: clamp(44px, 5vw, 72px) 0 !important;
@@ -61,120 +61,13 @@
   line-height: .98 !important;
 }
 
-/* Primary commerce modes should read as decisions, not full landing pages. */
-.sc-commerce-modes {
-  padding-block: clamp(40px, 5vw, 68px) !important;
-}
-
-.sc-commerce-modes__heading {
-  align-items: end !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  margin-bottom: 24px !important;
-}
-
-.sc-commerce-modes__heading > span {
-  color: #08763f !important;
-  font-size: 11px !important;
-  font-weight: 900 !important;
-  letter-spacing: .1em !important;
-  text-transform: uppercase !important;
-}
-
-.sc-commerce-modes__heading h2 {
-  color: #18211c !important;
-  font-size: clamp(30px, 4vw, 50px) !important;
-  line-height: 1 !important;
-  margin: 7px 0 0 !important;
-  max-width: 760px !important;
-}
-
-.primary-actions__grid {
-  display: grid !important;
-  gap: 14px !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-}
-
-.primary-action {
-  border: 1px solid #e3e8e4 !important;
-  border-radius: 22px !important;
-  box-shadow: none !important;
-  display: grid !important;
-  grid-template-columns: minmax(0, 1.05fr) minmax(150px, .95fr) !important;
-  min-height: 250px !important;
-  overflow: hidden !important;
-}
-
-.primary-action__copy {
-  justify-content: center !important;
-  padding: 28px !important;
-}
-
-.primary-action__copy > span {
-  color: #08763f !important;
-  font-size: 10px !important;
-  letter-spacing: .1em !important;
-  margin-top: 10px !important;
-}
-
-.primary-action__copy h3 {
-  color: #18211c !important;
-  font-size: clamp(24px, 2.4vw, 34px) !important;
-  line-height: 1 !important;
-  margin: 7px 0 9px !important;
-}
-
-.primary-action__copy p {
-  color: #66736b !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
-  margin: 0 0 18px !important;
-}
-
-.primary-action__copy > a {
-  align-self: flex-start !important;
-  background: #08763f !important;
-  border-radius: 999px !important;
-  color: #fff !important;
-  font-size: 12px !important;
-  font-weight: 900 !important;
-  margin-top: 0 !important;
-  padding: 11px 16px !important;
-}
-
-.primary-action--rent .primary-action__copy > a {
-  background: #f5c928 !important;
-  color: #262108 !important;
-}
-
-.primary-action--repair .primary-action__copy > a,
-.primary-action--commercial .primary-action__copy > a {
-  background: #08763f !important;
-  color: #fff !important;
-}
-
-.primary-action__image {
-  min-height: 0 !important;
-}
-
-.primary-action__image img {
-  height: 100% !important;
-  object-fit: cover !important;
-  width: 100% !important;
-}
-
 @media (max-width: 900px) {
   .v3-category-grid--icons {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .v3-section-heading--compact,
-  .sc-commerce-modes__heading {
+  .v3-section-heading--compact {
     align-items: start !important;
-  }
-
-  .primary-actions__grid {
-    grid-template-columns: 1fr !important;
   }
 }
 
@@ -237,113 +130,6 @@
     font-size: 14px !important;
     line-height: 1.5 !important;
   }
-
-  /* On phones the four service modes become one compact horizontal rail. */
-  .sc-commerce-modes {
-    overflow: hidden !important;
-    padding-block: 28px 32px !important;
-  }
-
-  .sc-commerce-modes .tt-container {
-    padding-right: 0 !important;
-  }
-
-  .sc-commerce-modes__heading {
-    display: block !important;
-    margin-bottom: 16px !important;
-    padding-right: 20px !important;
-  }
-
-  .sc-commerce-modes__heading > span {
-    font-size: 9px !important;
-  }
-
-  .sc-commerce-modes__heading h2 {
-    font-size: 26px !important;
-    line-height: 1.03 !important;
-    margin-top: 5px !important;
-    max-width: 330px !important;
-  }
-
-  .primary-actions__grid {
-    display: grid !important;
-    gap: 12px !important;
-    grid-auto-columns: minmax(268px, 78vw) !important;
-    grid-auto-flow: column !important;
-    grid-template-columns: none !important;
-    overflow-x: auto !important;
-    overscroll-behavior-inline: contain !important;
-    padding: 0 20px 8px 0 !important;
-    scroll-padding-inline: 20px !important;
-    scroll-snap-type: x proximity !important;
-    scrollbar-width: none !important;
-  }
-
-  .primary-actions__grid::-webkit-scrollbar {
-    display: none !important;
-  }
-
-  .primary-action {
-    border-radius: 18px !important;
-    grid-template-columns: minmax(0, 1fr) 108px !important;
-    min-height: 164px !important;
-    scroll-snap-align: start !important;
-  }
-
-  .primary-action__copy {
-    justify-content: center !important;
-    padding: 16px 10px 16px 16px !important;
-  }
-
-  .primary-action__icon {
-    align-items: center !important;
-    background: rgba(8, 118, 63, .08) !important;
-    border-radius: 10px !important;
-    color: #08763f !important;
-    display: flex !important;
-    height: 34px !important;
-    justify-content: center !important;
-    width: 34px !important;
-  }
-
-  .primary-action__icon svg {
-    height: 19px !important;
-    width: 19px !important;
-  }
-
-  .primary-action__copy > span {
-    font-size: 8px !important;
-    margin-top: 7px !important;
-  }
-
-  .primary-action__copy h3 {
-    font-size: 21px !important;
-    line-height: 1 !important;
-    margin: 3px 0 5px !important;
-  }
-
-  .primary-action__copy p {
-    display: -webkit-box !important;
-    font-size: 11px !important;
-    line-height: 1.35 !important;
-    margin-bottom: 9px !important;
-    overflow: hidden !important;
-    -webkit-box-orient: vertical !important;
-    -webkit-line-clamp: 2 !important;
-  }
-
-  .primary-action__copy > a {
-    font-size: 10px !important;
-    padding: 8px 11px !important;
-  }
-
-  .primary-action__image {
-    height: 164px !important;
-  }
-
-  .primary-action__image img {
-    object-position: center !important;
-  }
 }
 
 @media (max-width: 390px) {
@@ -358,9 +144,5 @@
 
   .v3-category-name {
     font-size: 13px !important;
-  }
-
-  .primary-actions__grid {
-    grid-auto-columns: minmax(258px, 82vw) !important;
   }
 }
