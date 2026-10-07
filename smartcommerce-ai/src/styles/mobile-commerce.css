@@ -90,15 +90,12 @@
   /* Global mobile reading floor on customer-facing copy. */
   .demo-home p,
   .demo-page p,
-  .sc-account-real p,
-  .primary-action p {
+  .sc-account-real p {
     font-size: 16px;
     line-height: 1.55;
   }
 
   .sc-eyebrow,
-  .sc-commerce-modes__heading > span,
-  .primary-action__copy > span,
   .sc-order-summary__eyebrow {
     font-size: 12px !important;
     line-height: 1.3 !important;
@@ -161,98 +158,6 @@
   .sc-account-real__form > button:not(.sc-account-real__text-action) {
     min-height: 54px !important;
     font-size: 17px !important;
-  }
-
-  /* Homepage commerce modes: readable, compact swipe rail rather than tall clipped cards. */
-  .sc-commerce-modes {
-    overflow: hidden !important;
-    padding-block: 52px !important;
-  }
-
-  .sc-commerce-modes__heading {
-    margin-bottom: 22px !important;
-  }
-
-  .sc-commerce-modes__heading h2 {
-    font-size: clamp(2rem, 8.5vw, 2.7rem) !important;
-    line-height: 1.02 !important;
-    letter-spacing: -.04em !important;
-  }
-
-  .primary-actions__grid {
-    display: flex !important;
-    gap: 14px !important;
-    grid-template-columns: none !important;
-    overflow-x: auto !important;
-    padding: 2px 18px 12px 0 !important;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-  }
-
-  .primary-actions__grid::-webkit-scrollbar {
-    display: none;
-  }
-
-  .primary-action {
-    flex: 0 0 min(84vw, 330px) !important;
-    min-height: 0 !important;
-    height: 250px !important;
-    display: grid !important;
-    grid-template-columns: 43% 57% !important;
-    grid-template-rows: 1fr !important;
-    overflow: hidden !important;
-    border-radius: 22px !important;
-    scroll-snap-align: start;
-  }
-
-  .primary-action__image {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    order: 0 !important;
-  }
-
-  .primary-action__image img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-  }
-
-  .primary-action__copy {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-    align-content: center !important;
-    min-width: 0 !important;
-    padding: 18px 16px !important;
-  }
-
-  .primary-action__icon {
-    width: 40px !important;
-    height: 40px !important;
-    margin-bottom: 8px !important;
-  }
-
-  .primary-action__copy h3 {
-    margin: 4px 0 7px !important;
-    font-size: 23px !important;
-    line-height: 1.02 !important;
-  }
-
-  .primary-action__copy p {
-    display: -webkit-box !important;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden !important;
-    margin: 0 0 13px !important;
-    font-size: 15px !important;
-    line-height: 1.35 !important;
-  }
-
-  .primary-action__copy a {
-    min-height: 44px !important;
-    padding-inline: 15px !important;
-    font-size: 15px !important;
   }
 
   /* Rental intent chips should scroll naturally, not become an overlay layer. */
@@ -524,15 +429,6 @@
 }
 
 @media (max-width: 390px) {
-  .primary-action {
-    flex-basis: 88vw !important;
-    height: 238px !important;
-  }
-
-  .primary-action__copy h3 {
-    font-size: 21px !important;
-  }
-
   .rental-card-next .demo-rates b,
   .rental-card-next .rental-rate-grid b,
   .rental-card-next .rental-card-next__rates strong {

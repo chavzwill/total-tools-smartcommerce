@@ -10,6 +10,7 @@ on:
       - 'preview/**'
       - 'security/**'
       - development
+      - fix/approved-ui-github-source
   pull_request:
     paths:
       - 'smartcommerce-ai/**'
