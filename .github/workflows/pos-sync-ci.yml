@@ -55,3 +55,67 @@ jobs:
         run: npm run test:couriers-database
         env:
           COURIER_TEST_DATABASE_URL: postgresql://postgres:local_test_only@127.0.0.1:5432/courier_test
+
+      - name: Checkout current POS master for live pair acceptance
+        run: |
+          git clone --depth 1 --branch master https://github.com/chavzwill/pos_system.git "$GITHUB_WORKSPACE/.acceptance/pos-system"
+          printf 'POS acceptance SHA: '
+          git -C "$GITHUB_WORKSPACE/.acceptance/pos-system" rev-parse HEAD
+
+      - name: Install POS acceptance dependencies
+        working-directory: .acceptance/pos-system
+        run: npm ci --no-audit --no-fund
+
+      - name: Bootstrap isolated POS acceptance database
+        working-directory: .acceptance/pos-system
+        env:
+          POS_TEST_USER: admin
+          POS_TEST_PASSWORD: 'SmartCommerce-Pair-Test!2026'
+          TURSO_DATABASE_URL: ''
+          TURSO_AUTH_TOKEN: ''
+        run: |
+          key="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64'))")"
+          printf 'POS_SETTINGS_ENCRYPTION_KEY=%s\n' "$key" >> "$GITHUB_ENV"
+          rm -f pos.db pos.db-shm pos.db-wal
+          POS_SETTINGS_ENCRYPTION_KEY="$key" node scripts/ci-runtime-bootstrap.js
+
+      - name: Seed isolated SmartCommerce pair fixtures
+        working-directory: .acceptance/pos-system
+        env:
+          POS_ACCEPTANCE_POS_ROOT: ${{ github.workspace }}/.acceptance/pos-system
+          POS_ACCEPTANCE_FIXTURE_PATH: ${{ runner.temp }}/smartcommerce-pos-fixture.json
+        run: node "$GITHUB_WORKSPACE/smartcommerce-ai/tests/pos-live-pair-fixture.cjs" seed
+
+      - name: Exercise live SmartCommerce to POS order pair
+        env:
+          POS_ACCEPTANCE_POS_ROOT: ${{ github.workspace }}/.acceptance/pos-system
+          POS_ACCEPTANCE_FIXTURE_PATH: ${{ runner.temp }}/smartcommerce-pos-fixture.json
+          POS_ACCEPTANCE_HTTP_ORIGIN: http://127.0.0.1:3001
+          TURSO_DATABASE_URL: ''
+          TURSO_AUTH_TOKEN: ''
+        run: |
+          (
+            cd "$POS_ACCEPTANCE_POS_ROOT"
+            node server.js > "$RUNNER_TEMP/pos-acceptance.log" 2>&1
+          ) &
+          pos_pid=$!
+          cleanup() { kill "$pos_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "$POS_ACCEPTANCE_HTTP_ORIGIN/" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$RUNNER_TEMP/pos-acceptance.log" || true
+            exit 1
+          fi
+          status=0
+          node tests/pos-live-pair-acceptance.mjs || status=$?
+          if [ "$status" -ne 0 ]; then
+            cat "$RUNNER_TEMP/pos-acceptance.log" || true
+          fi
+          exit "$status"
