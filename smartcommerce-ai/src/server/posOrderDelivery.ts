@@ -113,8 +113,7 @@ export async function deliverPosOrder(row: OrderDeliveryRow, options: DeliveryOp
   if (prior) return prior;
   let response: Response | undefined;
   try {
-    const { expected_pos_total: _settledTotal, ...wirePayload } = row.payload;
-    response = await request(endpoint, { method: 'POST', headers, body: JSON.stringify(wirePayload) });
+    response = await request(endpoint, { method: 'POST', headers, body: JSON.stringify(row.payload) });
     if (response.status === 200 || response.status === 201) {
       return receiptResult(await response.json());
     } else if ([401, 403, 409, 422].includes(response.status)) return review(`POS_ORDER_HTTP_${response.status}`);

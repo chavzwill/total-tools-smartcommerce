@@ -16,12 +16,12 @@ Trusted server producers use `enqueueWebsitePosOperation` with operation `order.
 - `branch_id`: authoritative positive numeric POS branch ID.
 - `items`: unique positive numeric POS `product_id` values with finite positive quantities. No submitted price fields, rental lines, guessed IDs, or client stock assertions.
 - `payment_method`: `online`; `external_payment_reference`: confirmed payment identity.
-- `expected_pos_total`: confirmed website settlement total, used only for receipt comparison and removed before POST.
+- `expected_pos_total`: confirmed website settlement total. It is sent to the POS as a required pre-commit economic precondition and is also used to validate the returned receipt.
 - Optional POS customer/quote external references, mapped numeric `customer_id`, and approved delivery/service/handling amounts.
 
 The producer must have independently authorized the payment and derived these fields server-side. Presence of a reference is not payment verification. This worker does not turn draft platform orders into paid orders. Credit orders, tax exemptions, discounts, approvals and unverified payment flows remain unsupported by this path. No public enqueue endpoint is exposed.
 
-The POS currently computes prices/taxes from its own products, validates branch stock, reserves stock transactionally, and treats non-credit creates as completed payments. Its contract lacks expected-price preconditions. Therefore a price change may already have created a POS order before the worker detects a total mismatch: that order becomes `needs_review`, retaining its POS reference. The worker never refunds, recreates, or silently changes it. Strict prevention of settlement/price drift requires a POS-side conditional quote/price contract before wider checkout activation.
+The POS computes prices/taxes from its own products, validates branch stock, and requires `expected_pos_total` before a SmartCommerce order can be created. If the current POS total differs from the settled website total, the POS returns a conflict before transaction-number allocation, stock mutation, payment evidence, or transaction commit. SmartCommerce treats that conflict as `needs_review`; it never substitutes a new price, retries with a new external order identity, refunds automatically, or silently changes the settled order.
 
 ## Delivery semantics
 
