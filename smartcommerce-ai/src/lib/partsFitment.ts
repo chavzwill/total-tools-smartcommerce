@@ -317,7 +317,7 @@ export function buildPartTree(parts: FitmentPart[]): FitmentPartNode[] {
 
   return parts
     .filter((part) => !childIds.has(partIdentity(part)))
-    .sort((a, b) => a.product.name.localeCompare(b.product.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
     .map((part) => buildNode(part));
 }
 
