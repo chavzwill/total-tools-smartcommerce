@@ -38,3 +38,4 @@
   .sc-parts-finder__search-row form button{grid-column:auto}
   .sc-parts-finder__search-row>a{min-height:40px;padding:0 13px}
 }
+.sc-part-row.is-reference-only{background:#fbfcfa;border-style:dashed}.sc-part-row__image--reference{color:var(--sc-green-700)}.sc-part-row.is-reference-only .sc-part-row__commerce>strong{color:var(--sc-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
