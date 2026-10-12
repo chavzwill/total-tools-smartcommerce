@@ -18,6 +18,7 @@ const invariants = [
   [fitment.includes("existingIndex >= 0") && fitment.includes("source: existing.source || part.source"), "POS products can enrich a reference mapping without duplicating the part"],
   [referenceCatalog.includes('brand: "STIHL"') && referenceCatalog.includes('model: "MS 362"'), "initial reference catalogue publishes an explicit STIHL MS 362 hierarchy"],
   [referenceCatalog.includes('partNumber: "1135 160 5400"') && referenceCatalog.includes('assembly: "Chain Brake"'), "reference catalogue includes source-backed assembly and OEM part-number facts"],
+  [referenceCatalog.includes("ms362Sources.chainBrake") && referenceCatalog.includes("ca6d3d4b-20fb-4ce0-8293"), "reference parts retain exact per-assembly source provenance"],
   [referenceCatalog.includes("These records do not create sellable products, prices, or stock claims"), "reference catalogue explicitly separates fitment facts from commerce authority"],
   [fitment.includes('if (!brand) return;'), "products without governed brand data are not invented into the parts hierarchy"],
   [fitment.includes("COMPATIBLE_MODEL_FIELDS") && fitment.includes("targetModels = compatibleModels.length"), "part fitment comes from explicit compatible model attributes"],
