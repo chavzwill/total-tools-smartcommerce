@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import type { ReferenceFitmentModel, ReferenceFitmentSource } from "../data/partsReferenceCatalog";
 
 const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"] as const;
 const EQUIPMENT_TYPE_FIELDS = ["Equipment Type", "Machine Type", "Equipment Family", "Machine Family"] as const;
@@ -65,11 +66,13 @@ function isPartLike(product: Product) {
 }
 
 export type FitmentPart = {
-  product: Product;
+  product?: Product;
+  name: string;
   partNumber: string;
   parentPartNumber?: string;
   assembly: string;
   reference?: string;
+  source?: ReferenceFitmentSource;
 };
 
 export type EquipmentModelFitment = {
@@ -128,10 +131,10 @@ function modelKey(brand: string, equipmentType: string, model: string, variant =
 }
 
 function partIdentity(part: FitmentPart) {
-  return `${part.product.id}::${normalize(part.partNumber)}`;
+  return `${part.product?.id || "reference"}::${normalize(part.partNumber)}::${normalize(part.assembly)}`;
 }
 
-export function buildPartsFitmentIndex(products: Product[]): PartsFitmentIndex {
+export function buildPartsFitmentIndex(products: Product[], references: ReferenceFitmentModel[] = []): PartsFitmentIndex {
   const models = new Map<string, EquipmentModelFitment>();
 
   const ensureModel = (brand: string, equipmentType: string, model: string, variant = "") => {
@@ -151,6 +154,31 @@ export function buildPartsFitmentIndex(products: Product[]): PartsFitmentIndex {
     return created;
   };
 
+  references.forEach((referenceModel) => {
+    const fitment = ensureModel(
+      referenceModel.brand,
+      referenceModel.equipmentType,
+      referenceModel.model,
+      referenceModel.variant || ""
+    );
+    referenceModel.parts.forEach((referencePart) => {
+      const part: FitmentPart = {
+        name: referencePart.name,
+        partNumber: referencePart.partNumber,
+        parentPartNumber: referencePart.parentPartNumber,
+        assembly: referencePart.assembly,
+        reference: referencePart.reference,
+        source: referencePart.source || referenceModel.source,
+      };
+      const duplicate = fitment.parts.some(
+        (candidate) =>
+          normalize(candidate.partNumber) === normalize(part.partNumber) &&
+          normalize(candidate.assembly) === normalize(part.assembly)
+      );
+      if (!duplicate) fitment.parts.push(part);
+    });
+  });
+
   products.forEach((product) => {
     const brand = readFirst(product, BRAND_FIELDS);
     if (!brand) return;
@@ -168,6 +196,7 @@ export function buildPartsFitmentIndex(products: Product[]): PartsFitmentIndex {
 
       const part: FitmentPart = {
         product,
+        name: product.name,
         partNumber: readFirst(product, PART_NUMBER_FIELDS) || product.sku,
         parentPartNumber: readFirst(product, PARENT_PART_FIELDS) || undefined,
         assembly: readFirst(product, ASSEMBLY_FIELDS) || "Other parts",
@@ -176,7 +205,19 @@ export function buildPartsFitmentIndex(products: Product[]): PartsFitmentIndex {
 
       targetModels.forEach((model) => {
         const fitment = ensureModel(brand, equipmentType, model, variant);
-        if (!fitment.parts.some((candidate) => partIdentity(candidate) === partIdentity(part))) {
+        const existingIndex = fitment.parts.findIndex(
+          (candidate) =>
+            normalize(candidate.partNumber) === normalize(part.partNumber) &&
+            normalize(candidate.assembly) === normalize(part.assembly)
+        );
+        if (existingIndex >= 0) {
+          const existing = fitment.parts[existingIndex];
+          fitment.parts[existingIndex] = {
+            ...existing,
+            ...part,
+            source: existing.source || part.source,
+          };
+        } else {
           fitment.parts.push(part);
         }
       });
@@ -198,7 +239,7 @@ export function buildPartsFitmentIndex(products: Product[]): PartsFitmentIndex {
       parts: [...fitment.parts].sort((a, b) => {
         const assembly = a.assembly.localeCompare(b.assembly);
         if (assembly) return assembly;
-        return a.product.name.localeCompare(b.product.name);
+        return a.name.localeCompare(b.name);
       }),
     }))
     .sort((a, b) =>
@@ -269,14 +310,14 @@ export function buildPartTree(parts: FitmentPart[]): FitmentPartNode[] {
     return {
       part,
       children: (children.get(id) || [])
-        .sort((a, b) => a.product.name.localeCompare(b.product.name))
+        .sort((a, b) => a.name.localeCompare(b.name))
         .map((child) => buildNode(child, nextAncestry)),
     };
   };
 
   return parts
     .filter((part) => !childIds.has(partIdentity(part)))
-    .sort((a, b) => a.product.name.localeCompare(b.product.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
     .map((part) => buildNode(part));
 }
 
@@ -306,9 +347,9 @@ export function searchPartsFitment(index: PartsFitmentIndex, query: string, limi
 
     fitment.parts.forEach((part) => {
       const partNumber = normalize(part.partNumber);
-      const sku = normalize(part.product.sku);
+      const sku = normalize(part.product?.sku || "");
       const partText = normalize(
-        `${fitment.brand} ${fitment.equipmentType} ${fitment.model} ${fitment.variant || ""} ${part.assembly} ${part.product.name} ${part.partNumber} ${part.product.sku} ${part.reference || ""}`
+        `${fitment.brand} ${fitment.equipmentType} ${fitment.model} ${fitment.variant || ""} ${part.assembly} ${part.name} ${part.partNumber} ${part.product?.sku || ""} ${part.reference || ""}`
       );
       if (!partText.includes(term)) return;
       const exactPart = partNumber === term || sku === term;
@@ -321,7 +362,7 @@ export function searchPartsFitment(index: PartsFitmentIndex, query: string, limi
         variant: fitment.variant,
         assembly: part.assembly,
         part,
-        label: part.product.name,
+        label: part.name,
         detail: `${part.partNumber} · ${fitment.brand} ${fitment.model} · ${part.assembly}`,
         score: exactPart ? 0 : 2,
       });

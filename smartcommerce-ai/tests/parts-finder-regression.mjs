@@ -9,9 +9,17 @@ const mobile = await readFile(new URL("../src/components/layout/MobileCommerceNa
 const branches = await readFile(new URL("../src/lib/shoppingBranch.ts", import.meta.url), "utf8");
 const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url), "utf8");
 const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
+const referenceCatalog = await readFile(new URL("../src/data/partsReferenceCatalog.ts", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
+  [fitment.includes("references: ReferenceFitmentModel[] = []"), "fitment index can merge governed reference relationships with commerce products"],
+  [fitment.includes('part.product?.id || "reference"'), "reference-only parts have stable non-commerce identities"],
+  [fitment.includes("existingIndex >= 0") && fitment.includes("source: existing.source || part.source"), "POS products can enrich a reference mapping without duplicating the part"],
+  [referenceCatalog.includes('brand: "STIHL"') && referenceCatalog.includes('model: "MS 362"'), "initial reference catalogue publishes an explicit STIHL MS 362 hierarchy"],
+  [referenceCatalog.includes('partNumber: "1135 160 5400"') && referenceCatalog.includes('assembly: "Chain Brake"'), "reference catalogue includes source-backed assembly and OEM part-number facts"],
+  [referenceCatalog.includes("ms362Sources.chainBrake") && referenceCatalog.includes("ca6d3d4b-20fb-4ce0-8293"), "reference parts retain exact per-assembly source provenance"],
+  [referenceCatalog.includes("These records do not create sellable products, prices, or stock claims"), "reference catalogue explicitly separates fitment facts from commerce authority"],
   [fitment.includes('if (!brand) return;'), "products without governed brand data are not invented into the parts hierarchy"],
   [fitment.includes("COMPATIBLE_MODEL_FIELDS") && fitment.includes("targetModels = compatibleModels.length"), "part fitment comes from explicit compatible model attributes"],
   [fitment.includes('readFirst(product, PART_NUMBER_FIELDS) || product.sku'), "catalogued parts preserve OEM/manufacturer part numbers with SKU fallback for commerce identity"],
@@ -19,9 +27,11 @@ const invariants = [
   [fitment.includes('assembly: readFirst(product, ASSEMBLY_FIELDS) || "Other parts"'), "parts are grouped into governed assemblies without fabricating an assembly name"],
   [!fitment.includes("product.name.split") && !fitment.includes("product.sku.split"), "brand and model are not guessed from product name or SKU tokenization"],
   [page.includes('from "../lib/branchCatalogue"') && page.includes("loadBranchCatalogue(branch)"), "parts finder uses the grounded branch catalogue adapter"],
-  [page.includes("buildPartsFitmentIndex(products)") && page.includes("searchPartsFitment(index, query)"), "parts finder hierarchy and direct search share the governed fitment index"],
+  [page.includes("buildPartsFitmentIndex(products, referenceFitmentCatalog)") && page.includes("searchPartsFitment(index, query)"), "parts finder hierarchy and direct search share provider products plus governed reference fitment"],
   [page.includes("SmartCommerce will not infer or invent compatible parts"), "model empty state explicitly fails closed when spare-part fitment is missing"],
   [page.includes("purchaseBlockedReason") && page.includes("purchasable === false"), "parts finder respects provider commerce purchase blocks"],
+  [page.includes("Reference part — availability not linked to POS") && page.includes("Reference only"), "reference-only fitment cannot be added to cart or presented with fabricated price/stock"],
+  [page.includes("Search inventory") && page.includes("price and stock require a POS-linked product"), "reference parts offer inventory discovery while preserving POS commerce authority"],
   [page.includes("product.currency || \"JMD\"") && page.includes("Intl.NumberFormat"), "parts finder preserves provider currency when rendering price"],
   [app.includes('path === "/parts"') && app.includes("PartsFinderPage"), "application router exposes the parts finder"],
   [app.includes('path === "/parts" || path.startsWith("/category/")'), "parts finder participates in branch-scoped route normalization"],
@@ -32,6 +42,7 @@ const invariants = [
   [shell.includes('@import "./parts-finder.css";'), "parts finder styles are loaded through the canonical SmartCommerce shell"],
   [partsStyles.includes(".sc-parts-finder.demo-page .sc-parts-finder__hero>.tt-container") && partsStyles.includes("font-size:36px!important"), "mobile finder hero uses cascade-safe page-specific overrides to preserve fixed-control clearance"],
   [partsStyles.includes(".sc-parts-finder__search-row form") && partsStyles.includes("display:flex") && partsStyles.includes("width:0"), "narrow finder search stays one row and can shrink without horizontal overflow"],
+  [partsStyles.includes(".sc-part-row.is-reference-only"), "reference-only parts receive a distinct non-commerce presentation"],
 ];
 
 for (const [ok, label] of invariants) assert.equal(ok, true, label);

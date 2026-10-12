@@ -9,6 +9,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Container from "../components/shared/Container";
 import { getProducts } from "../data/products";
 import { getCommerceDataMode } from "../data/providerMode";
+import { referenceFitmentCatalog } from "../data/partsReferenceCatalog";
 import { loadBranchCatalogue } from "../lib/branchCatalogue";
 import {
   buildPartTree,
@@ -101,42 +102,71 @@ function PartTreeNode({
   onAdd: (id: string) => void;
 }) {
   const product = node.part.product;
-  const blockedReason = product.purchaseBlockedReason || (product.purchasable === false ? "Not available for purchase" : "");
+  const blockedReason = product
+    ? product.purchaseBlockedReason || (product.purchasable === false ? "Not available for purchase" : "")
+    : "Reference part — availability not linked to POS";
   const label = depth > 0 ? "Subpart" : node.part.assembly;
+  const searchHref = routeHref(`/search?q=${encodeURIComponent(node.part.partNumber)}`);
 
   return (
     <div className="sc-part-tree-node" data-depth={Math.min(depth, 3)}>
-      <article className="sc-part-row">
-        <a className="sc-part-row__image" href={routeHref(`/product/${product.id}`)} aria-label={`View ${product.name}`}>
-          <img src={product.image} alt="" loading="lazy" decoding="async" />
-        </a>
+      <article className={`sc-part-row ${product ? "" : "is-reference-only"}`}>
+        {product ? (
+          <a className="sc-part-row__image" href={routeHref(`/product/${product.id}`)} aria-label={`View ${product.name}`}>
+            <img src={product.image} alt="" loading="lazy" decoding="async" />
+          </a>
+        ) : (
+          <div className="sc-part-row__image sc-part-row__image--reference" aria-hidden="true">
+            <Wrench size={26} />
+          </div>
+        )}
         <div className="sc-part-row__body">
           <div className="sc-part-row__eyebrow">
             <span>{label}</span>
             {node.part.reference ? <span>Ref {node.part.reference}</span> : null}
+            {!product ? <span>Reference catalog</span> : null}
           </div>
-          <h3><a href={routeHref(`/product/${product.id}`)}>{product.name}</a></h3>
-          <p><strong>Part no.</strong> {node.part.partNumber}<span aria-hidden="true"> · </span><strong>SKU</strong> {product.sku}</p>
-          <small>{product.stockStatus}</small>
+          <h3>
+            {product ? <a href={routeHref(`/product/${product.id}`)}>{node.part.name}</a> : node.part.name}
+          </h3>
+          <p>
+            <strong>Part no.</strong> {node.part.partNumber}
+            {product ? <><span aria-hidden="true"> · </span><strong>SKU</strong> {product.sku}</> : null}
+          </p>
+          <small>
+            {product
+              ? product.stockStatus
+              : "Compatibility reference only · price and stock require a POS-linked product"}
+          </small>
         </div>
         <div className="sc-part-row__commerce">
-          <strong>{money(product)}</strong>
-          <a href={routeHref(`/product/${product.id}`)}>View details</a>
-          <button
-            type="button"
-            disabled={Boolean(blockedReason)}
-            title={blockedReason || "Add this part to cart"}
-            onClick={() => { if (!blockedReason) onAdd(product.id); }}
-          >
-            {blockedReason ? "Unavailable" : "Add to cart"}
-          </button>
+          {product ? (
+            <>
+              <strong>{money(product)}</strong>
+              <a href={routeHref(`/product/${product.id}`)}>View details</a>
+              <button
+                type="button"
+                disabled={Boolean(blockedReason)}
+                title={blockedReason || "Add this part to cart"}
+                onClick={() => { if (!blockedReason) onAdd(product.id); }}
+              >
+                {blockedReason ? "Unavailable" : "Add to cart"}
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Reference only</strong>
+              <a href={searchHref}>Search inventory</a>
+              <a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Check Total Tools availability for part ${node.part.partNumber} ${node.part.name}`)}`)}>Ask AI</a>
+            </>
+          )}
         </div>
       </article>
       {node.children.length ? (
-        <div className="sc-part-tree-children" aria-label={`Subparts for ${product.name}`}>
+        <div className="sc-part-tree-children" aria-label={`Subparts for ${node.part.name}`}>
           {node.children.map((child) => (
             <PartTreeNode
-              key={`${child.part.product.id}:${child.part.partNumber}`}
+              key={`${child.part.product?.id || "reference"}:${child.part.partNumber}:${child.part.assembly}`}
               node={child}
               depth={depth + 1}
               onAdd={onAdd}
@@ -191,7 +221,7 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
     return () => { active = false; };
   }, [branch, connected]);
 
-  const index = useMemo(() => buildPartsFitmentIndex(products), [products]);
+  const index = useMemo(() => buildPartsFitmentIndex(products, referenceFitmentCatalog), [products]);
   const selectedBrandModels = useMemo(
     () => index.models.filter((item) => item.brand === selection.brand),
     [index.models, selection.brand],
@@ -406,7 +436,7 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
             <div className="sc-parts-choice-grid">
               {equipmentTypes.map((equipmentType) => {
                 const models = selectedBrandModels.filter((item) => item.equipmentType === equipmentType);
-                const parts = new Set(models.flatMap((item) => item.parts.map((part) => part.product.id)));
+                const parts = new Set(models.flatMap((item) => item.parts.map((part) => `${part.partNumber}:${part.assembly}`)));
                 return (
                   <button type="button" className="sc-parts-choice-card" key={equipmentType} onClick={() => chooseEquipmentType(equipmentType)}>
                     <span>Equipment</span>
@@ -439,7 +469,7 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
               <div>
                 <span>{selectedFitment.brand} · {selectedFitment.equipmentType}</span>
                 <h2 id="parts-model-workspace-title">{selectedFitment.model}{selectedFitment.variant ? ` · ${selectedFitment.variant}` : ""}</h2>
-                <p>{selectedFitment.parts.length} governed mapped {selectedFitment.parts.length === 1 ? "part" : "parts"} across {assemblies.length} {assemblies.length === 1 ? "assembly" : "assemblies"}.</p>
+                <p>{selectedFitment.parts.length} governed mapped {selectedFitment.parts.length === 1 ? "part" : "parts"} across {assemblies.length} {assemblies.length === 1 ? "assembly" : "assemblies"}. Reference-only parts remain non-purchasable until matched to POS inventory.</p>
               </div>
               {selectedFitment.machineProducts[0] ? (
                 <a href={routeHref(`/product/${selectedFitment.machineProducts[0].id}`)}>View equipment</a>
@@ -463,11 +493,11 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
                 <div className="sc-parts-list">
                   <div className="sc-parts-list__heading">
                     <div><span>{selection.assembly || "All assemblies"}</span><h3>{visibleParts.length} {visibleParts.length === 1 ? "part" : "parts"}</h3></div>
-                    <small>Only provider-backed product price and branch availability are shown.</small>
+                    <small>Reference fitment may be shown for identification; price, stock, and cart actions appear only for POS-linked products.</small>
                   </div>
                   {partTree.map((node) => (
                     <PartTreeNode
-                      key={`${node.part.product.id}:${node.part.partNumber}`}
+                      key={`${node.part.product?.id || "reference"}:${node.part.partNumber}:${node.part.assembly}`}
                       node={node}
                       depth={0}
                       onAdd={actions.onAdd}
