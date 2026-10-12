@@ -168,7 +168,7 @@ export function buildPartsFitmentIndex(products: Product[], references: Referenc
         parentPartNumber: referencePart.parentPartNumber,
         assembly: referencePart.assembly,
         reference: referencePart.reference,
-        source: referenceModel.source,
+        source: referencePart.source || referenceModel.source,
       };
       const duplicate = fitment.parts.some(
         (candidate) =>
