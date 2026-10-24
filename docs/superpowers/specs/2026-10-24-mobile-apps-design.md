@@ -1,7 +1,7 @@
 # Smartcommerce customer and courier mobile apps
 
 Date: 2026-10-24 (Jamaica)
-Status: Proposed design, awaiting user approval. No mobile product code built.
+Status: Approved by user on 2026-10-24. Implementation plan prepared; no mobile product code built.
 Baseline inspected: main at 3a4e1c0dc88ed5601290239546add6207ddaddd4.
 
 ## Intent and agreed direction
