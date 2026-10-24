@@ -65,6 +65,9 @@ export type AssistantRequest = {
 };
 
 export type AssistantResult = {
+  // Optional, safely scoped TT AI candidate analysis; not a price/stock/fitment
+  // guarantee, and not required for the existing checkout flow.
+  ttAiAdvisory?: import("../integrations/ttAiAdvice").TTAICatalogAdvisory;
   response: string;
   recommendedProducts: CommerceProduct[];
   recommendedRentals: RentalAsset[];

@@ -10,6 +10,7 @@ import type { PosAdapter, PosAdapterContext } from "../platform/posAdapter";
 import { createHardenedServerFetch, validateServerIntegrationBaseUrl } from "../server/hardenedOutboundFetch.js";
 import { createPreviewCommerceAdapter, PREVIEW_BUSINESS_ID, PREVIEW_PROVIDER_ID, previewCatalogueEnabled } from "./previewCommerceAdapter.js";
 import { createTotalToolsPosReadAdapter } from "./totalToolsPosReadAdapter.js";
+import { requestTTAICatalogAdvisory } from "./ttAiAdvice.js";
 
 const unsupported = <T>(operation: string): PlatformApiResult<T> => ({
   success: false,
@@ -330,6 +331,17 @@ export const createConfiguredTotalToolsPlatformService = () => {
       ...grounded.products.map((product) => buildProductRecommendationEvidence(product, grounded.understanding)),
       ...grounded.rentals.map((rental) => buildRentalRecommendationEvidence(rental, grounded.understanding)),
     ];
+    const ttAiAdvisory = !previewMode && grounded.products.length>0
+      ? await requestTTAICatalogAdvisory({
+          // Only product names from the already grounded public catalog;
+          // do not forward raw customer messages (which may contain PII).
+          question:grounded.products.slice(0,5).map(product=>String(product.name)).join(" ").slice(0,500),
+          products:grounded.products.slice(0,12).map(product=>({
+            id:String(product.id),name:String(product.name),
+          })),
+          requestId:context.requestId,
+        })
+      : undefined;
 
     return {
       success: true,
@@ -346,6 +358,7 @@ export const createConfiguredTotalToolsPlatformService = () => {
         recommendedProducts: grounded.products,
         recommendedRentals: grounded.rentals,
         recommendationEvidence,
+        ...(ttAiAdvisory ? {ttAiAdvisory} : {}),
         nextActions: followUps(resolvedIntent, hasRecommendations, grounded.understanding.needsClarification),
         workflowHandoff: handoff,
       },
