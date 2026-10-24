@@ -30,10 +30,15 @@ export async function requestTTAICatalogAdvisory({
   if(!raw || !privatePem || !tenant) return undefined;
   let base:URL,key:crypto.KeyObject;
   try {
+    // The shared POS URL validator normalizes/removes credentials. Reject
+    // unsafe TT AI URLs *before* that normalization, not afterwards.
+    const supplied=new URL(raw);
+    if(supplied.username||supplied.password||supplied.hash||supplied.search
+        || (supplied.pathname!=="/"&&supplied.pathname!=="")) return undefined;
     base=validateServerIntegrationBaseUrl(raw);
     key=crypto.createPrivateKey(privatePem);
   } catch {return undefined;}
-  if(key.asymmetricKeyType!=="ed25519"||base.username||base.password||base.hash||base.search) return undefined;
+  if(key.asymmetricKeyType!=="ed25519") return undefined;
   // No customer ID, email, order history, unit cost, margin or financial
   // information crosses this boundary. Catalog grounding stays with the
   // existing SmartCommerce/POS adapter and checkout workflows.

@@ -88,6 +88,13 @@ try {
     })}),
   });
   assert.equal(spoof,undefined);
+  process.env.SMARTCOMMERCE_TT_AI_URL="https://user:pass@tt-ai.example.test";
+  const credentialUrl=await requestTTAICatalogAdvisory({
+    question:"ECHO air filter",products,
+    fetchImpl:async()=>{throw Error("unsafe URL must never be fetched");},
+  });
+  assert.equal(credentialUrl,undefined);
+  process.env.SMARTCOMMERCE_TT_AI_URL="https://tt-ai.example.test";
   delete process.env.SMARTCOMMERCE_TT_AI_SIGNING_PRIVATE_KEY;
   const disabled=await requestTTAICatalogAdvisory({question:"ECHO air filter",products});
   assert.equal(disabled,undefined);
