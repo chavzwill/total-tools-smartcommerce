@@ -338,6 +338,9 @@ export const createConfiguredTotalToolsPlatformService = () => {
           question:grounded.products.slice(0,5).map(product=>String(product.name)).join(" ").slice(0,500),
           products:grounded.products.slice(0,12).map(product=>({
             id:String(product.id),name:String(product.name),
+            // Public product identity from the grounded CommerceProduct.
+            // Never forward pricing, stock, supplier or customer fields.
+            brand:product.brand,sku:product.sku,
           })),
           requestId:context.requestId,
         })

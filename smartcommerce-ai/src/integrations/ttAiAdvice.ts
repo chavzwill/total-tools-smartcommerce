@@ -7,6 +7,13 @@ export type TTAICatalogAdvisory = {
   answer: string;
   candidates: Array<{ id:string; name:string; brand:string|null; sku:string|null; category:string|null }>;
   evidence: { source:"smartcommerce_supplied_catalog"; independentlyVerified:false };
+  // Review applies to the exact public product record only, never to
+  // machine fitment, stock, pricing or checkout authorization.
+  knowledge?: Array<{
+    id:string;
+    state:"reviewed_public_technical_record"|"not_verified_for_public_use";
+    reviewedPublicRecord:boolean;
+  }>;
   branchStockVerified:false;
   compatibilityVerified:false;
   customerPricingVerified:false;

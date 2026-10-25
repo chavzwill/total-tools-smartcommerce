@@ -63,6 +63,10 @@ try {
       assert.equal(claims.request_id,"smartcommerce-test-1");
       assert.equal(claims.body_sha256,
         crypto.createHash("sha256").update(options.body).digest("hex"));
+      const outbound=JSON.parse(options.body);
+      assert.deepEqual(outbound.products.map(item=>({
+        id:item.id,brand:item.brand,sku:item.sku,
+      })),[{id:"P1",brand:"ECHO",sku:"AF-1"}]);
       assert.equal(options.body.includes("supplierCost"),false);
       assert.equal(options.body.includes("stock_qty"),false);
       assert.equal(options.body.includes('"price"'),false);
@@ -72,11 +76,14 @@ try {
         answer:"possible matches",candidates:[{id:"P1",name:"ECHO Air Filter"}],
         branchStockVerified:false,customerPricingVerified:false,
         compatibilityVerified:false,purchaseApproved:false,
+        knowledge:[{id:"P1",state:"reviewed_public_technical_record",
+          reviewedPublicRecord:true}],
       })};
     },
   });
   assert.equal(called,true);
   assert.equal(result?.candidates[0].id,"P1");
+  assert.equal(result?.knowledge?.[0].reviewedPublicRecord,true);
 
   const spoof=await requestTTAICatalogAdvisory({
     question:"ECHO air filter",products,requestId:"smartcommerce-test-2",
