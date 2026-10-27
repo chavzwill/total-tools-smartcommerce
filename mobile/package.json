@@ -1,0 +1,9 @@
+{
+  "name": "smartcommerce-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {"test": "vitest run", "typecheck": "tsc --noEmit", "start:customer": "npm run start -w @smartcommerce/customer", "start:courier": "npm run start -w @smartcommerce/courier"},
+  "devDependencies": {"vitest": "5.0.5", "typescript": "~6.0.3", "@types/react": "~19.3.0"}
+}
