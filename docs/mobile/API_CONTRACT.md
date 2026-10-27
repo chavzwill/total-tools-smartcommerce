@@ -36,6 +36,33 @@ domain payloads are frozen with each task's service adapter and tests. Unsupport
 capabilities return an explicit unavailable response. POS review/pickup/status write
 contracts remain gated until their authenticated exchange is verified.
 
+## Authentication checkpoint
+
+Login, refresh, logout, logout-all and me have server handlers and an additive SQL
+migration in `smartcommerce-ai/migrations/20261027_mobile_sessions.sql`. They are disabled
+unless `SMARTCOMMERCE_MOBILE_AUTH_ENABLED=true`. Do not enable before applying and
+verifying the migration in a disposable environment, then the approved target environment.
+No production migration or feature activation has been performed by this checkpoint.
+
+Access credentials expire after 15 minutes; refresh families expire absolutely after
+30 days. Refresh rotates both credentials; replay revokes the entire family, including
+after an ambiguous network failure. In that case the user must sign in again. Logout
+accepts current or previously consumed refresh proof and revokes only that family.
+Native logout-all revokes mobile families for both app audiences and browser/courier
+cookie sessions. Browser sign-out-other-devices also revokes mobile families when
+mobile authentication is enabled, preserving the initiating browser session. Password changes
+invalidate all mobile families through the stored password fingerprint comparison.
+
+Accounts with active authenticators return `403 MFA_REQUIRED` without receiving native
+tokens. Issuance, access checks and refresh also reject accounts with active factors,
+so enrollment invalidates password-only mobile access. Mobile MFA challenge completion,
+native signup/recovery, device adapter integration and screens remain pending. Do not
+describe live native sign-in or all-device account security as complete yet.
+
+SQL behavior tests execute the real migration and service queries in disposable local
+PGlite databases. They do not access production; hosted PostgreSQL concurrency and
+deployment acceptance are still required before activation.
+
 Writes are never retried automatically by transport. Domain callers retain the same
 idempotency key when retrying an ambiguous action; 409 demands authorized state refresh.
 Push and payment-return links trigger authorized reads, never financial mutations.

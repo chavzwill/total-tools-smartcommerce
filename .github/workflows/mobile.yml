@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'mobile/**'
+      - 'smartcommerce-ai/src/server/mobile/**'
+      - 'smartcommerce-ai/api/mobile/**'
+      - 'smartcommerce-ai/migrations/*mobile*'
       - '.github/workflows/mobile.yml'
 permissions:
   contents: read
