@@ -20,6 +20,7 @@
     "react-native-screens": "~4.30.0",
     "react-native-web": "~0.21.4",
     "react-dom": "19.3.0",
-    "@smartcommerce/core": "0.1.0"
+    "@smartcommerce/core": "0.1.0",
+    "@smartcommerce/ui": "0.1.0"
   }
 }

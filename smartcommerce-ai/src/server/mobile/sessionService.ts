@@ -1,5 +1,6 @@
 import {createHash,randomBytes} from 'node:crypto';
 
+export type MobileMfaProof={stamp:string;factorId:string;encryptedSecret:string;counter:number};
 type Audience='customer'|'courier';
 type Db={query:(sql:string,params:unknown[])=>Promise<any[]>};
 type Row={id:string;customer_id:string;full_name:string;audience:Audience;access_expires_at:Date|string;refresh_expires_at:Date|string};
@@ -12,21 +13,25 @@ function present(row:Row,accessToken:string,refreshToken:string){return {accessT
 /** Called only after password and required MFA authentication by the HTTP layer. */
 export function createMobileSessionService(db:Db){
  return {
-  async issue(accountId:string,audience:Audience,deviceId:string,credentialStamp?:string){
+  async issue(accountId:string,audience:Audience,deviceId:string,credentialStamp?:string,proof?:MobileMfaProof){
    if(!validAudience(audience)||typeof deviceId!=='string'||!deviceId.trim()||deviceId.length>200)throw Error('INVALID_SESSION_INPUT');
    const accessToken=freshToken(),refreshToken=freshToken(),id=`mob_${freshToken()}`;
-   const rows=await db.query(`WITH created AS (
-    INSERT INTO mobile_sessions(id,customer_id,audience,device_id,credential_stamp,access_hash,access_expires_at,refresh_expires_at)
-    SELECT $1,c.id,$2,$3,c.password_hash,$4,now()+interval '15 minutes',now()+interval '30 days' FROM customer_accounts c WHERE c.id=$5 AND ($7::text IS NULL OR c.password_hash=$7) AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)
+   const rows=await db.query(`WITH used AS (
+    INSERT INTO mobile_totp_counters(authenticator_id,last_counter)
+    SELECT a.id,$11::bigint FROM customer_authenticators a WHERE a.id=$9 AND a.customer_id=$5 AND a.authenticator_type='totp' AND a.status='active' AND a.revoked_at IS NULL AND a.secret_encrypted=$10 AND mobile_factor_stamp($5)=$8
+    ON CONFLICT(authenticator_id) DO UPDATE SET last_counter=EXCLUDED.last_counter WHERE mobile_totp_counters.last_counter<EXCLUDED.last_counter RETURNING authenticator_id
+    ), created AS (
+    INSERT INTO mobile_sessions(id,customer_id,audience,device_id,credential_stamp,access_hash,access_expires_at,refresh_expires_at,mfa_stamp)
+    SELECT $1,c.id,$2,$3,c.password_hash,$4,now()+interval '15 minutes',now()+interval '30 days',$8 FROM customer_accounts c WHERE c.id=$5 AND ($7::text IS NULL OR c.password_hash=$7) AND (($8::text IS NULL AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)) OR EXISTS(SELECT 1 FROM used))
     RETURNING *), credential AS (
     INSERT INTO mobile_refresh_credentials(token_hash,session_id) SELECT $6,id FROM created RETURNING session_id)
-    SELECT s.*,c.full_name FROM created s JOIN customer_accounts c ON c.id=s.customer_id JOIN credential r ON r.session_id=s.id`,[id,audience,deviceId,hash(accessToken),accountId,hash(refreshToken),credentialStamp??null]);
+    SELECT s.*,c.full_name FROM created s JOIN customer_accounts c ON c.id=s.customer_id JOIN credential r ON r.session_id=s.id`,[id,audience,deviceId,hash(accessToken),accountId,hash(refreshToken),credentialStamp??null,proof?.stamp??null,proof?.factorId??null,proof?.encryptedSecret??null,proof?.counter??null]);
    if(!rows[0])throw Error('ACCOUNT_UNAVAILABLE');
    return present(rows[0],accessToken,refreshToken);
   },
   async actor(accessToken:string,audience:Audience){
    if(!validToken(accessToken)||!validAudience(audience))return null;
-   const rows=await db.query(`SELECT s.id,s.customer_id,s.audience,c.full_name FROM mobile_sessions s JOIN customer_accounts c ON c.id=s.customer_id WHERE s.access_hash=$1 AND s.audience=$2 AND s.revoked_at IS NULL AND s.access_expires_at>now() AND s.refresh_expires_at>now() AND s.credential_stamp=c.password_hash AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)`,[hash(accessToken),audience]);
+   const rows=await db.query(`SELECT s.id,s.customer_id,s.audience,c.full_name FROM mobile_sessions s JOIN customer_accounts c ON c.id=s.customer_id WHERE s.access_hash=$1 AND s.audience=$2 AND s.revoked_at IS NULL AND s.access_expires_at>now() AND s.refresh_expires_at>now() AND s.credential_stamp=c.password_hash AND ((s.mfa_stamp IS NOT NULL AND s.mfa_stamp=mobile_factor_stamp(c.id)) OR (s.mfa_stamp IS NULL AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)))`,[hash(accessToken),audience]);
    return rows[0]?{sessionId:rows[0].id,account:{id:rows[0].customer_id,fullName:rows[0].full_name},audience:rows[0].audience}:null;
   },
   async refresh(token:string,audience:Audience){
@@ -34,7 +39,7 @@ export function createMobileSessionService(db:Db){
    const accessToken=freshToken(),refreshToken=freshToken();
    const result=await db.query('SELECT session_id FROM mobile_rotate_refresh($1,$2,$3,$4)',[hash(token),audience,hash(accessToken),hash(refreshToken)]);
    if(!result[0])return null;
-   const rows=await db.query(`SELECT s.*,c.full_name FROM mobile_sessions s JOIN customer_accounts c ON c.id=s.customer_id WHERE s.id=$1 AND s.access_hash=$2 AND s.revoked_at IS NULL AND s.credential_stamp=c.password_hash AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)`,[result[0].session_id,hash(accessToken)]);
+   const rows=await db.query(`SELECT s.*,c.full_name FROM mobile_sessions s JOIN customer_accounts c ON c.id=s.customer_id WHERE s.id=$1 AND s.access_hash=$2 AND s.revoked_at IS NULL AND s.credential_stamp=c.password_hash AND ((s.mfa_stamp IS NOT NULL AND s.mfa_stamp=mobile_factor_stamp(c.id)) OR (s.mfa_stamp IS NULL AND NOT EXISTS (SELECT 1 FROM customer_authenticators a WHERE a.customer_id=c.id AND a.status='active' AND a.revoked_at IS NULL)))`,[result[0].session_id,hash(accessToken)]);
    return rows[0]?present(rows[0],accessToken,refreshToken):null;
   },
   async logout(token:string,audience:Audience){

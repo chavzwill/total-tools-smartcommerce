@@ -41,7 +41,7 @@ contracts remain gated until their authenticated exchange is verified.
 Login, refresh, logout, logout-all and me have server handlers and an additive SQL
 migration in `smartcommerce-ai/migrations/20261027_mobile_sessions.sql`. They are disabled
 unless `SMARTCOMMERCE_MOBILE_AUTH_ENABLED=true`. Do not enable before applying and
-verifying the migration in a disposable environment, then the approved target environment.
+verifying both migrations (sessions, then `20261027_mobile_mfa.sql`) in a disposable environment, then the approved target environment.
 No production migration or feature activation has been performed by this checkpoint.
 
 Access credentials expire after 15 minutes; refresh families expire absolutely after
@@ -53,11 +53,13 @@ cookie sessions. Browser sign-out-other-devices also revokes mobile families whe
 mobile authentication is enabled, preserving the initiating browser session. Password changes
 invalidate all mobile families through the stored password fingerprint comparison.
 
-Accounts with active authenticators return `403 MFA_REQUIRED` without receiving native
-tokens. Issuance, access checks and refresh also reject accounts with active factors,
-so enrollment invalidates password-only mobile access. Mobile MFA challenge completion,
-native signup/recovery and screens remain pending. Do not
-describe live native sign-in or all-device account security as complete yet.
+Accounts with active authenticators receive `403 MFA_REQUIRED` until a valid six-digit
+TOTP code is supplied with the password. The server verifies the existing encrypted
+secret, then atomically consumes a monotonic authenticator counter while issuing the
+session. Replay is rejected. Sessions carry a factor-set stamp, so factor changes or
+password changes invalidate access and refresh. Recovery-code and native passkey
+completion remain unsupported; those accounts must use the existing website security
+flows. No account receives a password-only session to bypass an active factor.
 
 SQL behavior tests execute the real migration and service queries in disposable local
 PGlite databases. They do not access production; hosted PostgreSQL concurrency and
@@ -69,15 +71,16 @@ Each app has `src/connection.ts`, exporting a lazy `getConnection()` factory. Se
 `EXPO_PUBLIC_API_ORIGIN` to the HTTPS origin for the intended environment. Missing or
 insecure origins are rejected. The factory wires Expo SecureStore (unlocked, this-device
 keychain access) to the shared session manager; it provides no localStorage fallback.
-Call `connection.session.restore()` during the future auth-provider startup and use
+Call `connection.session.restore()` during auth-gate startup and use
 `connection.session.login(...)` / `.logout()` for account actions. Protected service
 calls use `connection.api.request(...)` and obtain access credentials from the manager.
 
 Login, refresh and credential-proven logout use anonymous transport so restoration
 cannot recursively attempt to refresh itself. MFA_REQUIRED is the only additional
 allowlisted challenge code preserved from 403 errors; server error text is not displayed.
-The modules are prepared for screen integration; their presence does not make the
-current development placeholder screens a usable sign-in experience.
+The shared native auth gate now consumes these modules on customer Account/Cart and
+Courier screens. Session subscriptions immediately clear all mounted protected routes
+on sign-out or unauthorized responses; protected content is keyed by account identity.
 
 Writes are never retried automatically by transport. Domain callers retain the same
 idempotency key when retrying an ambiguous action; 409 demands authorized state refresh.
@@ -91,3 +94,31 @@ in EXPO_PUBLIC values. EAS project IDs and signing are deliberately unconfigured
 real company-owned projects are connected. Android package and iOS bundle identifiers
 are proposed `com.totaltools.smartcommerce.customer` / `.courier` and must be checked
 against company registrations before store release.
+
+## Functional screen checkpoint — 2026-10-27
+
+- Customer: public catalogue search and product description, account sign-in/TOTP,
+  persistent cart add/remove/quantity changes and server price quotes.
+- Catalogue projects only public fields; configured business/provider context is injected
+  server-side. No caller tenant headers, negotiated prices or internal metadata are forwarded.
+- `/cart` explicitly adapts existing commerce actions and native customer identity; existing
+  cookie origin controls remain. Quotes revalidate price, not inventory quantities.
+- `/checkout` uses the verified native customer callback and existing payment policies.
+  Browser origin protection remains for browser checkout. No client amount is accepted.
+  Payment launch is disabled until the server returns available:true, which requires a
+  trusted fulfillment reservation. Cart quotes do not produce that reservation; its
+  producer remains a release blocker. Do not insert synthetic payment-order rows.
+- Pending payment quote IDs are securely stored by app/account before the start request,
+  survive app restarts, and are reconciled from server state; paid acknowledgments clear
+  the pointer. The stored quote ID never proves payment or grants another account access.
+- Courier: password/TOTP sign-in, owner application draft/submission and own assigned-job
+  views. Linked individual drivers are identified by account_id; job reads require a
+  matching driver_id and organization_id. No organization-wide driver access is granted.
+- Legacy local approval flags are not treated as POS verification. Acceptance, pickup,
+  status changes, proof and payout actions remain blocked pending reviewed POS contracts.
+- 50 tests, mobile/server TypeScript, both iOS/Android/web exports and the existing web
+  release build passed. Local browser checks covered sign-in, account navigation,
+  catalogue fixture search/detail, and 320/390px reflow. Fixture data was test-only.
+- Physical-device keychain/MFA/payment acceptance, hosted multi-connection SQL concurrency,
+  signed builds, store publishing, production migrations and activation remain unverified.
+  No real payment, dispatch mutation, deployment or production migration was performed.

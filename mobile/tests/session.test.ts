@@ -29,6 +29,17 @@ it('does not erase recoverable credentials on a transient refresh failure',async
  const manager=createSessionManager({audience:'customer',store,api:{login:async()=>fresh,refresh:async()=>{throw Error('offline');},logout:async()=>{}}});
  await manager.restore();await expect(manager.getAccessToken()).rejects.toThrow('offline');expect(await store.get()).not.toBeNull();
 });
+it('does not replace a current access token when another screen restores the account',async()=>{
+ const manager=createSessionManager({audience:'customer',store:memory(),api:{login:async()=>fresh,refresh:async()=>{throw Error('Unnecessary refresh');},logout:async()=>{}}});
+ await manager.login({email:'a@example.com',password:'password',deviceId:'phone'});
+ await manager.restore();expect(await manager.getAccessToken()).toBe('new');
+});
+it('notifies all mounted screens when the account is signed out',async()=>{
+ const manager=createSessionManager({audience:'customer',store:memory(),api:{login:async()=>fresh,refresh:async()=>fresh,logout:async()=>{}}});
+ const events:Array<string|null>=[];const unsubscribe=manager.subscribe(account=>events.push(account?.id||null));
+ await manager.login({email:'a@example.com',password:'password',deviceId:'phone'});await manager.logout();unsubscribe();
+ expect(events).toContain('one');expect(events.at(-1)).toBeNull();
+});
 it('does not sign in after logout interrupts private-data cleanup',async()=>{
  let finish!:()=>void;let clears=0;
  const manager=createSessionManager({audience:'customer',store:memory(),clearPrivateData:async()=>{if(++clears===1)await new Promise<void>(r=>{finish=r;});},api:{login:async()=>fresh,refresh:async()=>fresh,logout:async()=>{}}});

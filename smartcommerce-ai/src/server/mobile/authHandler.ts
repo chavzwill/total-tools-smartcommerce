@@ -1,6 +1,6 @@
-import type {createMobileSessionService} from './sessionService.js';
+import type {MobileMfaProof,createMobileSessionService} from './sessionService.js';
 type Audience='customer'|'courier';
-type Deps={enabled:()=>boolean;limit:(request:any,subject:string)=>Promise<void>;login:(email:string,password:string)=>Promise<{accountId:string;mfaRequired:boolean;credentialStamp?:string}|null>;sessions:ReturnType<typeof createMobileSessionService>};
+type Deps={enabled:()=>boolean;limit:(request:any,subject:string)=>Promise<void>;login:(email:string,password:string,code?:string)=>Promise<{accountId:string;mfaRequired:boolean;credentialStamp?:string;mfaProof?:MobileMfaProof}|null>;sessions:ReturnType<typeof createMobileSessionService>};
 const credential=(value:unknown)=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 export function createMobileAuthHandler(deps:Deps){return async(req:any,res:any)=>{
  res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -29,10 +29,10 @@ export function createMobileAuthHandler(deps:Deps){return async(req:any,res:any)
    const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof body.password!=='string'||!body.password||body.password.length>128||typeof body.deviceId!=='string'||!body.deviceId.trim()||body.deviceId.length>200)return error(400,'INVALID_REQUEST');
    await deps.limit(req,email);
-   const account=await deps.login(email,body.password);if(!account)return error(401,'INVALID_CREDENTIALS');
-   // Fail closed until mobile factor challenge completion is implemented.
-   if(account.mfaRequired)return error(403,'MFA_REQUIRED');
-   return send(200,await deps.sessions.issue(account.accountId,audience,body.deviceId,account.credentialStamp));
+   const account=await deps.login(email,body.password,typeof body.code==='string'?body.code:undefined);if(!account)return error(401,'INVALID_CREDENTIALS');
+   // MFA proof is created by the trusted verifier, never taken from the body.
+   if(account.mfaRequired&&!account.mfaProof)return error(403,'MFA_REQUIRED');
+   return send(200,await deps.sessions.issue(account.accountId,audience,body.deviceId,account.credentialStamp,account.mfaProof));
   }
   if(path==='/auth/logout-all'){
    const token=String(req.headers?.authorization||'').match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];

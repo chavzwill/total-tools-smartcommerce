@@ -1,3 +1,12 @@
-import {View,Text,StyleSheet} from 'react-native';
-export default function App(){return <View style={styles.screen}><Text accessibilityRole="header" style={styles.title}>Smartcommerce</Text><Text>Mobile development build</Text><Text>Account and service connections are being implemented.</Text></View>;}
-const styles=StyleSheet.create({screen:{flex:1,padding:24,justifyContent:'center',gap:12,backgroundColor:'#f7f8f5'},title:{fontSize:28,fontWeight:'700',color:'#08763f'}});
+import React,{useState} from 'react';
+import {Text} from 'react-native';
+import {router} from 'expo-router';
+import {Page,Field,Action,Item,Notice} from '@smartcommerce/ui';
+import {getConnection} from '../src/connection';
+type Product={id:string;name:string;description?:string;brand?:string;sku?:string;pricing:Array<{currency:string;listPrice?:number;salePrice?:number}>;purchasable:boolean};
+export default function Shop(){
+ const [query,setQuery]=useState(''),[products,setProducts]=useState<Product[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('Search for tools, equipment, and spare parts.'),[selected,setSelected]=useState<Product|null>(null);
+ async function search(){setBusy(true);setSelected(null);try{setProducts(await getConnection().api.request('/catalogue?query='+encodeURIComponent(query),{anonymous:true},value=>{const v=value as {items:Product[]};if(!v||!Array.isArray(v.items))throw Error('Invalid catalogue');return v.items;}));setMessage('Stock has not been confirmed. Cart quotes recheck prices only.');}catch{setProducts([]);setMessage('The catalogue is temporarily unavailable. Please try again.');}finally{setBusy(false);}}
+ async function add(product:Product){setBusy(true);try{const c=getConnection();await c.session.restore();if(!await c.session.getAccessToken()){router.push('/account');return;}await c.api.request('/cart',{method:'POST',body:{action:'add_item',providerItemId:product.id,quantity:1}},value=>value);setMessage('Added to your cart.');}catch{setMessage('This item could not be added. Check your sign-in and try again.');}finally{setBusy(false);}}
+ return <Page title="Find the right tool." subtitle="Shop tools and equipment from Total Tools."><Action label="Account" onPress={()=>router.push('/account')} secondary/><Action label="Your cart" onPress={()=>router.push('/cart')} secondary/><Field label="Search products" value={query} onChangeText={setQuery}/><Action label={busy?'Searching…':'Search catalogue'} disabled={busy} onPress={()=>{void search();}}/><Notice text={message}/>{selected?<Item title={selected.name} detail={selected.description||selected.sku}><Action label="Back to results" secondary onPress={()=>setSelected(null)}/><Action label="Add to cart" onPress={()=>{void add(selected);}} disabled={busy||!selected.purchasable}/></Item>:products.map(product=><Item key={product.id} title={product.name} detail={product.brand||product.sku}><Text>{product.pricing[0]?.currency} {product.pricing[0]?.salePrice??product.pricing[0]?.listPrice??'Price unavailable'}</Text><Action label="View product" secondary onPress={()=>setSelected(product)}/></Item>)}</Page>;
+}

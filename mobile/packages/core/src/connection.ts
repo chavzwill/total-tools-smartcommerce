@@ -1,4 +1,5 @@
 import type {AppAudience} from './contracts';
+import {createPaymentRecovery} from './paymentRecovery';
 import {createApiClient} from './transport';
 import {createSessionManager,decodeSession,type SecureSessionStore} from './session';
 
@@ -12,5 +13,5 @@ export function createMobileConnection({baseUrl,audience,store,fetchImpl,clearPr
    if(!value||typeof value!=='object'||!('ok' in value)||value.ok!==true)throw Error('Invalid logout acknowledgment');
   })
  }});
- return {session,api:createApiClient({baseUrl,audience,getAccessToken:()=>session.getAccessToken(),fetchImpl})};
+ return {session,paymentRecovery:createPaymentRecovery(store,audience),api:createApiClient({baseUrl,audience,getAccessToken:()=>session.getAccessToken(),onUnauthorized:()=>session.invalidate(),fetchImpl})};
 }

@@ -1,10 +1,10 @@
 import {ApiError,type AppAudience,type Decoder} from './contracts';
 
-type Options={baseUrl:string;audience:AppAudience;getAccessToken:()=>Promise<string|null>;fetchImpl?:typeof fetch};
+type Options={baseUrl:string;audience:AppAudience;getAccessToken:()=>Promise<string|null>;fetchImpl?:typeof fetch;onUnauthorized?:()=>Promise<void>};
 type RequestOptions={method?:'GET'|'POST'|'PATCH'|'DELETE';body?:unknown;signal?:AbortSignal;anonymous?:boolean};
 const routes=/^\/(?:auth|catalogue|products|parts|cart|quotes|checkout|orders|driver|devices|assistant|rentals|repairs|commercial)(?:[/?]|$)/;
 
-export function createApiClient({baseUrl,audience,getAccessToken,fetchImpl=fetch}:Options){
+export function createApiClient({baseUrl,audience,getAccessToken,fetchImpl=fetch,onUnauthorized}:Options){
   const origin=new URL(baseUrl);
   if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash) throw new Error('A secure API origin is required.');
   return {
@@ -26,6 +26,7 @@ export function createApiClient({baseUrl,audience,getAccessToken,fetchImpl=fetch
       }
       if(response.redirected||(response.status>=300&&response.status<400))throw new ApiError('UNEXPECTED_REDIRECT',response.status,'The service returned an unexpected redirect.');
       if(!response.ok){
+        if(response.status===401&&onUnauthorized)await onUnauthorized().catch(()=>{});
         if(response.status===403){
           const data=await response.json().catch(()=>null);
           if(data?.error?.code==='MFA_REQUIRED')throw new ApiError('MFA_REQUIRED',403,'Additional verification is required.');

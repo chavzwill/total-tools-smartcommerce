@@ -30,3 +30,9 @@ it('preserves only the allowlisted MFA challenge code, without trusting server e
  await expect(connection.session.login({email:'a@example.com',password:'password',deviceId:'phone'})).rejects.toMatchObject({code:'MFA_REQUIRED',message:'Additional verification is required.'});
  expect(await connection.session.getAccessToken()).toBeNull();
 });
+it('clears the shared account when a protected endpoint rejects its token',async()=>{
+ const c=createMobileConnection({baseUrl:'https://commerce.example',audience:'customer',store:store(),fetchImpl:async url=>String(url).endsWith('/auth/login')?Response.json(session):Response.json({error:{}},{status:401})});
+ await c.session.login({email:'a@example.com',password:'password',deviceId:'phone'});
+ await expect(c.api.request('/cart',{},v=>v)).rejects.toMatchObject({status:401});
+ expect(await c.session.getAccessToken()).toBeNull();
+});

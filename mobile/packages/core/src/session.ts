@@ -15,9 +15,12 @@ export function decodeSession(value:unknown):MobileSession{
 export function createSessionManager({audience,store,api,clearPrivateData=async()=>{}}:{audience:AppAudience;store:SecureSessionStore;api:Api;clearPrivateData?:()=>Promise<void>}){
  const key=`smartcommerce.${audience}.session`;
  let session:MobileSession|null=null,version=0,refreshing:Promise<string|null>|null=null;
+ const listeners=new Set<(account:{id:string;fullName:string}|null)=>void>();
+ const emit=()=>{for(const listener of listeners){try{listener(session?.account||null);}catch{/* isolate UI listeners */}}};
+ let restoring:Promise<{id:string;fullName:string}|null>|null=null;
  let writes:Promise<void>=Promise.resolve();
  const serialize=(operation:()=>Promise<void>)=>{const next=writes.then(operation,operation);writes=next.catch(()=>{});return next;};
- async function clear(){session=null;version++;await serialize(()=>store.remove(key));await clearPrivateData();}
+ async function clear(){session=null;version++;emit();await serialize(()=>store.remove(key));await clearPrivateData();}
  async function save(input:MobileSession,expectedVersion:number){
   const next=decodeSession(input);
   if(next.audience!==audience||Date.parse(next.refreshExpiresAt)<=Date.now())throw Error('Invalid session audience or expiry');
@@ -27,15 +30,23 @@ export function createSessionManager({audience,store,api,clearPrivateData=async(
    await store.set(key,JSON.stringify({...next,accessToken:'restored-placeholder',accessExpiresAt:'1970-01-01T00:00:00Z'}));
   });
   if(version!==expectedVersion)return false;
-  session=next;return true;
+  session=next;emit();return true;
  }
  return {
+  subscribe(listener:(account:{id:string;fullName:string}|null)=>void){listeners.add(listener);return ()=>{listeners.delete(listener);};},
+  invalidate:clear,
   async restore(){
+   if(session)return session.account;
+   if(restoring)return restoring;
    const stamp=version;
-   const raw=await store.get(key);
-   if(version!==stamp||!raw)return null;
-   try{const next=decodeSession(JSON.parse(raw));if(next.audience!==audience||Date.parse(next.refreshExpiresAt)<=Date.now())throw Error('expired');session=next;return next.account;}
-   catch{await clear();return null;}
+   const pending=(async()=>{
+    const raw=await store.get(key);
+    if(version!==stamp||!raw)return null;
+    try{const next=decodeSession(JSON.parse(raw));if(next.audience!==audience||Date.parse(next.refreshExpiresAt)<=Date.now())throw Error('expired');session=next;return next.account;}
+    catch{await clear();return null;}
+   })();
+   restoring=pending;
+   try{return await pending;}finally{if(restoring===pending)restoring=null;}
   },
   async login(input:LoginInput){
    const stamp=version+1;await clear();if(version!==stamp)return null;
