@@ -1,3 +1,4 @@
+import {nativeActor} from '../mobile/nativeIdentity.js';
 import {createHash} from 'node:crypto';
 import {createHandyPay} from './handypay.js';
 import {courierDb} from '../couriers/repository.js';
@@ -12,7 +13,7 @@ export function paymentConfig():{mode:'live'|'test';apiKey:string;publicOrigin:s
  return {mode,apiKey:process.env.HANDYPAY_API_KEY||'',publicOrigin:process.env.SMARTCOMMERCE_PUBLIC_ORIGIN||'',checkoutOrigins:(process.env.HANDYPAY_CHECKOUT_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)};
 }
 export function paymentsEnabled(){return process.env.SMARTCOMMERCE_PAYMENTS_ENABLED==='true'&&process.env.SMARTCOMMERCE_PAYMENT_PROVIDER==='handypay';}
-export const checkoutPayment=paymentHandler({
+const dependencies:Parameters<typeof paymentHandler>[0]={
  enabled:paymentsEnabled,origin:process.env.SMARTCOMMERCE_PUBLIC_ORIGIN||'',
  async customer(req){
    const token=parseCookie(req.headers?.cookie).sc_session;if(!token)return null;
@@ -27,4 +28,6 @@ export const checkoutPayment=paymentHandler({
    const order=rows[0];return {available:!!order&&['ready','awaiting_payment'].includes(order.status)&&new Date(order.reserved_until).getTime()>Date.now(),status:order?.status||'unavailable',dispatch:order?.dispatch_result||null,...(order?{amountMinor:Number(order.amount_minor),currency:order.currency}:{})};
  },
  async start(customer,quote){const config=paymentConfig();return startPayment(paymentRepository(config.mode),createHandyPay(config),customer,quote);},
-});
+};
+export const checkoutPayment=paymentHandler(dependencies);
+export const nativeCheckoutPayment=paymentHandler({...dependencies,native:true,customer:async request=>{const actor=await nativeActor(request);return actor?.audience==='customer'?actor.account.id:null;}});

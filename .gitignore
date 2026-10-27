@@ -7,3 +7,9 @@ smartcommerce-ai/.env.*
 smartcommerce-ai/coverage/
 *.log
 *.tsbuildinfo
+mobile/**/node_modules/
+mobile/**/.expo/
+mobile/**/dist/
+mobile/**/.env*
+!mobile/**/.env.example
+mobile/**/coverage/

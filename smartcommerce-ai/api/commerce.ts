@@ -1,3 +1,4 @@
+import {nativeActor} from '../src/server/mobile/nativeIdentity.js';
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "node:crypto";
 import { handlePlatformRestRequest } from "../src/backend/platformRestApi.js";
@@ -115,6 +116,8 @@ async function readJsonBody<T>(request: AsyncIterable<unknown>): Promise<T> {
 }
 
 async function currentCustomerId(request: any) {
+  if(request.headers?.authorization){const actor=await nativeActor(request);return actor?.audience==='customer'?actor.account.id:undefined;}
+
   const token = parseCookie(firstHeader(request.headers?.cookie))[COOKIE_NAME];
   if (!token) return undefined;
   const db = sql();
