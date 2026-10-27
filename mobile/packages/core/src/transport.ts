@@ -26,6 +26,10 @@ export function createApiClient({baseUrl,audience,getAccessToken,fetchImpl=fetch
       }
       if(response.redirected||(response.status>=300&&response.status<400))throw new ApiError('UNEXPECTED_REDIRECT',response.status,'The service returned an unexpected redirect.');
       if(!response.ok){
+        if(response.status===403){
+          const data=await response.json().catch(()=>null);
+          if(data?.error?.code==='MFA_REQUIRED')throw new ApiError('MFA_REQUIRED',403,'Additional verification is required.');
+        }
         const code=response.status===401?'SIGN_IN_REQUIRED':response.status===403?'FORBIDDEN':response.status===409?'STATE_CONFLICT':response.status===429?'RATE_LIMITED':response.status>=500?'SERVICE_UNAVAILABLE':'REQUEST_REJECTED';
         throw new ApiError(code,response.status,response.status===401?'Please sign in again.':response.status===409?'This information changed. Refresh and try again.':'The request could not be completed.',response.status===429||response.status>=500);
       }

@@ -56,12 +56,28 @@ invalidate all mobile families through the stored password fingerprint compariso
 Accounts with active authenticators return `403 MFA_REQUIRED` without receiving native
 tokens. Issuance, access checks and refresh also reject accounts with active factors,
 so enrollment invalidates password-only mobile access. Mobile MFA challenge completion,
-native signup/recovery, device adapter integration and screens remain pending. Do not
+native signup/recovery and screens remain pending. Do not
 describe live native sign-in or all-device account security as complete yet.
 
 SQL behavior tests execute the real migration and service queries in disposable local
 PGlite databases. They do not access production; hosted PostgreSQL concurrency and
 deployment acceptance are still required before activation.
+
+## Native connection checkpoint
+
+Each app has `src/connection.ts`, exporting a lazy `getConnection()` factory. Set
+`EXPO_PUBLIC_API_ORIGIN` to the HTTPS origin for the intended environment. Missing or
+insecure origins are rejected. The factory wires Expo SecureStore (unlocked, this-device
+keychain access) to the shared session manager; it provides no localStorage fallback.
+Call `connection.session.restore()` during the future auth-provider startup and use
+`connection.session.login(...)` / `.logout()` for account actions. Protected service
+calls use `connection.api.request(...)` and obtain access credentials from the manager.
+
+Login, refresh and credential-proven logout use anonymous transport so restoration
+cannot recursively attempt to refresh itself. MFA_REQUIRED is the only additional
+allowlisted challenge code preserved from 403 errors; server error text is not displayed.
+The modules are prepared for screen integration; their presence does not make the
+current development placeholder screens a usable sign-in experience.
 
 Writes are never retried automatically by transport. Domain callers retain the same
 idempotency key when retrying an ambiguous action; 409 demands authorized state refresh.
