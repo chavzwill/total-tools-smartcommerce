@@ -6,6 +6,8 @@ on:
       - 'mobile/**'
       - 'smartcommerce-ai/src/server/mobile/**'
       - 'smartcommerce-ai/api/mobile/**'
+      - 'smartcommerce-ai/api/integrations/pos/**'
+      - 'smartcommerce-ai/migrations/*pos_driver*'
       - 'smartcommerce-ai/migrations/*mobile*'
       - '.github/workflows/mobile.yml'
 permissions:

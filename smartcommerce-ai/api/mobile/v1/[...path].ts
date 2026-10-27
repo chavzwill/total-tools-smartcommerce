@@ -45,7 +45,11 @@ const marketHandler=createMobileMarketHandler({
   }
   const application=await db().query('SELECT id,status,version,decision_reason AS "decisionReason" FROM courier_organizations WHERE owner_customer_id::text=$1 LIMIT 1',[account]) as any[];
   const drivers=await db().query('SELECT id,organization_id AS \"organizationId\",active FROM courier_drivers WHERE account_id=$1 LIMIT 1',[account]) as any[];
-  return {application:application[0]||null,driver:drivers[0]||null,verificationPending:true,canUpdate:false};
+  let posDecision=null;
+  if(process.env.SMARTCOMMERCE_POS_DRIVER_SYNC_ENABLED==='true'){
+   const rows=await db().query('SELECT mobile_pos_driver_decision($1) AS decision',[account]) as any[];posDecision=rows[0]?.decision||null;
+  }
+  return {application:application[0]||null,driver:drivers[0]||null,posDecision,verificationPending:true,canUpdate:false};
  },
  application:async(account,body:any)=>{
   if(!body||!['create_application','save_application','submit_application'].includes(body.action))throw Error('INVALID_APPLICATION_ACTION');

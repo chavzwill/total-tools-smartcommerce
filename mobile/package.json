@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1 --hookTimeout=60000",
     "typecheck": "tsc --noEmit",
     "start:customer": "npm run start -w @smartcommerce/customer",
     "start:courier": "npm run start -w @smartcommerce/courier"

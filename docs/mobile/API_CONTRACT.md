@@ -122,3 +122,17 @@ against company registrations before store release.
 - Physical-device keychain/MFA/payment acceptance, hosted multi-connection SQL concurrency,
   signed builds, store publishing, production migrations and activation remain unverified.
   No real payment, dispatch mutation, deployment or production migration was performed.
+
+## POS decision receiver checkpoint — 2026-10-27
+
+Signed courier decisions now have a separate, disabled-by-default receiver at
+`/api/integrations/pos/v1/courier-decisions`, an additive migration, transactional replay/
+version/conflict checks, immutable POS/local identity binding and an expiring read projection.
+See [POS driver contract](POS_DRIVER_CONTRACT.md) for the exact schema and handshake gate.
+No POS sender or operational courier permission is enabled. Existing courier guards remain.
+The connected POS workspace was unavailable during implementation (bridge returned 429),
+so upstream sender/reservation support could not be verified or changed.
+Verification for this checkpoint: all 57 mobile behavior tests, mobile/server TypeScript,
+existing POS/courier authority regressions and the clean web release build pass. New SQL
+runs in disposable PGlite only; hosted concurrency and the real sender handshake remain
+unverified. App source screens are unchanged from the preceding export checkpoint.
