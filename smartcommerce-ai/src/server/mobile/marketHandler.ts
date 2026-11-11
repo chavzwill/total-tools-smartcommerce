@@ -3,7 +3,23 @@ export function publicCatalogueRequest(request:Request,context:{businessAccountI
  return new Request(request.url,{method:'GET',headers:{'x-business-account-id':context.businessAccountId,'x-provider-id':context.providerId}});
 }
 type Deps={enabled:()=>boolean;limit:(req:any)=>Promise<void>;actor:(req:any)=>Promise<Actor|null>;publicRead:(request:Request)=>Promise<Response>;cart:(req:any,res:any)=>Promise<any>;checkout?:(req:any,res:any)=>Promise<any>;driver:(account:string,path:string)=>Promise<unknown>;application:(account:string,body:unknown)=>Promise<unknown>};
-const safeProduct=(p:any)=>({id:String(p.id),name:String(p.name||''),description:typeof p.description==='string'?p.description:undefined,brand:typeof p.brand==='string'?p.brand:undefined,sku:typeof p.sku==='string'?p.sku:undefined,active:p.active===true,purchasable:p.purchasable===true,images:Array.isArray(p.images)?p.images.filter((i:any)=>typeof i.url==='string'&&i.url.startsWith('https://')).map((i:any)=>({url:i.url,alt:typeof i.alt==='string'?i.alt:''})):[],pricing:Array.isArray(p.pricing)?p.pricing.map((r:any)=>({currency:r.currency,listPrice:Number.isFinite(r.listPrice)?r.listPrice:undefined,salePrice:Number.isFinite(r.salePrice)?r.salePrice:undefined})):[],availability:'unknown'});
+// A provider's omitted purchasable flag means "not explicitly denied", not
+// "out of stock". Require a published item and a genuine positive provider
+// price before exposing the native cart action; explicit non-retail denials win.
+const safeProduct=(p:any)=>{
+ const pricing=Array.isArray(p.pricing)?p.pricing.map((r:any)=>({
+  currency:typeof r.currency==='string'?r.currency:'JMD',
+  listPrice:Number.isFinite(r.listPrice)&&r.listPrice>=0?r.listPrice:undefined,
+  salePrice:Number.isFinite(r.salePrice)&&r.salePrice>=0?r.salePrice:undefined
+ })):[];
+ const priced=pricing.some((r:any)=>Number.isFinite(r.salePrice??r.listPrice)&&(r.salePrice??r.listPrice)>0);
+ return {id:String(p.id),name:String(p.name||''),description:typeof p.description==='string'?p.description:undefined,
+  brand:typeof p.brand==='string'?p.brand:undefined,sku:typeof p.sku==='string'?p.sku:undefined,
+  active:p.active===true,purchasable:p.active===true&&p.purchasable!==false&&priced,
+  images:Array.isArray(p.images)?p.images.filter((i:any)=>typeof i.url==='string'&&i.url.startsWith('https://'))
+   .map((i:any)=>({url:i.url,alt:typeof i.alt==='string'?i.alt:''})):[],
+  pricing,availability:'unknown'};
+};
 export function createMobileMarketHandler(deps:Deps){return async(req:any,res:any)=>{
  res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');
  const send=(status:number,value:unknown)=>{res.statusCode=status;res.end(JSON.stringify(value));};
@@ -17,7 +33,11 @@ export function createMobileMarketHandler(deps:Deps){return async(req:any,res:an
    const target=new URL(path==='/catalogue'?'/api/platform/products':'/api/platform'+path,'https://internal.invalid');
    if(query)target.searchParams.set('search',query);if(branch)target.searchParams.set('branchId',branch);target.searchParams.set('pageSize','30');
    const result=await deps.publicRead(new Request(target));const payload=await result.json();if(!result.ok||!payload.success)return fail(503,'CATALOGUE_UNAVAILABLE');
-   return path==='/catalogue'?send(200,{items:(Array.isArray(payload.data?.items)?payload.data.items:[]).filter((p:any)=>p&&p.active===true).map(safeProduct),checkedAt:new Date().toISOString()}):send(200,{product:safeProduct(payload.data),checkedAt:new Date().toISOString()});
+   if(path==='/catalogue')return send(200,{items:(Array.isArray(payload.data?.items)?payload.data.items:[]).filter((p:any)=>p&&p.active===true).map(safeProduct),checkedAt:new Date().toISOString()});
+   // A direct lookup must not bypass the published-only catalogue restriction.
+   const product=payload.data;
+   if(!product||product.active!==true||String(product.id)!==path.slice('/products/'.length))return fail(404,'NOT_FOUND');
+   return send(200,{product:safeProduct(product),checkedAt:new Date().toISOString()});
   }
   const actor=await deps.actor(req);if(!actor)return fail(401,'SIGN_IN_REQUIRED');
   if(path==='/checkout'){if(actor.audience!=='customer')return fail(403,'FORBIDDEN');return deps.checkout?deps.checkout(req,res):fail(503,'PAYMENT_UNAVAILABLE');}
