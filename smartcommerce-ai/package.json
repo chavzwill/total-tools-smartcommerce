@@ -36,7 +36,7 @@
     "test:couriers-database": "node tests/courier-database-regression.mjs && node tests/courier-repository-regression.mjs && node tests/courier-private-database-regression.mjs && node tests/courier-delivery-database-regression.mjs && node tests/courier-dispatch-database-regression.mjs && node tests/payment-database-regression.mjs && node tests/courier-receipt-database-regression.mjs && node tests/courier-pos-authority-database-regression.mjs",
     "test:payments": "node tests/handypay-regression.mjs && node tests/payment-workflow-regression.mjs && node tests/payment-http-regression.mjs && node tests/payment-client-regression.mjs",
     "test:staff-pos-authority": "node tests/staff-pos-authority-regression.mjs && node tests/staff-pos-authority-api-regression.mjs",
-    "test:pos-commerce-sync": "node tests/pos-commerce-sync-contract-regression.mjs && node tests/pos-catalog-dependency-regression.mjs && node tests/pos-order-delivery-regression.mjs",
+    "test:pos-commerce-sync": "node tests/pos-commerce-sync-contract-regression.mjs && node tests/pos-catalog-dependency-regression.mjs && node tests/pos-order-delivery-regression.mjs && node tests/pos-oem-branch-runtime-regression.mjs",
     "test:pos-order-database": "node tests/pos-order-outbox-database-regression.mjs",
     "test:security-commercial-team": "node tests/security-commercial-team-regression.mjs",
     "test:security-commercial-member-enforcement": "node tests/security-commercial-member-enforcement-regression.mjs"
