@@ -25,7 +25,14 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-      - run: npm ci
+      # Mobile integration tests import the real sibling SmartCommerce API
+      # handlers. Their Node dependencies resolve from smartcommerce-ai,
+      # not the separate mobile workspace.
+      - name: Install SmartCommerce API test dependencies
+        working-directory: smartcommerce-ai
+        run: npm ci --no-audit --no-fund
+      - name: Install mobile workspace dependencies
+        run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run typecheck
       - run: npm run export --workspace @smartcommerce/customer
