@@ -13,6 +13,23 @@ async function loadModule(path) {
   return import(`data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`);
 }
 
+// The catalogue uses a least-privileged server-only credential, while order
+// delivery retains its independent POS write authorization.
+const runtimeConfig = await readFile(new URL("../src/integrations/totalToolsPlatformRuntime.ts", import.meta.url), "utf8");
+const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
+const orderDelivery = await readFile(new URL("../api/pos-order-delivery.ts", import.meta.url), "utf8");
+for (const source of [runtimeConfig, viteConfig]) {
+  assert.equal(source.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY"), true,
+    "read adapters prefer a separate least-privileged POS key");
+  assert.equal(source.indexOf("SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY") <
+    source.indexOf("SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY"), true,
+    "read-only credential must take precedence over legacy shared key");
+}
+assert.equal(orderDelivery.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY"), true,
+  "existing order worker keeps its independent write-capable integration key");
+assert.equal(orderDelivery.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY"), false,
+  "catalogue key must never authorize POS order delivery");
+
 const { createTotalToolsPosReadAdapter } = await loadModule("../src/integrations/totalToolsPosReadAdapter.ts");
 const { buildPartsFitmentIndex } = await loadModule("../src/lib/partsFitment.ts");
 const context = { providerId: "total-tools-pos", businessAccountId: "test-account", requestId: "test-request" };
@@ -116,4 +133,4 @@ assert.equal(fitment.models[0].parts[0].product, undefined, "cross-brand OEM col
 fitment = buildPartsFitmentIndex([part("4", "STIHL", undefined, "1135 160 5400")], references);
 assert.equal(fitment.models[0].parts[0].product, undefined, "SKU alone is not governed OEM identity");
 
-console.log("POS OEM mapping and branch inventory runtime regressions passed (17 checks).");
+console.log("POS OEM mapping and branch inventory runtime regressions passed (23 checks).");
