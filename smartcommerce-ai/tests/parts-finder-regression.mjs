@@ -25,7 +25,7 @@ const invariants = [
   [referenceCatalog.includes("These records do not create sellable products, prices, or stock claims"), "reference catalogue explicitly separates fitment facts from commerce authority"],
   [fitment.includes('if (!brand) return;'), "products without governed brand data are not invented into the parts hierarchy"],
   [fitment.includes("COMPATIBLE_MODEL_FIELDS") && fitment.includes("targetModels = compatibleModels.length"), "part fitment comes from explicit compatible model attributes"],
-  [fitment.includes('readFirst(product, PART_NUMBER_FIELDS) || product.sku'), "catalogued parts preserve OEM/manufacturer part numbers with SKU fallback for commerce identity"],
+  [fitment.includes("const explicitPartNumber = readFirst(product, PART_NUMBER_FIELDS)") && fitment.includes("const partNumber = explicitPartNumber || product.sku"), "catalogued parts preserve explicit OEM identity while retaining SKU fallback only inside model-scoped commerce identity"],
   [fitment.includes("PARENT_PART_FIELDS") && fitment.includes("buildPartTree"), "parent-part relationships support subpart hierarchy"],
   [fitment.includes('assembly: readFirst(product, ASSEMBLY_FIELDS) || "Other parts"'), "parts are grouped into governed assemblies without fabricating an assembly name"],
   [!fitment.includes("product.name.split") && !fitment.includes("product.sku.split"), "brand and model are not guessed from product name or SKU tokenization"],
