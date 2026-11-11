@@ -32,6 +32,43 @@ assert.equal(orderDelivery.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY"
 
 const { createTotalToolsPosReadAdapter } = await loadModule("../src/integrations/totalToolsPosReadAdapter.ts");
 const { buildPartsFitmentIndex } = await loadModule("../src/lib/partsFitment.ts");
+// A Vercel protection bypass is separate from POS authorization and must
+// never be forwarded to non-Vercel providers or to the browser.
+const protectedHeaders = [];
+const protectedAdapter = createTotalToolsPosReadAdapter({
+  baseUrl: "https://pos-system-rouge-ten.vercel.app",
+  apiKey: "test-catalogue-key",
+  deploymentProtectionBypass: "test-protection-secret",
+  fetchImpl: async (_url, init) => {
+    protectedHeaders.push(init.headers);
+    return { ok: true, json: async () => [] };
+  },
+});
+const protectedBranchResult = await protectedAdapter.listBranches({
+  providerId: "total-tools-pos", businessAccountId: "test-account", requestId: "test-request",
+});
+assert.equal(protectedBranchResult.success, true);
+assert.equal(protectedHeaders[0]["X-API-Key"], "test-catalogue-key");
+assert.equal(protectedHeaders[0]["X-Vercel-Protection-Bypass"], "test-protection-secret");
+const otherHeaders = [];
+const otherAdapter = createTotalToolsPosReadAdapter({
+  baseUrl: "https://private-pos.example.org",
+  apiKey: "test-catalogue-key",
+  deploymentProtectionBypass: "must-not-be-forwarded",
+  fetchImpl: async (_url, init) => {
+    otherHeaders.push(init.headers);
+    return { ok: true, json: async () => [] };
+  },
+});
+await otherAdapter.listBranches({
+  providerId: "total-tools-pos", businessAccountId: "test-account", requestId: "test-request",
+});
+assert.equal(otherHeaders[0]["X-Vercel-Protection-Bypass"], undefined,
+  "a POS protection bypass must not be leaked to an unrelated host");
+for (const source of [runtimeConfig, viteConfig]) {
+  assert.equal(source.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_VERCEL_BYPASS_SECRET"), true,
+    "the protection bypass is supplied only by server-side environment");
+}
 const context = { providerId: "total-tools-pos", businessAccountId: "test-account", requestId: "test-request" };
 
 function makeAdapter(payload) {
@@ -133,4 +170,4 @@ assert.equal(fitment.models[0].parts[0].product, undefined, "cross-brand OEM col
 fitment = buildPartsFitmentIndex([part("4", "STIHL", undefined, "1135 160 5400")], references);
 assert.equal(fitment.models[0].parts[0].product, undefined, "SKU alone is not governed OEM identity");
 
-console.log("POS OEM mapping and branch inventory runtime regressions passed (23 checks).");
+console.log("POS OEM mapping and branch inventory runtime regressions passed (29 checks).");
