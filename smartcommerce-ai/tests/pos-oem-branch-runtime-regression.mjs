@@ -80,6 +80,21 @@ const commerce = products.data.items[0];
 assert.equal(commerce.attributes.Brand, "STIHL");
 assert.equal(commerce.attributes["Manufacturer Part Number"], "1135 160 5400");
 assert.equal(commerce.attributes.Model, undefined, "the spare part's own model is not compatibility evidence");
+assert.equal(commerce.active, true, "published POS spare parts remain active");
+
+const { adapter: restrictedAdapter } = makeAdapter({
+  products: [
+    { id: "201", name: "Rental chainsaw", is_rental: 1, active: 1, online_available: 1, price: 500 },
+    { id: "202", name: "Service", is_service: 1, active: 1, online_available: 1, price: 250 },
+    { id: "203", name: "Hidden stock", active: 1, online_available: 0, price: 100 },
+  ],
+});
+const restricted = await restrictedAdapter.searchProducts(context, {});
+assert.equal(restricted.success, true);
+assert.equal(restricted.data.items[0].purchasable, false, "rental-only POS records cannot be purchased as ordinary products");
+assert.equal(restricted.data.items[0].rentable, true);
+assert.equal(restricted.data.items[1].purchasable, false, "POS service records cannot show normal retail purchase");
+assert.equal(restricted.data.items[2].active, false, "POS unpublished items must not be marked as active commerce products");
 
 const references = [{
   brand: "STIHL", equipmentType: "Chainsaws", model: "MS 362",
@@ -101,4 +116,4 @@ assert.equal(fitment.models[0].parts[0].product, undefined, "cross-brand OEM col
 fitment = buildPartsFitmentIndex([part("4", "STIHL", undefined, "1135 160 5400")], references);
 assert.equal(fitment.models[0].parts[0].product, undefined, "SKU alone is not governed OEM identity");
 
-console.log("POS OEM mapping and branch inventory runtime regressions passed (13 checks).");
+console.log("POS OEM mapping and branch inventory runtime regressions passed (17 checks).");
