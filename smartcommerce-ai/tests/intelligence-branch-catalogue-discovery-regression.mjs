@@ -6,6 +6,7 @@ const advisor = await readFile(new URL("../src/lib/advisor.ts", import.meta.url)
 const pages = await readFile(new URL("../src/pages/CatalogPages.tsx", import.meta.url), "utf8");
 const tile = await readFile(new URL("../src/components/demo/ProductTile.tsx", import.meta.url), "utf8");
 const types = await readFile(new URL("../src/types.ts", import.meta.url), "utf8");
+const posAdapter = await readFile(new URL("../src/integrations/totalToolsPosReadAdapter.ts", import.meta.url), "utf8");
 
 const invariants = [
   [loader.includes('api.get<Branch[]>("/platform/branches")'), "branch catalogue resolves the shopper branch against provider branch data"],
@@ -21,6 +22,8 @@ const invariants = [
   [advisor.includes("inventoryRecordsForBranch") && advisor.includes('records.filter((item) => String(item.branchId || "") === branchId)'), "Ask AI availability snapshots retain only exact requested-branch inventory records"],
   [!advisor.includes('records.find((item) => String(item.branchId || "") === branchId) || records[0]'), "Ask AI never substitutes the first unrelated inventory record for the selected branch"],
   [loader.includes('record?.metadata?.liveVerified !== false') && loader.includes('record?.metadata?.source !== "preview_catalogue"'), "preview/unverified inventory cannot masquerade as live catalogue stock"],
+  [posAdapter.includes('{ "OEM Part Number": manufacturerPartNumber }'), "provider OEM identity is preserved into CommerceProduct attributes for governed fitment matching"],
+  [loader.includes("Object.entries(product.attributes || {})"), "provider product attributes, including OEM identity, survive into UI product specs"],
   [loader.includes("availability not confirmed") && loader.includes("live stock not verified"), "failed and unverified inventory remain distinct from explicit out-of-stock"],
   [loader.includes('product.purchasable === false') && loader.includes('"Rental only"') && loader.includes('"Not available for purchase"'), "provider non-purchasable products cannot expose a normal purchase action"],
   [loader.includes('record.status === "out_of_stock"') && loader.includes("Out of stock at ${branchName}"), "verified provider out-of-stock creates a grounded catalogue purchase block"],
