@@ -179,6 +179,31 @@ export function buildPartsFitmentIndex(products: Product[], references: Referenc
     });
   });
 
+  // A governed reference fitment may be enriched by commerce data without
+  // forcing the POS to duplicate compatibility metadata. The join is exact
+  // and fail-closed: brand + explicit OEM/manufacturer part number must match,
+  // and exactly one commerce product may claim that identity.
+  const commercePartsByIdentity = new Map<string, Product[]>();
+  products.forEach((product) => {
+    const brand = readFirst(product, BRAND_FIELDS);
+    const partNumber = readFirst(product, PART_NUMBER_FIELDS);
+    if (!brand || !partNumber) return;
+    const key = `${normalize(brand)}::${normalize(partNumber)}`;
+    const matches = commercePartsByIdentity.get(key) || [];
+    matches.push(product);
+    commercePartsByIdentity.set(key, matches);
+  });
+
+  models.forEach((fitment) => {
+    fitment.parts.forEach((part, index) => {
+      if (part.product) return;
+      const key = `${normalize(fitment.brand)}::${normalize(part.partNumber)}`;
+      const matches = commercePartsByIdentity.get(key) || [];
+      if (matches.length !== 1) return;
+      fitment.parts[index] = { ...part, product: matches[0] };
+    });
+  });
+
   products.forEach((product) => {
     const brand = readFirst(product, BRAND_FIELDS);
     if (!brand) return;
