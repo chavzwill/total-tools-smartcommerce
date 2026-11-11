@@ -64,6 +64,8 @@ export const createConfiguredTotalToolsAdapter = (): PosAdapter => {
     apiKeyHeader:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY_HEADER?.trim() ||
       "X-API-Key",
+    deploymentProtectionBypass:
+      process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_VERCEL_BYPASS_SECRET?.trim() || undefined,
     defaultCurrency:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_CURRENCY?.trim() || "JMD",
     fetchImpl: createHardenedServerFetch({ timeoutMs: 7000, maxResponseBytes: 2_000_000 }),
