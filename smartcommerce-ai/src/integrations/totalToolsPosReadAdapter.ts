@@ -277,10 +277,17 @@ export function createTotalToolsPosReadAdapter(
     productId: string,
     branchId?: string
   ): InventoryAvailability => {
-    const onHand = numberValue(row, ["stock_qty", "quantity_on_hand", "qty_on_hand"]);
+    const onHand = numberValue(row, ["branch_stock_qty", "stock_qty", "quantity_on_hand", "qty_on_hand"]);
     const available = numberValue(row, ["available_qty", "quantity_available", "qty_available"]) ?? onHand;
+    const minimum = numberValue(row, ["branch_min_stock", "min_stock"]);
     let status: InventoryAvailability["status"] = "unknown";
-    if (available !== undefined) status = available > 0 ? "in_stock" : "out_of_stock";
+    if (available !== undefined) {
+      status = available <= 0
+        ? "out_of_stock"
+        : minimum !== undefined && available <= minimum
+          ? "low_stock"
+          : "in_stock";
+    }
     return {
       productId,
       branchId,
