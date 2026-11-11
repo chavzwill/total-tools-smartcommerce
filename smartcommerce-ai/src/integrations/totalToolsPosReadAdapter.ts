@@ -220,6 +220,15 @@ export function createTotalToolsPosReadAdapter(
     const price = numberValue(row, ["price", "selling_price", "sale_price", "unit_price"]);
     const imagePath = textValue(row, ["image_path", "image", "image_url"]);
     const categoryId = textValue(row, ["category_id", "categoryId"]);
+    const brand = textValue(row, ["brand", "brand_name", "manufacturer"]);
+    const modelNumber = textValue(row, ["model_number", "modelNumber"]);
+    const manufacturerPartNumber = textValue(row, [
+      "manufacturer_part_number",
+      "manufacturerPartNumber",
+      "oem_part_number",
+      "oemPartNumber",
+      "mpn",
+    ]);
     const explicitRentable = booleanValue(row, ["rentable", "is_rentable", "rental_enabled"]);
 
     return {
@@ -228,7 +237,7 @@ export function createTotalToolsPosReadAdapter(
       sku: textValue(row, ["sku", "item_code", "product_code", "code"]),
       barcode: textValue(row, ["barcode", "upc", "ean"]),
       name,
-      brand: textValue(row, ["brand", "manufacturer"]),
+      brand,
       categoryIds: categoryId ? [categoryId] : undefined,
       description: textValue(row, ["description", "long_description"]),
       images: imagePath
@@ -249,6 +258,9 @@ export function createTotalToolsPosReadAdapter(
       taxable: booleanValue(row, ["taxable", "is_taxable", "track_tax"]),
       active: booleanValue(row, ["is_active", "active"]) ?? true,
       attributes: {
+        ...(brand ? { Brand: brand } : {}),
+        ...(modelNumber ? { Model: modelNumber } : {}),
+        ...(manufacturerPartNumber ? { "Manufacturer Part Number": manufacturerPartNumber } : {}),
         ...(productType ? { productType } : {}),
         ...(numberValue(row, ["stock_qty"]) !== undefined
           ? { stockQuantity: numberValue(row, ["stock_qty"]) as number }
@@ -368,14 +380,13 @@ export function createTotalToolsPosReadAdapter(
     },
 
     async getInventoryAvailability(context, query: InventoryAvailabilityQuery) {
-      const result = await request<unknown>(context, "/api/products", {
-        branch_id: query.branchId,
-        search: query.productId,
-      });
-      if (!result.success) return result;
-      const row = rowsFromPayload(result.data).find((candidate) =>
-        textValue(candidate, ["id", "product_id", "productId"]) === query.productId
+      const result = await request<unknown>(
+        context,
+        `/api/products/${encodeURIComponent(query.productId)}`,
+        { branch_id: query.branchId }
       );
+      if (!result.success) return result;
+      const row = asRecord(result.data) || rowsFromPayload(result.data)[0];
       return row
         ? { ...result, data: [inventoryFromProduct(context, row, query.productId, query.branchId)] }
         : {
