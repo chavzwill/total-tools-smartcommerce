@@ -39,8 +39,6 @@ jobs:
           cache: npm
           cache-dependency-path: smartcommerce-ai/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Transport and route contract regressions
         run: npm run test:pos-commerce-sync
       - name: Real PostgreSQL concurrency and replay regressions
@@ -48,9 +46,10 @@ jobs:
         env:
           POS_TEST_DATABASE_URL: postgresql://postgres:local_test_only@127.0.0.1:5432/pos_sync_test
       - name: Create isolated courier test database
-        env:
-          PGPASSWORD: local_test_only
-        run: createdb -h 127.0.0.1 -U postgres courier_test
+        # Reuse the postgres:16 image already pulled for the service.
+        # Avoid apt repositories: intermittent runner DNS failures must not
+        # prevent the actual database regression tests from executing.
+        run: docker run --rm --network host -e PGPASSWORD=local_test_only postgres:16 createdb -h 127.0.0.1 -U postgres courier_test
       - name: Courier PostgreSQL governance and concurrency regressions
         run: npm run test:couriers-database
         env:
