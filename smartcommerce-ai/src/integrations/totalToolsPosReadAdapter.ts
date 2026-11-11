@@ -220,6 +220,17 @@ export function createTotalToolsPosReadAdapter(
     const price = numberValue(row, ["price", "selling_price", "sale_price", "unit_price"]);
     const imagePath = textValue(row, ["image_path", "image", "image_url"]);
     const categoryId = textValue(row, ["category_id", "categoryId"]);
+    const brand = textValue(row, ["brand", "brand_name", "manufacturer"]);
+    const modelNumber = textValue(row, ["model_number", "modelNumber"]);
+    const manufacturerPartNumber = textValue(row, [
+      "manufacturer_part_number",
+      "manufacturerPartNumber",
+      "oem_part_number",
+      "oemPartNumber",
+      "mpn",
+    ]);
+    const serviceFlag = booleanValue(row, ["is_service", "service"]);
+    const rentalFlag = booleanValue(row, ["is_rental", "rental"]);
     const explicitRentable = booleanValue(row, ["rentable", "is_rentable", "rental_enabled"]);
 
     return {
@@ -228,7 +239,7 @@ export function createTotalToolsPosReadAdapter(
       sku: textValue(row, ["sku", "item_code", "product_code", "code"]),
       barcode: textValue(row, ["barcode", "upc", "ean"]),
       name,
-      brand: textValue(row, ["brand", "manufacturer"]),
+      brand,
       categoryIds: categoryId ? [categoryId] : undefined,
       description: textValue(row, ["description", "long_description"]),
       images: imagePath
@@ -243,12 +254,20 @@ export function createTotalToolsPosReadAdapter(
       pricing: price !== undefined
         ? [{ currency, listPrice: price, taxInclusive: undefined }]
         : undefined,
-      purchasable: productType ? !["service"].includes(productType) : undefined,
-      rentable: explicitRentable ?? (productType === "rental" ? true : undefined),
+      // The POS exposes is_service / is_rental instead of product_type.
+      // Never offer a normal retail Add-to-Cart action for these records.
+      purchasable: serviceFlag === true || rentalFlag === true
+        ? false
+        : productType ? !["service", "rental"].includes(productType) : undefined,
+      rentable: explicitRentable ?? (rentalFlag === true || productType === "rental" ? true : undefined),
       repairable: booleanValue(row, ["repairable", "is_repairable"]),
       taxable: booleanValue(row, ["taxable", "is_taxable", "track_tax"]),
-      active: booleanValue(row, ["is_active", "active"]) ?? true,
+      active: (booleanValue(row, ["is_active", "active"]) ?? true) &&
+        (booleanValue(row, ["online_available", "onlineAvailable"]) ?? true),
       attributes: {
+        ...(brand ? { Brand: brand } : {}),
+        ...(modelNumber && !manufacturerPartNumber ? { Model: modelNumber } : {}),
+        ...(manufacturerPartNumber ? { "Manufacturer Part Number": manufacturerPartNumber } : {}),
         ...(productType ? { productType } : {}),
         ...(numberValue(row, ["stock_qty"]) !== undefined
           ? { stockQuantity: numberValue(row, ["stock_qty"]) as number }
@@ -265,10 +284,27 @@ export function createTotalToolsPosReadAdapter(
     productId: string,
     branchId?: string
   ): InventoryAvailability => {
-    const onHand = numberValue(row, ["stock_qty", "quantity_on_hand", "qty_on_hand"]);
-    const available = numberValue(row, ["available_qty", "quantity_available", "qty_available"]) ?? onHand;
+    // A branch-scoped request must never borrow aggregate or another branch's
+    // stock quantities. Older POS endpoints may return only global stock.
+    // That is an unknown branch result, not proof that this branch has stock.
+    const branchScoped = Boolean(branchId);
+    const onHand = branchScoped
+      ? numberValue(row, ["branch_stock_qty", "branchStockQty"])
+      : numberValue(row, ["stock_qty", "quantity_on_hand", "qty_on_hand"]);
+    const available = branchScoped
+      ? numberValue(row, ["branch_available_qty", "branchAvailableQty"]) ?? onHand
+      : numberValue(row, ["available_qty", "quantity_available", "qty_available"]) ?? onHand;
+    const minimum = branchScoped
+      ? numberValue(row, ["branch_min_stock", "branchMinStock"])
+      : numberValue(row, ["min_stock"]);
     let status: InventoryAvailability["status"] = "unknown";
-    if (available !== undefined) status = available > 0 ? "in_stock" : "out_of_stock";
+    if (available !== undefined) {
+      status = available <= 0
+        ? "out_of_stock"
+        : minimum !== undefined && available <= minimum
+          ? "low_stock"
+          : "in_stock";
+    }
     return {
       productId,
       branchId,
@@ -368,21 +404,39 @@ export function createTotalToolsPosReadAdapter(
     },
 
     async getInventoryAvailability(context, query: InventoryAvailabilityQuery) {
-      const result = await request<unknown>(context, "/api/products", {
-        branch_id: query.branchId,
-        search: query.productId,
-      });
-      if (!result.success) return result;
-      const row = rowsFromPayload(result.data).find((candidate) =>
-        textValue(candidate, ["id", "product_id", "productId"]) === query.productId
+      const result = await request<unknown>(
+        context,
+        `/api/products/${encodeURIComponent(query.productId)}`,
+        { branch_id: query.branchId }
       );
-      return row
-        ? { ...result, data: [inventoryFromProduct(context, row, query.productId, query.branchId)] }
-        : {
-            success: false,
-            error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
-            requestId: context.requestId,
-          };
+      if (!result.success) return result;
+      const envelope = asRecord(result.data);
+      const row = asRecord(envelope?.product) ||
+        asRecord(envelope?.data) ||
+        (envelope && textValue(envelope, ["id", "product_id", "productId"]) ? envelope : undefined) ||
+        rowsFromPayload(result.data)[0];
+      // Direct URL lookups are only trusted if the returned identity agrees.
+      // An ignored branch_id parameter must not let another branch's data through.
+      const responseProductId = row && textValue(row, ["id", "product_id", "productId"]);
+      if (!row || responseProductId !== query.productId) {
+        return {
+          success: false,
+          error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
+          requestId: context.requestId,
+        };
+      }
+      const responseBranchId = textValue(row, ["branch_id", "branchId"]);
+      if (query.branchId && responseBranchId && responseBranchId !== query.branchId) {
+        return {
+          success: false,
+          error: { code: "INVENTORY_BRANCH_MISMATCH", message: "POS returned inventory for a different branch." },
+          requestId: context.requestId,
+        };
+      }
+      return {
+        ...result,
+        data: [inventoryFromProduct(context, row, query.productId, query.branchId)],
+      };
     },
 
     listRentalAssets: async (_context: PosAdapterContext, _query?: RentalAssetQuery): Promise<PlatformApiResult<PlatformPage<RentalAsset>>> => unsupported("Rental asset listing"),

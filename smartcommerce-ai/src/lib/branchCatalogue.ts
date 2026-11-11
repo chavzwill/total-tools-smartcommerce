@@ -71,6 +71,11 @@ function stockText(records: InventoryAvailability[] | undefined, branchId?: stri
 
 function purchaseBlockedReason(product: CommerceProduct, records: InventoryAvailability[] | undefined, branchId?: string, branchName?: string) {
   if (product.purchasable === false) return product.rentable ? "Rental only" : "Not available for purchase";
+  const verifiedPrice = providerPrice(product, branchId);
+  // A catalog entry without a positive POS price must never expose an
+  // ordinary checkout action. The connected product card already labels
+  // zero/missing amounts as "Price unavailable".
+  if (!verifiedPrice || verifiedPrice.amount <= 0) return "Price unavailable";
   if (!branchId || !branchName) return undefined;
   const record = inventoryRecord(records, branchId);
   if (!record || !verifiedInventory(record)) return undefined;

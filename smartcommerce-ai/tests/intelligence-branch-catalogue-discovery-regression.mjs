@@ -23,6 +23,7 @@ const invariants = [
   [loader.includes('record?.metadata?.liveVerified !== false') && loader.includes('record?.metadata?.source !== "preview_catalogue"'), "preview/unverified inventory cannot masquerade as live catalogue stock"],
   [loader.includes("availability not confirmed") && loader.includes("live stock not verified"), "failed and unverified inventory remain distinct from explicit out-of-stock"],
   [loader.includes('product.purchasable === false') && loader.includes('"Rental only"') && loader.includes('"Not available for purchase"'), "provider non-purchasable products cannot expose a normal purchase action"],
+  [loader.includes("const verifiedPrice = providerPrice(product, branchId)") && loader.includes('verifiedPrice.amount <= 0') && loader.includes('return "Price unavailable"'), "connected products without a positive verified POS price cannot enter the shopping cart"],
   [loader.includes('record.status === "out_of_stock"') && loader.includes("Out of stock at ${branchName}"), "verified provider out-of-stock creates a grounded catalogue purchase block"],
   [types.includes("currency?: string") && types.includes("purchasable?: boolean") && types.includes("purchaseBlockedReason?: string"), "Product UI contract carries provider-grounded currency and purchase action state"],
   [tile.includes("product.currency || \"JMD\"") && tile.includes("Intl.NumberFormat"), "connected catalogue cards render the provider currency rather than assuming JMD"],

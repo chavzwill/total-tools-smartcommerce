@@ -53,7 +53,8 @@ const createConfiguredAdapter = (): PosAdapter => {
 
   return createTotalToolsPosReadAdapter({
     baseUrl,
-    apiKey: process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim() || undefined,
+    apiKey: process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY?.trim() ||
+      process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY?.trim() || undefined,
     apiKeyHeader:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY_HEADER?.trim() ||
       "X-API-Key",

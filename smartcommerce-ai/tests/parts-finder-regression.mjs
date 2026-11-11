@@ -11,6 +11,7 @@ const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url)
 const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
 const referenceCatalog = await readFile(new URL("../src/data/partsReferenceCatalog.ts", import.meta.url), "utf8");
 const productTile = await readFile(new URL("../src/components/demo/ProductTile.tsx", import.meta.url), "utf8");
+const totalToolsPosAdapter = await readFile(new URL("../src/integrations/totalToolsPosReadAdapter.ts", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
@@ -24,9 +25,16 @@ const invariants = [
   [fitment.includes('if (!brand) return;'), "products without governed brand data are not invented into the parts hierarchy"],
   [fitment.includes("COMPATIBLE_MODEL_FIELDS") && fitment.includes("targetModels = compatibleModels.length"), "part fitment comes from explicit compatible model attributes"],
   [fitment.includes('readFirst(product, PART_NUMBER_FIELDS) || product.sku'), "catalogued parts preserve OEM/manufacturer part numbers with SKU fallback for commerce identity"],
+  [fitment.includes("commercePartsByIdentity") && fitment.includes("matches.length !== 1"), "governed reference fitment enriches only from one exact brand plus OEM commerce identity"],
+  [fitment.includes('const key = \`${normalize(fitment.brand)}::${normalize(part.partNumber)}\`'), "reference-to-commerce joins require exact normalized brand and OEM part number"],
   [fitment.includes("PARENT_PART_FIELDS") && fitment.includes("buildPartTree"), "parent-part relationships support subpart hierarchy"],
   [fitment.includes('assembly: readFirst(product, ASSEMBLY_FIELDS) || "Other parts"'), "parts are grouped into governed assemblies without fabricating an assembly name"],
   [!fitment.includes("product.name.split") && !fitment.includes("product.sku.split"), "brand and model are not guessed from product name or SKU tokenization"],
+  [totalToolsPosAdapter.includes('"brand_name"') && totalToolsPosAdapter.includes('"Manufacturer Part Number"') && totalToolsPosAdapter.includes('"manufacturer_part_number"'), "Total Tools POS adapter carries brand and OEM identity into governed product specs"],
+  [totalToolsPosAdapter.includes('"model_number"') && totalToolsPosAdapter.includes('{ Model: modelNumber }'), "Total Tools POS adapter carries equipment model identity when supplied by POS"],
+  [totalToolsPosAdapter.includes("modelNumber && !manufacturerPartNumber"), "spare-part product model numbers are not treated as equipment compatibility"],
+  [totalToolsPosAdapter.includes('"branch_stock_qty"') && totalToolsPosAdapter.includes('"branch_min_stock"') && totalToolsPosAdapter.includes('"low_stock"'), "branch inventory status is derived from branch-specific quantity and minimum stock"],
+  [totalToolsPosAdapter.includes('/api/products/${encodeURIComponent(query.productId)}') && !totalToolsPosAdapter.includes("search: query.productId"), "branch inventory verification fetches the exact provider product ID instead of text-searching the ID"],
   [page.includes('from "../lib/branchCatalogue"') && page.includes("loadBranchCatalogue(branch)"), "parts finder uses the grounded branch catalogue adapter"],
   [page.includes("buildPartsFitmentIndex(products, referenceFitmentCatalog)") && page.includes("searchPartsFitment(index, query)"), "parts finder hierarchy and direct search share provider products plus governed reference fitment"],
   [page.includes("SmartCommerce will not infer or invent compatible parts"), "model empty state explicitly fails closed when spare-part fitment is missing"],

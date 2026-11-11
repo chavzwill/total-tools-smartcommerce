@@ -65,7 +65,8 @@ The receiving team must configure these on the SmartCommerce server/runtime.
 | Variable | Required for | Rules |
 | --- | --- | --- |
 | `SMARTCOMMERCE_TOTAL_TOOLS_POS_URL` | SmartCommerce -> POS reads and order delivery | HTTPS POS origin only; no embedded username/password |
-| `SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY` | SmartCommerce -> POS machine authentication | server-only |
+| `SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY` | dedicated POS catalogue and branch read requests | server-only; must match POS `SMARTCOMMERCE_READ_API_KEY`; never used for order delivery |
+| `SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY` | existing POS order delivery and other separately authorized integrations | server-only; retain required order scopes; used as legacy read fallback only if dedicated read key is not configured |
 | `SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY_HEADER` | optional custom key header | defaults to `X-API-Key` |
 | `SMARTCOMMERCE_TOTAL_TOOLS_POS_CURRENCY` | POS catalogue normalization | defaults to `JMD` |
 | `SMARTCOMMERCE_POS_SYNC_SECRET` | POS -> SmartCommerce HMAC event signing | same secret configured in POS; minimum 32 characters |
@@ -87,7 +88,8 @@ The POS needs the following integration configuration.
 | --- | --- |
 | `SMARTCOMMERCE_SYNC_URL` | exact SmartCommerce event endpoint, normally `https://<smartcommerce-host>/api/integrations/pos/v1/events` |
 | `SMARTCOMMERCE_POS_SYNC_SECRET` | same HMAC signing secret as SmartCommerce |
-| POS API-key storage | create a machine credential for SmartCommerce with only the scopes it requires |
+| `SMARTCOMMERCE_READ_API_KEY` | optional dedicated catalogue-only credential (at least 32 random characters); same value goes only in SmartCommerce's server-side `SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY` |
+| POS API-key storage | keep the separate existing order-delivery key with `orders:read` and `orders:write` scopes |
 
 The current POS sync publisher refuses non-HTTPS SmartCommerce endpoints and will not publish when the endpoint or signing secret is missing.
 
@@ -127,7 +129,11 @@ Additional customer/repair integrations may require:
 - `customers:read`
 - `repairs:read`
 
-Only grant scopes actually used.
+**November 2026 key separation:** Do not replace the existing `SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY` with the dedicated `SMARTCOMMERCE_READ_API_KEY`. The existing key is still used for order writes and other integrations. Instead, set `SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY` on the SmartCommerce server. The read adapter prefers it, while the order-delivery worker continues using the existing general key. If it is missing, the read adapter retains the legacy key for migration compatibility; do not treat that fallback as a least-privilege release.
+
+The dedicated POS read key can access exactly `GET /api/products`, `GET /api/products/:numeric-id`, `GET /api/categories`, and `GET /api/branches`. It cannot access product exports, movements, customer records, staff branch details, POS order endpoints, or employee-only routes. Product requests may use `search`, `branch_id`, `category`/`category_id`, `sku`, `barcode`, `page`, `limit`, and `online`. Other query keys are rejected.
+
+Only active online-published products and safe branch fields are returned through that key. The POS projects approved product fields instead of exposing raw cost, supplier, staffing, or internal rows.
 
 ## 3.2 POS -> SmartCommerce signed event authentication
 
@@ -1385,3 +1391,17 @@ The integration is complete only when all of the following are true:
 10. Security, replay, concurrency, failure and production smoke tests pass on the exact release commits.
 
 Until item 6 exists for a domain, the correct behavior is to remain blocked/fail-closed rather than simulate approval.
+
+
+## November 2026 OEM and branch-stock release acceptance
+
+Before setting the read credential in production, merge and deploy the paired changes in POS PR #158 and SmartCommerce PR #57; verify the manufacturer-part-number database migration was applied on POS. Use real published POS items, not fabricated production fixture records, to verify:
+
+1. A published product with explicit `brand_name` and `manufacturer_part_number` resolves to exactly one governed parts-finder reference. A duplicate OEM claim, unrelated brand or SKU-only match remains unlinked.
+2. `GET /api/products/:id?branch_id=A` returns `branch_stock_qty` and `branch_min_stock` for branch A; zero at A is **out of stock at A** even when other branches have stock.
+3. A missing or contradictory product/branch identity fails closed; global `available_qty` must not be substituted for the selected branch's stock.
+4. Verify the new read credential returns no `cost`, `supplier_id`, internal notes or branch employee fields. Attempt `GET /api/products/export`, `GET /api/products/movements`, `GET /api/branches/:id`, `POST /api/products`, and supplier-only query filters; they must be denied.
+5. Verify published retail items have a positive POS-backed price before enabling Add to Cart; non-purchasable service/rental records and unpublished products remain unavailable for normal retail checkout.
+6. With a separately scoped existing order credential, test one idempotent website order creation/reconciliation against an isolated acceptance environment. Do not claim live checkout readiness unless stock reservation and payment confirmation also pass.
+
+Both credentials remain server-side. Never publish API keys, real prices or customer data in CI logs. Until the paired live checks pass, display stock and price as unverified rather than guessing.
