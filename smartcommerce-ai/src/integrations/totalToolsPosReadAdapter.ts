@@ -33,6 +33,9 @@ export type TotalToolsPosReadAdapterOptions = {
   baseUrl: string;
   apiKey?: string;
   apiKeyHeader?: string;
+  // Server-only Vercel deployment-protection bypass for the trusted POS host.
+  // This is NOT the POS API key and never belongs in VITE_ variables.
+  deploymentProtectionBypass?: string;
   defaultCurrency?: string;
   fetchImpl?: typeof fetch;
 };
@@ -123,6 +126,7 @@ export function createTotalToolsPosReadAdapter(
   const requestFetch = options.fetchImpl ?? fetch;
   const apiKeyHeader = options.apiKeyHeader || "X-API-Key";
   const currency = options.defaultCurrency || "JMD";
+  const protectedVercelHost = new URL(baseUrl).hostname.toLowerCase().endsWith(".vercel.app");
 
   const request = async <T>(
     context: PosAdapterContext,
@@ -140,6 +144,9 @@ export function createTotalToolsPosReadAdapter(
         headers: {
           Accept: "application/json",
           ...(options.apiKey ? { [apiKeyHeader]: options.apiKey } : {}),
+          ...(protectedVercelHost && options.deploymentProtectionBypass
+            ? { "X-Vercel-Protection-Bypass": options.deploymentProtectionBypass }
+            : {}),
           ...(context.requestId ? { "X-Request-Id": context.requestId } : {}),
         },
       });

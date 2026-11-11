@@ -58,6 +58,8 @@ const createConfiguredAdapter = (): PosAdapter => {
     apiKeyHeader:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_API_KEY_HEADER?.trim() ||
       "X-API-Key",
+    deploymentProtectionBypass:
+      process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_VERCEL_BYPASS_SECRET?.trim() || undefined,
     defaultCurrency:
       process.env.SMARTCOMMERCE_TOTAL_TOOLS_POS_CURRENCY?.trim() || "JMD",
   });

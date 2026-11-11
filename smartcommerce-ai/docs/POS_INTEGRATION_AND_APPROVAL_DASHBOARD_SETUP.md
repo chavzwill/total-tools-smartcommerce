@@ -1405,3 +1405,18 @@ Before setting the read credential in production, merge and deploy the paired ch
 6. With a separately scoped existing order credential, test one idempotent website order creation/reconciliation against an isolated acceptance environment. Do not claim live checkout readiness unless stock reservation and payment confirmation also pass.
 
 Both credentials remain server-side. Never publish API keys, real prices or customer data in CI logs. Until the paired live checks pass, display stock and price as unverified rather than guessing.
+
+
+## Vercel-protected POS origin (November 2026)
+
+The deployed POS project uses Vercel Deployment Protection. **Do not disable it** or use an unprotected administrative endpoint to make catalogue requests work. Instead:
+
+1. In the POS Vercel project's Deployment Protection settings, generate a dedicated automation bypass token for the SmartCommerce server. Keep it distinct from all POS API credentials.
+2. Set that value only as `SMARTCOMMERCE_TOTAL_TOOLS_POS_VERCEL_BYPASS_SECRET` in the **SmartCommerce server** environment. The POS read adapter supplies it as `X-Vercel-Protection-Bypass` only when the configured POS HTTPS hostname ends in `.vercel.app`.
+3. Configure the POS project with `SMARTCOMMERCE_READ_API_KEY` (random, minimum 32 characters), and SmartCommerce with the same value in `SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY`. This is the **separate POS API authorization**, not the Vercel bypass.
+4. Set `SMARTCOMMERCE_TOTAL_TOOLS_POS_URL` to the verified POS production alias; configure stable `SMARTCOMMERCE_PROVIDER_ID` and `SMARTCOMMERCE_BUSINESS_ACCOUNT_ID`. Only after real product, branch, stock and pricing requests pass may the storefront switch its client-side `VITE_SMARTCOMMERCE_PROVIDER_ID` and `VITE_SMARTCOMMERCE_BUSINESS_ID` to connected mode.
+5. Rebuild/redeploy the two services after changing their runtime environments. Verify a read of actual active/published POS products and one branch's genuine stock, and confirm employee-only endpoints still reject the read credential.
+
+Both secrets must remain on the server. Never set either to a `VITE_` or `EXPO_PUBLIC_` variable, print them in logs, return them in API responses, or use the Vercel bypass as the POS API key. The bypass only clears infrastructure protection; the POS still enforces its own product-read scope.
+
+The read-adapter bypass does **not** authorize order delivery, employee operations, payments or other POS workflows. Those require their own scope checks and, where relevant, separate protected-origin transport wiring and acceptance tests.
