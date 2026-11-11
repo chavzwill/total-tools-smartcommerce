@@ -17,7 +17,7 @@ const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
   [fitment.includes("references: ReferenceFitmentModel[] = []"), "fitment index can merge governed reference relationships with commerce products"],
   [fitment.includes('part.product?.id || "reference"'), "reference-only parts have stable non-commerce identities"],
-  [fitment.includes("exact brand + explicit") && fitment.includes("normalize(candidate.partNumber) === normalize(explicitPartNumber)"), "exact brand plus explicit OEM number can enrich governed reference fitment without duplicating compatibility data"],
+  [fitment.includes("Exact brand + explicit") && fitment.includes("normalize(candidate.partNumber) === normalize(explicitPartNumber)"), "exact brand plus explicit OEM number can enrich governed reference fitment without duplicating compatibility data"],
   [fitment.includes("if (!explicitPartNumber) return;"), "global reference enrichment refuses SKU/name guessing when the POS lacks an explicit OEM identifier"],
   [referenceCatalog.includes('brand: "STIHL"') && referenceCatalog.includes('model: "MS 362"'), "initial reference catalogue publishes an explicit STIHL MS 362 hierarchy"],
   [referenceCatalog.includes('partNumber: "1135 160 5400"') && referenceCatalog.includes('assembly: "Chain Brake"'), "reference catalogue includes source-backed assembly and OEM part-number facts"],
