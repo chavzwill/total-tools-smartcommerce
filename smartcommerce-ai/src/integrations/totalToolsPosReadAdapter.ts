@@ -229,6 +229,8 @@ export function createTotalToolsPosReadAdapter(
       "oemPartNumber",
       "mpn",
     ]);
+    const serviceFlag = booleanValue(row, ["is_service", "service"]);
+    const rentalFlag = booleanValue(row, ["is_rental", "rental"]);
     const explicitRentable = booleanValue(row, ["rentable", "is_rentable", "rental_enabled"]);
 
     return {
@@ -252,11 +254,16 @@ export function createTotalToolsPosReadAdapter(
       pricing: price !== undefined
         ? [{ currency, listPrice: price, taxInclusive: undefined }]
         : undefined,
-      purchasable: productType ? !["service"].includes(productType) : undefined,
-      rentable: explicitRentable ?? (productType === "rental" ? true : undefined),
+      // The POS exposes is_service / is_rental instead of product_type.
+      // Never offer a normal retail Add-to-Cart action for these records.
+      purchasable: serviceFlag === true || rentalFlag === true
+        ? false
+        : productType ? !["service", "rental"].includes(productType) : undefined,
+      rentable: explicitRentable ?? (rentalFlag === true || productType === "rental" ? true : undefined),
       repairable: booleanValue(row, ["repairable", "is_repairable"]),
       taxable: booleanValue(row, ["taxable", "is_taxable", "track_tax"]),
-      active: booleanValue(row, ["is_active", "active"]) ?? true,
+      active: (booleanValue(row, ["is_active", "active"]) ?? true) &&
+        (booleanValue(row, ["online_available", "onlineAvailable"]) ?? true),
       attributes: {
         ...(brand ? { Brand: brand } : {}),
         ...(modelNumber && !manufacturerPartNumber ? { Model: modelNumber } : {}),
