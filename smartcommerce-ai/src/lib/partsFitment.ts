@@ -192,12 +192,38 @@ export function buildPartsFitmentIndex(products: Product[], references: Referenc
       const compatibleModels = readList(product, COMPATIBLE_MODEL_FIELDS);
       const explicitModel = readFirst(product, MODEL_FIELDS);
       const targetModels = compatibleModels.length ? compatibleModels : explicitModel ? [explicitModel] : [];
-      if (!targetModels.length) return;
+      const explicitPartNumber = readFirst(product, PART_NUMBER_FIELDS);
+      const partNumber = explicitPartNumber || product.sku;
+
+      const enrichReferenceMatch = (fitment: EquipmentModelFitment, candidate: FitmentPart) => ({
+        ...candidate,
+        product,
+        name: product.name || candidate.name,
+        partNumber: candidate.partNumber,
+        source: candidate.source,
+      });
+
+      // A POS product does not need to duplicate fitment knowledge that is
+      // already governed by the reference catalogue. Exact brand + explicit
+      // manufacturer/OEM part number is sufficient to attach commerce truth
+      // (SKU, price and branch stock) to every matching reference relation.
+      if (!targetModels.length) {
+        if (!explicitPartNumber) return;
+        models.forEach((fitment) => {
+          if (normalize(fitment.brand) !== normalize(brand)) return;
+          fitment.parts = fitment.parts.map((candidate) =>
+            normalize(candidate.partNumber) === normalize(explicitPartNumber)
+              ? enrichReferenceMatch(fitment, candidate)
+              : candidate
+          );
+        });
+        return;
+      }
 
       const part: FitmentPart = {
         product,
         name: product.name,
-        partNumber: readFirst(product, PART_NUMBER_FIELDS) || product.sku,
+        partNumber,
         parentPartNumber: readFirst(product, PARENT_PART_FIELDS) || undefined,
         assembly: readFirst(product, ASSEMBLY_FIELDS) || "Other parts",
         reference: readFirst(product, REFERENCE_FIELDS) || undefined,
@@ -205,21 +231,18 @@ export function buildPartsFitmentIndex(products: Product[], references: Referenc
 
       targetModels.forEach((model) => {
         const fitment = ensureModel(brand, equipmentType, model, variant);
-        const existingIndex = fitment.parts.findIndex(
-          (candidate) =>
-            normalize(candidate.partNumber) === normalize(part.partNumber) &&
-            normalize(candidate.assembly) === normalize(part.assembly)
-        );
-        if (existingIndex >= 0) {
-          const existing = fitment.parts[existingIndex];
-          fitment.parts[existingIndex] = {
-            ...existing,
-            ...part,
-            source: existing.source || part.source,
-          };
-        } else {
-          fitment.parts.push(part);
+        const matchingPartNumber = fitment.parts
+          .map((candidate, index) => ({ candidate, index }))
+          .filter(({ candidate }) => normalize(candidate.partNumber) === normalize(part.partNumber));
+
+        if (matchingPartNumber.length) {
+          matchingPartNumber.forEach(({ candidate, index }) => {
+            fitment.parts[index] = enrichReferenceMatch(fitment, candidate);
+          });
+          return;
         }
+
+        fitment.parts.push(part);
       });
       return;
     }

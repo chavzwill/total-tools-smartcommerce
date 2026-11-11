@@ -221,6 +221,14 @@ export function createTotalToolsPosReadAdapter(
     const imagePath = textValue(row, ["image_path", "image", "image_url"]);
     const categoryId = textValue(row, ["category_id", "categoryId"]);
     const explicitRentable = booleanValue(row, ["rentable", "is_rentable", "rental_enabled"]);
+    const manufacturerPartNumber = textValue(row, [
+      "manufacturer_part_number",
+      "manufacturerPartNumber",
+      "oem_part_number",
+      "oemPartNumber",
+      "mpn",
+    ]);
+    const modelNumber = textValue(row, ["model_number", "modelNumber"]);
 
     return {
       id,
@@ -228,7 +236,7 @@ export function createTotalToolsPosReadAdapter(
       sku: textValue(row, ["sku", "item_code", "product_code", "code"]),
       barcode: textValue(row, ["barcode", "upc", "ean"]),
       name,
-      brand: textValue(row, ["brand", "manufacturer"]),
+      brand: textValue(row, ["brand", "brand_name", "manufacturer"]),
       categoryIds: categoryId ? [categoryId] : undefined,
       description: textValue(row, ["description", "long_description"]),
       images: imagePath
@@ -250,6 +258,8 @@ export function createTotalToolsPosReadAdapter(
       active: booleanValue(row, ["is_active", "active"]) ?? true,
       attributes: {
         ...(productType ? { productType } : {}),
+        ...(manufacturerPartNumber ? { "OEM Part Number": manufacturerPartNumber } : {}),
+        ...(modelNumber ? { Model: modelNumber } : {}),
         ...(numberValue(row, ["stock_qty"]) !== undefined
           ? { stockQuantity: numberValue(row, ["stock_qty"]) as number }
           : {}),
@@ -368,21 +378,26 @@ export function createTotalToolsPosReadAdapter(
     },
 
     async getInventoryAvailability(context, query: InventoryAvailabilityQuery) {
-      const result = await request<unknown>(context, "/api/products", {
-        branch_id: query.branchId,
-        search: query.productId,
-      });
-      if (!result.success) return result;
-      const row = rowsFromPayload(result.data).find((candidate) =>
-        textValue(candidate, ["id", "product_id", "productId"]) === query.productId
+      const result = await request<unknown>(
+        context,
+        `/api/products/${encodeURIComponent(query.productId)}`,
+        { branch_id: query.branchId },
       );
-      return row
-        ? { ...result, data: [inventoryFromProduct(context, row, query.productId, query.branchId)] }
-        : {
-            success: false,
-            error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
-            requestId: context.requestId,
-          };
+      if (!result.success) return result;
+      const row = asRecord(result.data) || rowsFromPayload(result.data)[0];
+      if (!row) {
+        return {
+          success: false,
+          error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
+          requestId: context.requestId,
+        };
+      }
+      const branchStock = numberValue(row, ["branch_stock_qty"]);
+      const inventoryRow = branchStock === undefined ? row : { ...row, stock_qty: branchStock };
+      return {
+        ...result,
+        data: [inventoryFromProduct(context, inventoryRow, query.productId, query.branchId)],
+      };
     },
 
     listRentalAssets: async (_context: PosAdapterContext, _query?: RentalAssetQuery): Promise<PlatformApiResult<PlatformPage<RentalAsset>>> => unsupported("Rental asset listing"),
