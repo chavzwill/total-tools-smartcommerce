@@ -259,7 +259,7 @@ export function createTotalToolsPosReadAdapter(
       active: booleanValue(row, ["is_active", "active"]) ?? true,
       attributes: {
         ...(brand ? { Brand: brand } : {}),
-        ...(modelNumber ? { Model: modelNumber } : {}),
+        ...(modelNumber && !manufacturerPartNumber ? { Model: modelNumber } : {}),
         ...(manufacturerPartNumber ? { "Manufacturer Part Number": manufacturerPartNumber } : {}),
         ...(productType ? { productType } : {}),
         ...(numberValue(row, ["stock_qty"]) !== undefined
