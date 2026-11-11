@@ -277,9 +277,19 @@ export function createTotalToolsPosReadAdapter(
     productId: string,
     branchId?: string
   ): InventoryAvailability => {
-    const onHand = numberValue(row, ["branch_stock_qty", "stock_qty", "quantity_on_hand", "qty_on_hand"]);
-    const available = numberValue(row, ["available_qty", "quantity_available", "qty_available"]) ?? onHand;
-    const minimum = numberValue(row, ["branch_min_stock", "min_stock"]);
+    // A branch-scoped request must never borrow aggregate or another branch's
+    // stock quantities. Older POS endpoints may return only global stock.
+    // That is an unknown branch result, not proof that this branch has stock.
+    const branchScoped = Boolean(branchId);
+    const onHand = branchScoped
+      ? numberValue(row, ["branch_stock_qty", "branchStockQty"])
+      : numberValue(row, ["stock_qty", "quantity_on_hand", "qty_on_hand"]);
+    const available = branchScoped
+      ? numberValue(row, ["branch_available_qty", "branchAvailableQty"]) ?? onHand
+      : numberValue(row, ["available_qty", "quantity_available", "qty_available"]) ?? onHand;
+    const minimum = branchScoped
+      ? numberValue(row, ["branch_min_stock", "branchMinStock"])
+      : numberValue(row, ["min_stock"]);
     let status: InventoryAvailability["status"] = "unknown";
     if (available !== undefined) {
       status = available <= 0
@@ -393,14 +403,33 @@ export function createTotalToolsPosReadAdapter(
         { branch_id: query.branchId }
       );
       if (!result.success) return result;
-      const row = asRecord(result.data) || rowsFromPayload(result.data)[0];
-      return row
-        ? { ...result, data: [inventoryFromProduct(context, row, query.productId, query.branchId)] }
-        : {
-            success: false,
-            error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
-            requestId: context.requestId,
-          };
+      const envelope = asRecord(result.data);
+      const row = asRecord(envelope?.product) ||
+        asRecord(envelope?.data) ||
+        (envelope && textValue(envelope, ["id", "product_id", "productId"]) ? envelope : undefined) ||
+        rowsFromPayload(result.data)[0];
+      // Direct URL lookups are only trusted if the returned identity agrees.
+      // An ignored branch_id parameter must not let another branch's data through.
+      const responseProductId = row && textValue(row, ["id", "product_id", "productId"]);
+      if (!row || responseProductId !== query.productId) {
+        return {
+          success: false,
+          error: { code: "INVENTORY_PRODUCT_NOT_FOUND", message: `Product ${query.productId} was not returned for the requested branch.` },
+          requestId: context.requestId,
+        };
+      }
+      const responseBranchId = textValue(row, ["branch_id", "branchId"]);
+      if (query.branchId && responseBranchId && responseBranchId !== query.branchId) {
+        return {
+          success: false,
+          error: { code: "INVENTORY_BRANCH_MISMATCH", message: "POS returned inventory for a different branch." },
+          requestId: context.requestId,
+        };
+      }
+      return {
+        ...result,
+        data: [inventoryFromProduct(context, row, query.productId, query.branchId)],
+      };
     },
 
     listRentalAssets: async (_context: PosAdapterContext, _query?: RentalAssetQuery): Promise<PlatformApiResult<PlatformPage<RentalAsset>>> => unsupported("Rental asset listing"),
