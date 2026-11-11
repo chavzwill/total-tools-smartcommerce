@@ -11,12 +11,14 @@ const shell = await readFile(new URL("../src/styles/shell.css", import.meta.url)
 const partsStyles = await readFile(new URL("../src/styles/parts-finder.css", import.meta.url), "utf8");
 const referenceCatalog = await readFile(new URL("../src/data/partsReferenceCatalog.ts", import.meta.url), "utf8");
 const productTile = await readFile(new URL("../src/components/demo/ProductTile.tsx", import.meta.url), "utf8");
+const posAdapter = await readFile(new URL("../src/integrations/totalToolsPosReadAdapter.ts", import.meta.url), "utf8");
 
 const invariants = [
   [fitment.includes('const BRAND_FIELDS = ["Brand", "Manufacturer", "Make"]'), "fitment requires an explicit governed brand field"],
   [fitment.includes("references: ReferenceFitmentModel[] = []"), "fitment index can merge governed reference relationships with commerce products"],
   [fitment.includes('part.product?.id || "reference"'), "reference-only parts have stable non-commerce identities"],
-  [fitment.includes("existingIndex >= 0") && fitment.includes("source: existing.source || part.source"), "POS products can enrich a reference mapping without duplicating the part"],
+  [fitment.includes("exact brand + explicit") && fitment.includes("normalize(candidate.partNumber) === normalize(explicitPartNumber)"), "exact brand plus explicit OEM number can enrich governed reference fitment without duplicating compatibility data"],
+  [fitment.includes("if (!explicitPartNumber) return;"), "global reference enrichment refuses SKU/name guessing when the POS lacks an explicit OEM identifier"],
   [referenceCatalog.includes('brand: "STIHL"') && referenceCatalog.includes('model: "MS 362"'), "initial reference catalogue publishes an explicit STIHL MS 362 hierarchy"],
   [referenceCatalog.includes('partNumber: "1135 160 5400"') && referenceCatalog.includes('assembly: "Chain Brake"'), "reference catalogue includes source-backed assembly and OEM part-number facts"],
   [referenceCatalog.includes("ms362Sources.chainBrake") && referenceCatalog.includes("ca6d3d4b-20fb-4ce0-8293"), "reference parts retain exact per-assembly source provenance"],
@@ -33,6 +35,9 @@ const invariants = [
   [page.includes('import ProductTile from "../components/demo/ProductTile"') && page.includes("<ProductTile"), "POS-linked parts reuse the canonical SmartCommerce product card"],
   [productTile.includes("purchaseBlockedReason") && productTile.includes('product.stockStatus || "Availability unavailable"'), "mapped POS products inherit canonical purchase blocking and stock display"],
   [productTile.includes("formatConnectedPrice(product)") && productTile.includes('product.currency || "JMD"'), "mapped POS products inherit canonical provider currency formatting"],
+  [posAdapter.includes('"manufacturer_part_number"') && posAdapter.includes('{ "OEM Part Number": manufacturerPartNumber }'), "Total Tools POS adapter maps the governed manufacturer part number into fitment attributes"],
+  [posAdapter.includes('"brand_name"') && posAdapter.includes('brand: textValue'), "Total Tools POS adapter preserves POS brand identity for safe OEM matching"],
+  [posAdapter.includes('/api/products/${encodeURIComponent(query.productId)}') && posAdapter.includes('"branch_stock_qty"'), "branch inventory uses a direct product lookup and the POS branch-specific stock field"],
   [page.includes("POS match required") && page.includes("Reference only"), "reference-only fitment cannot be presented as sellable inventory"],
   [page.includes("Price and stock are unavailable until an exact provider match exists."), "reference-only parts fail closed on price and stock"],
   [page.includes("Search inventory") && page.includes("Ask AI"), "reference parts retain discovery actions without checkout authority"],
