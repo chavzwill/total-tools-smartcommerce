@@ -6,6 +6,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import ProductTile from "../components/demo/ProductTile";
 import Container from "../components/shared/Container";
 import { getProducts } from "../data/products";
 import { getCommerceDataMode } from "../data/providerMode";
@@ -20,7 +21,7 @@ import {
   type FitmentPartNode,
   type FitmentSearchHit,
 } from "../lib/partsFitment";
-import { routeHref } from "../lib/router";
+import { go, routeHref } from "../lib/router";
 import { getShoppingBranch } from "../lib/shoppingBranch";
 import type { Product } from "../types";
 
@@ -70,19 +71,6 @@ function initialQuery() {
   return hashParams().get("q") || "";
 }
 
-function money(product: Product) {
-  if (!(product.price > 0)) return "Price not supplied";
-  try {
-    return new Intl.NumberFormat("en-JM", {
-      style: "currency",
-      currency: product.currency || "JMD",
-      maximumFractionDigits: 0,
-    }).format(product.price);
-  } catch {
-    return `${product.currency || "JMD"} ${product.price.toLocaleString()}`;
-  }
-}
-
 function sameModel(fitment: EquipmentModelFitment, selection: Selection) {
   return (
     fitment.brand === selection.brand &&
@@ -95,73 +83,71 @@ function sameModel(fitment: EquipmentModelFitment, selection: Selection) {
 function PartTreeNode({
   node,
   depth,
-  onAdd,
+  actions,
 }: {
   node: FitmentPartNode;
   depth: number;
-  onAdd: (id: string) => void;
+  actions: Actions;
 }) {
   const product = node.part.product;
-  const blockedReason = product
-    ? product.purchaseBlockedReason || (product.purchasable === false ? "Not available for purchase" : "")
-    : "Reference part — availability not linked to POS";
-  const label = depth > 0 ? "Subpart" : node.part.assembly;
   const searchHref = routeHref(`/search?q=${encodeURIComponent(node.part.partNumber)}`);
+  const aiHref = routeHref(
+    `/assistant?prompt=${encodeURIComponent(
+      `Check Total Tools availability for part ${node.part.partNumber} ${node.part.name}`,
+    )}`,
+  );
 
   return (
-    <div className="sc-part-tree-node" data-depth={Math.min(depth, 3)}>
-      <article className={`sc-part-row ${product ? "" : "is-reference-only"}`}>
-        {product ? (
-          <a className="sc-part-row__image" href={routeHref(`/product/${product.id}`)} aria-label={`View ${product.name}`}>
-            <img src={product.image} alt="" loading="lazy" decoding="async" />
-          </a>
-        ) : (
-          <div className="sc-part-row__image sc-part-row__image--reference" aria-hidden="true">
-            <Wrench size={26} />
+    <div className="sc-part-result-tree" data-depth={Math.min(depth, 3)}>
+      <div className="sc-part-result-context">
+        <span>{depth > 0 ? "Subpart" : node.part.assembly}</span>
+        <strong>OEM {node.part.partNumber}</strong>
+        {node.part.reference ? <small>Ref {node.part.reference}</small> : null}
+      </div>
+
+      {product ? (
+        <ProductTile
+          product={product}
+          wished={actions.wishlist.includes(product.id)}
+          compared={actions.compared.includes(product.id)}
+          onWishlist={actions.onWishlist}
+          onCompare={actions.onCompare}
+          onAdd={actions.onAdd}
+        />
+      ) : (
+        <article className="demo-product-card sc-product-card sc-part-reference-card">
+          <div className="demo-product-card__image sc-part-reference-card__image">
+            <Wrench size={38} aria-hidden="true" />
+            <span>Reference only</span>
           </div>
-        )}
-        <div className="sc-part-row__body">
-          <div className="sc-part-row__eyebrow">
-            <span>{label}</span>
-            {node.part.reference ? <span>Ref {node.part.reference}</span> : null}
-            {!product ? <span>Reference catalog</span> : null}
+          <div className="demo-product-card__body">
+            <small className="sc-product-card__category">
+              {node.part.assembly}<span aria-hidden="true"> · </span><span>OEM {node.part.partNumber}</span>
+            </small>
+            <div className="sc-product-card__title"><h3>{node.part.name}</h3></div>
+            <p className="sc-product-card__spec">
+              Compatibility is governed, but this part is not yet linked to a sellable POS product.
+            </p>
+            <div className="sc-product-card__commerce">
+              <strong className="demo-price">POS match required</strong>
+              <p className="demo-stock">Price and stock are unavailable until an exact provider match exists.</p>
+            </div>
+            <button className="demo-add-button" type="button" onClick={() => go(searchHref)}>
+              <PackageSearch size={17} /> Search inventory
+            </button>
+            <div className="demo-card-tools" aria-label={`More actions for ${node.part.name}`}>
+              <a href={aiHref}><Sparkles size={15} /> Ask AI</a>
+              {node.part.source?.url ? (
+                <a href={node.part.source.url} target="_blank" rel="noreferrer">
+                  <Search size={15} /> Source
+                </a>
+              ) : <span aria-hidden="true" />}
+              <a href={searchHref}><PackageSearch size={15} /> Search</a>
+            </div>
           </div>
-          <h3>
-            {product ? <a href={routeHref(`/product/${product.id}`)}>{node.part.name}</a> : node.part.name}
-          </h3>
-          <p>
-            <strong>Part no.</strong> {node.part.partNumber}
-            {product ? <><span aria-hidden="true"> · </span><strong>SKU</strong> {product.sku}</> : null}
-          </p>
-          <small>
-            {product
-              ? product.stockStatus
-              : "Compatibility reference only · price and stock require a POS-linked product"}
-          </small>
-        </div>
-        <div className="sc-part-row__commerce">
-          {product ? (
-            <>
-              <strong>{money(product)}</strong>
-              <a href={routeHref(`/product/${product.id}`)}>View details</a>
-              <button
-                type="button"
-                disabled={Boolean(blockedReason)}
-                title={blockedReason || "Add this part to cart"}
-                onClick={() => { if (!blockedReason) onAdd(product.id); }}
-              >
-                {blockedReason ? "Unavailable" : "Add to cart"}
-              </button>
-            </>
-          ) : (
-            <>
-              <strong>Reference only</strong>
-              <a href={searchHref}>Search inventory</a>
-              <a href={routeHref(`/assistant?prompt=${encodeURIComponent(`Check Total Tools availability for part ${node.part.partNumber} ${node.part.name}`)}`)}>Ask AI</a>
-            </>
-          )}
-        </div>
-      </article>
+        </article>
+      )}
+
       {node.children.length ? (
         <div className="sc-part-tree-children" aria-label={`Subparts for ${node.part.name}`}>
           {node.children.map((child) => (
@@ -169,7 +155,7 @@ function PartTreeNode({
               key={`${child.part.product?.id || "reference"}:${child.part.partNumber}:${child.part.assembly}`}
               node={child}
               depth={depth + 1}
-              onAdd={onAdd}
+              actions={actions}
             />
           ))}
         </div>
@@ -250,6 +236,10 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
   );
   const partTree = useMemo(() => buildPartTree(visibleParts), [visibleParts]);
   const searchHits = useMemo(() => searchPartsFitment(index, query), [index, query]);
+  const linkedParts = useMemo(
+    () => visibleParts.filter((part) => Boolean(part.product)).length,
+    [visibleParts],
+  );
 
   useEffect(() => {
     if (!selection.brand) return;
@@ -331,7 +321,7 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
   };
 
   const renderEmptyCatalogue = () => (
-    <div className="demo-empty sc-parts-finder__empty">
+    <div className="demo-empty sc-results-empty">
       <Wrench size={28} aria-hidden="true" />
       <h2>No governed equipment-to-part relationships are published yet.</h2>
       <p>
@@ -345,28 +335,28 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
   );
 
   return (
-    <div className="demo-page sc-parts-finder">
-      <section className="demo-page-hero sc-parts-finder__hero">
+    <div className="demo-page sc-product-discovery sc-parts-finder">
+      <section className="demo-page-hero sc-product-discovery__hero">
         <Container>
           <span>SmartCommerce equipment & parts</span>
           <h1>Find the right part from the machine it belongs to.</h1>
           <p>
-            Choose a brand, equipment family, and exact model. SmartCommerce then narrows the catalogue to governed assemblies, parts, and subparts without guessing fitment.
+            Choose a brand, equipment family, and exact model. SmartCommerce narrows the catalogue to governed assemblies, parts, and subparts without guessing fitment.
           </p>
           <div className={`sc-data-mode ${connected ? "is-connected" : "is-preview"}`}>
             <span aria-hidden="true" />
             <strong>{connected ? "Connected provider mode" : "Catalogue preview mode"}</strong>
             <small>
               {connected
-                ? `Product price and ${branch === "Online" ? "catalogue" : `${branch} availability`} remain sourced through the configured provider path.`
-                : "Preview mode does not claim live price, stock, or equipment fitment that the provider has not supplied."}
+                ? `Price and ${branch === "Online" ? "catalogue availability" : `${branch} availability`} come from the configured provider path.`
+                : "Reference fitment can be explored in preview, but live price and branch stock are never inferred."}
             </small>
           </div>
         </Container>
       </section>
 
-      <Container size="wide" className="sc-parts-finder__workspace">
-        <div className="sc-parts-finder__search-row">
+      <Container size="wide" className="sc-product-discovery__workspace sc-parts-finder__workspace">
+        <div className="sc-product-discovery__search-row">
           <form role="search" onSubmit={submitSearch}>
             <Search size={20} aria-hidden="true" />
             <label className="tt-sr-only" htmlFor="parts-finder-search">Search equipment models or parts</label>
@@ -384,27 +374,27 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
           </a>
         </div>
 
-        <nav className="sc-parts-breadcrumbs" aria-label="Parts finder path">
-          <button type="button" className={!selection.brand ? "is-current" : undefined} onClick={resetToBrands}>Brands</button>
-          {selection.brand ? <><ChevronRight size={15} aria-hidden="true" /><button type="button" className={!selection.equipmentType ? "is-current" : undefined} onClick={() => chooseBrand(selection.brand)}>{selection.brand}</button></> : null}
-          {selection.equipmentType ? <><ChevronRight size={15} aria-hidden="true" /><button type="button" className={!selection.model ? "is-current" : undefined} onClick={() => chooseEquipmentType(selection.equipmentType)}>{selection.equipmentType}</button></> : null}
-          {selectedFitment ? <><ChevronRight size={15} aria-hidden="true" /><button type="button" className="is-current" onClick={() => chooseModel(selectedFitment)}>{selectedFitment.model}{selectedFitment.variant ? ` · ${selectedFitment.variant}` : ""}</button></> : null}
+        <nav className="sc-active-filters sc-parts-path" aria-label="Parts finder path">
+          <button type="button" className={!selection.brand ? "is-current" : undefined} onClick={resetToBrands}><span>Brands</span></button>
+          {selection.brand ? <button type="button" className={!selection.equipmentType ? "is-current" : undefined} onClick={() => chooseBrand(selection.brand)}><span>{selection.brand}</span></button> : null}
+          {selection.equipmentType ? <button type="button" className={!selection.model ? "is-current" : undefined} onClick={() => chooseEquipmentType(selection.equipmentType)}><span>{selection.equipmentType}</span></button> : null}
+          {selectedFitment ? <button type="button" className="is-current" onClick={() => chooseModel(selectedFitment)}><span>{selectedFitment.model}{selectedFitment.variant ? ` · ${selectedFitment.variant}` : ""}</span></button> : null}
         </nav>
 
         {status === "loading" ? (
-          <div className="demo-empty sc-parts-finder__empty"><PackageSearch size={28} aria-hidden="true" /><h2>Checking the connected catalogue…</h2><p>Loading provider products, fitment attributes, pricing, and your current branch context.</p></div>
+          <div className="demo-empty sc-results-empty"><PackageSearch size={28} aria-hidden="true" /><h2>Checking the connected catalogue…</h2><p>Loading provider products, fitment attributes, pricing, and your current branch context.</p></div>
         ) : status === "error" ? (
-          <div className="demo-empty sc-parts-finder__empty"><PackageSearch size={28} aria-hidden="true" /><h2>The parts catalogue could not be loaded.</h2><p>{loadError}</p><div><a href={routeHref("/products")}>Return to products</a><a href={routeHref("/assistant?prompt=Help%20me%20find%20a%20part")}>Ask AI for help</a></div></div>
+          <div className="demo-empty sc-results-empty"><PackageSearch size={28} aria-hidden="true" /><h2>The parts catalogue could not be loaded.</h2><p>{loadError}</p><div><a href={routeHref("/products")}>Return to products</a><a href={routeHref("/assistant?prompt=Help%20me%20find%20a%20part")}>Ask AI for help</a></div></div>
         ) : query ? (
-          <section className="sc-parts-search-results" aria-labelledby="parts-search-results-title">
-            <div className="sc-parts-section-heading">
+          <section className="sc-parts-step" aria-labelledby="parts-search-results-title">
+            <div className="sc-parts-step__heading">
               <div><span>Search</span><h2 id="parts-search-results-title">Matches for “{query}”</h2></div>
               <button type="button" onClick={() => { setQuery(""); setDraftQuery(""); }}>Clear search</button>
             </div>
             {searchHits.length ? (
-              <div className="sc-parts-search-results__grid">
+              <div className="sc-parts-option-grid">
                 {searchHits.map((hit) => (
-                  <button type="button" key={hit.key} onClick={() => chooseSearchHit(hit)}>
+                  <button type="button" className="sc-parts-option" key={hit.key} onClick={() => chooseSearchHit(hit)}>
                     <span>{hit.kind === "part" ? "Part" : "Equipment model"}</span>
                     <strong>{hit.label}</strong>
                     <small>{hit.detail}</small>
@@ -413,15 +403,15 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
                 ))}
               </div>
             ) : (
-              <div className="demo-empty sc-parts-finder__empty"><h2>No governed fitment match found.</h2><p>Try the brand or exact model number, OEM part number, SKU, assembly name, or a shorter search.</p></div>
+              <div className="demo-empty sc-results-empty"><h2>No governed fitment match found.</h2><p>Try the brand or exact model number, OEM part number, SKU, assembly name, or a shorter search.</p></div>
             )}
           </section>
         ) : !index.models.length ? renderEmptyCatalogue() : !selection.brand ? (
-          <section aria-labelledby="parts-brand-title">
-            <div className="sc-parts-section-heading"><div><span>Step 1</span><h2 id="parts-brand-title">Choose a brand</h2></div><p>{index.brands.length} brands with governed equipment or part relationships</p></div>
-            <div className="sc-parts-choice-grid">
+          <section className="sc-parts-step" aria-labelledby="parts-brand-title">
+            <div className="sc-parts-step__heading"><div><span>Step 1</span><h2 id="parts-brand-title">Choose a brand</h2></div><p>{index.brands.length} brands with governed equipment or part relationships</p></div>
+            <div className="sc-parts-option-grid">
               {index.brands.map((brand) => (
-                <button type="button" className="sc-parts-choice-card" key={brand.brand} onClick={() => chooseBrand(brand.brand)}>
+                <button type="button" className="sc-parts-option" key={brand.brand} onClick={() => chooseBrand(brand.brand)}>
                   <span>Brand</span>
                   <strong>{brand.brand}</strong>
                   <small>{brand.equipmentTypes} equipment {brand.equipmentTypes === 1 ? "family" : "families"} · {brand.models} {brand.models === 1 ? "model" : "models"} · {brand.parts} mapped {brand.parts === 1 ? "part" : "parts"}</small>
@@ -431,14 +421,14 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
             </div>
           </section>
         ) : !selection.equipmentType ? (
-          <section aria-labelledby="parts-type-title">
-            <div className="sc-parts-section-heading"><div><span>Step 2</span><h2 id="parts-type-title">Choose {selection.brand} equipment</h2></div><p>Select the machine family before narrowing to a model.</p></div>
-            <div className="sc-parts-choice-grid">
+          <section className="sc-parts-step" aria-labelledby="parts-type-title">
+            <div className="sc-parts-step__heading"><div><span>Step 2</span><h2 id="parts-type-title">Choose {selection.brand} equipment</h2></div><p>Select the machine family before narrowing to a model.</p></div>
+            <div className="sc-parts-option-grid">
               {equipmentTypes.map((equipmentType) => {
                 const models = selectedBrandModels.filter((item) => item.equipmentType === equipmentType);
                 const parts = new Set(models.flatMap((item) => item.parts.map((part) => `${part.partNumber}:${part.assembly}`)));
                 return (
-                  <button type="button" className="sc-parts-choice-card" key={equipmentType} onClick={() => chooseEquipmentType(equipmentType)}>
+                  <button type="button" className="sc-parts-option" key={equipmentType} onClick={() => chooseEquipmentType(equipmentType)}>
                     <span>Equipment</span>
                     <strong>{equipmentType}</strong>
                     <small>{models.length} {models.length === 1 ? "model" : "models"} · {parts.size} mapped {parts.size === 1 ? "part" : "parts"}</small>
@@ -449,15 +439,14 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
             </div>
           </section>
         ) : !selectedFitment ? (
-          <section aria-labelledby="parts-model-title">
-            <div className="sc-parts-section-heading"><div><span>Step 3</span><h2 id="parts-model-title">Choose the exact model</h2></div><p>{selection.brand} · {selection.equipmentType}</p></div>
-            <div className="sc-parts-model-grid">
+          <section className="sc-parts-step" aria-labelledby="parts-model-title">
+            <div className="sc-parts-step__heading"><div><span>Step 3</span><h2 id="parts-model-title">Choose the exact model</h2></div><p>{selection.brand} · {selection.equipmentType}</p></div>
+            <div className="sc-parts-option-grid">
               {selectedTypeModels.map((fitment) => (
-                <button type="button" className="sc-parts-model-card" key={fitment.key} onClick={() => chooseModel(fitment)}>
+                <button type="button" className="sc-parts-option" key={fitment.key} onClick={() => chooseModel(fitment)}>
                   <span>{fitment.machineProducts.length ? "Catalogued equipment" : "Fitment model"}</span>
                   <strong>{fitment.model}</strong>
-                  {fitment.variant ? <em>{fitment.variant}</em> : null}
-                  <small>{fitment.parts.length} mapped {fitment.parts.length === 1 ? "part" : "parts"} · {getAssemblies(fitment).length} {getAssemblies(fitment).length === 1 ? "assembly" : "assemblies"}</small>
+                  <small>{fitment.variant ? `${fitment.variant} · ` : ""}{fitment.parts.length} mapped {fitment.parts.length === 1 ? "part" : "parts"} · {getAssemblies(fitment).length} {getAssemblies(fitment).length === 1 ? "assembly" : "assemblies"}</small>
                   <ChevronRight size={18} aria-hidden="true" />
                 </button>
               ))}
@@ -465,48 +454,54 @@ export default function PartsFinderPage({ actions }: { actions: Actions }) {
           </section>
         ) : (
           <section className="sc-parts-model-workspace" aria-labelledby="parts-model-workspace-title">
-            <div className="sc-parts-model-summary">
+            <div className="sc-product-discovery__toolbar sc-parts-model-summary">
               <div>
-                <span>{selectedFitment.brand} · {selectedFitment.equipmentType}</span>
-                <h2 id="parts-model-workspace-title">{selectedFitment.model}{selectedFitment.variant ? ` · ${selectedFitment.variant}` : ""}</h2>
-                <p>{selectedFitment.parts.length} governed mapped {selectedFitment.parts.length === 1 ? "part" : "parts"} across {assemblies.length} {assemblies.length === 1 ? "assembly" : "assemblies"}. Reference-only parts remain non-purchasable until matched to POS inventory.</p>
+                <small>{selectedFitment.brand} · {selectedFitment.equipmentType}</small>
+                <strong id="parts-model-workspace-title">{selectedFitment.model}{selectedFitment.variant ? ` · ${selectedFitment.variant}` : ""}</strong>
               </div>
+              <span>{linkedParts} POS-linked · {selectedFitment.parts.length - linkedParts} reference-only</span>
               {selectedFitment.machineProducts[0] ? (
                 <a href={routeHref(`/product/${selectedFitment.machineProducts[0].id}`)}>View equipment</a>
               ) : null}
             </div>
 
             {selectedFitment.parts.length ? (
-              <div className="sc-parts-model-layout">
-                <aside className="sc-parts-assemblies" aria-label="Equipment assemblies">
-                  <strong>Assemblies</strong>
-                  <button type="button" className={!selection.assembly ? "is-active" : undefined} onClick={() => setSelection((current) => ({ ...current, assembly: "" }))}>
-                    <span>All parts</span><small>{selectedFitment.parts.length}</small>
-                  </button>
-                  {assemblies.map((assembly) => (
-                    <button type="button" className={selection.assembly === assembly.name ? "is-active" : undefined} key={assembly.name} onClick={() => setSelection((current) => ({ ...current, assembly: assembly.name }))}>
-                      <span>{assembly.name}</span><small>{assembly.count}</small>
+              <div className="sc-product-discovery__layout sc-parts-model-layout">
+                <aside className="sc-filter-panel sc-parts-assemblies" aria-label="Equipment assemblies">
+                  <div className="sc-filter-panel__title"><PackageSearch size={18} /><strong>Assemblies</strong></div>
+                  <div className="sc-parts-assembly-list">
+                    <button type="button" className={!selection.assembly ? "is-active" : undefined} onClick={() => setSelection((current) => ({ ...current, assembly: "" }))}>
+                      <span>All parts</span><small>{selectedFitment.parts.length}</small>
                     </button>
-                  ))}
+                    {assemblies.map((assembly) => (
+                      <button type="button" className={selection.assembly === assembly.name ? "is-active" : undefined} key={assembly.name} onClick={() => setSelection((current) => ({ ...current, assembly: assembly.name }))}>
+                        <span>{assembly.name}</span><small>{assembly.count}</small>
+                      </button>
+                    ))}
+                  </div>
                 </aside>
 
-                <div className="sc-parts-list">
-                  <div className="sc-parts-list__heading">
-                    <div><span>{selection.assembly || "All assemblies"}</span><h3>{visibleParts.length} {visibleParts.length === 1 ? "part" : "parts"}</h3></div>
-                    <small>Reference fitment may be shown for identification; price, stock, and cart actions appear only for POS-linked products.</small>
+                <div className="sc-product-discovery__results sc-parts-results">
+                  <div className="demo-results-bar sc-parts-results__heading">
+                    <div>
+                      <strong>{selection.assembly || "All assemblies"}</strong>
+                      <span>{visibleParts.length} {visibleParts.length === 1 ? "part" : "parts"} · POS-linked items show live provider stock</span>
+                    </div>
                   </div>
-                  {partTree.map((node) => (
-                    <PartTreeNode
-                      key={`${node.part.product?.id || "reference"}:${node.part.partNumber}:${node.part.assembly}`}
-                      node={node}
-                      depth={0}
-                      onAdd={actions.onAdd}
-                    />
-                  ))}
+                  <div className="demo-product-grid sc-parts-product-grid">
+                    {partTree.map((node) => (
+                      <PartTreeNode
+                        key={`${node.part.product?.id || "reference"}:${node.part.partNumber}:${node.part.assembly}`}
+                        node={node}
+                        depth={0}
+                        actions={actions}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="demo-empty sc-parts-finder__empty">
+              <div className="demo-empty sc-results-empty">
                 <Wrench size={28} aria-hidden="true" />
                 <h2>This model is governed, but its spare-part fitment has not been published yet.</h2>
                 <p>SmartCommerce will not infer or invent compatible parts. The relationship can be added through approved POS, manufacturer, or TT AI catalogue enrichment.</p>
