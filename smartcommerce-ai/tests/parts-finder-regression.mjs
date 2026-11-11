@@ -32,6 +32,7 @@ const invariants = [
   [!fitment.includes("product.name.split") && !fitment.includes("product.sku.split"), "brand and model are not guessed from product name or SKU tokenization"],
   [totalToolsPosAdapter.includes('"brand_name"') && totalToolsPosAdapter.includes('"Manufacturer Part Number"') && totalToolsPosAdapter.includes('"manufacturer_part_number"'), "Total Tools POS adapter carries brand and OEM identity into governed product specs"],
   [totalToolsPosAdapter.includes('"model_number"') && totalToolsPosAdapter.includes('{ Model: modelNumber }'), "Total Tools POS adapter carries equipment model identity when supplied by POS"],
+  [totalToolsPosAdapter.includes("modelNumber && !manufacturerPartNumber"), "spare-part product model numbers are not treated as equipment compatibility"],
   [totalToolsPosAdapter.includes('"branch_stock_qty"') && totalToolsPosAdapter.includes('"branch_min_stock"') && totalToolsPosAdapter.includes('"low_stock"'), "branch inventory status is derived from branch-specific quantity and minimum stock"],
   [totalToolsPosAdapter.includes('/api/products/${encodeURIComponent(query.productId)}') && !totalToolsPosAdapter.includes("search: query.productId"), "branch inventory verification fetches the exact provider product ID instead of text-searching the ID"],
   [page.includes('from "../lib/branchCatalogue"') && page.includes("loadBranchCatalogue(branch)"), "parts finder uses the grounded branch catalogue adapter"],
