@@ -150,6 +150,47 @@ assert.equal(restricted.data.items[0].rentable, true);
 assert.equal(restricted.data.items[1].purchasable, false, "POS service records cannot show normal retail purchase");
 assert.equal(restricted.data.items[2].active, false, "POS unpublished items must not be marked as active commerce products");
 
+// Direct POS detail reads must verify product identity; do not silently
+// substitute an unrelated record or search after an authorization failure.
+async function productDetailScenario(directPayload, directStatus = 200, searchPayload = []) {
+  const calls = [];
+  const adapter = createTotalToolsPosReadAdapter({
+    baseUrl: "https://pos.example.invalid",
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      calls.push(pathname);
+      return pathname === "/api/products/101"
+        ? {ok: directStatus === 200, status: directStatus, statusText: "POS response", json: async () => directPayload}
+        : {ok: true, status: 200, json: async () => searchPayload};
+    },
+  });
+  return {result: await adapter.getProductById(context, "101"), calls};
+}
+let detail = await productDetailScenario({id: "101", name: "Brake"});
+assert.equal(detail.result.success, true);
+assert.equal(detail.result.data.id, "101");
+assert.deepEqual(detail.calls, ["/api/products/101"]);
+detail = await productDetailScenario({product: {id: "101", name: "Brake"}});
+assert.equal(detail.result.success, true, "wrapped exact POS product is recognized");
+detail = await productDetailScenario({id: "999", name: "Wrong part"});
+assert.equal(detail.result.success, false);
+assert.equal(detail.result.error.code, "PRODUCT_ID_MISMATCH");
+assert.deepEqual(detail.calls, ["/api/products/101"], "mismatched direct lookup cannot trigger fallback search");
+detail = await productDetailScenario({error: "Forbidden"}, 403);
+assert.equal(detail.result.success, false);
+assert.equal(detail.result.error.code, "TOTAL_TOOLS_POS_HTTP_403");
+assert.deepEqual(detail.calls, ["/api/products/101"], "authorization denial must not retry through search");
+detail = await productDetailScenario({error: "Not found"}, 404, [
+  {id: "999", name: "Unrelated result"},
+  {id: "101", name: "Exact fallback"},
+]);
+assert.equal(detail.result.success, true, "404 permits legacy exact-ID fallback");
+assert.equal(detail.result.data.id, "101");
+assert.deepEqual(detail.calls, ["/api/products/101", "/api/products"]);
+detail = await productDetailScenario({error: "Not found"}, 404, [{id: "999", name: "Wrong"}]);
+assert.equal(detail.result.success, false, "fuzzy matches cannot impersonate the requested product");
+assert.equal(detail.result.error.code, "PRODUCT_NOT_FOUND");
+
 const references = [{
   brand: "STIHL", equipmentType: "Chainsaws", model: "MS 362",
   parts: [{ name: "Chain brake", partNumber: "1135 160 5400", assembly: "Chain Brake" }],
@@ -170,4 +211,4 @@ assert.equal(fitment.models[0].parts[0].product, undefined, "cross-brand OEM col
 fitment = buildPartsFitmentIndex([part("4", "STIHL", undefined, "1135 160 5400")], references);
 assert.equal(fitment.models[0].parts[0].product, undefined, "SKU alone is not governed OEM identity");
 
-console.log("POS OEM mapping and branch inventory runtime regressions passed (29 checks).");
+console.log("POS OEM mapping and branch inventory runtime regressions passed (41 checks).");
