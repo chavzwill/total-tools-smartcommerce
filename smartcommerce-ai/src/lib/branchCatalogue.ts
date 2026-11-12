@@ -10,6 +10,7 @@ import type {
 } from "../platform";
 import type { Category, Product } from "../types";
 import type { ShoppingBranch } from "./shoppingBranch";
+import { availabilityFromPosCatalogueSnapshot } from "./posBranchInventorySnapshot";
 
 const api = createApiClient();
 const INVENTORY_CONCURRENCY = 8;
@@ -173,6 +174,11 @@ export async function loadBranchCatalogue(branch: ShoppingBranch): Promise<Branc
   const categoryMap = new Map(categoryItems.map((category) => [String(category.id), category]));
   const inventory = branchId
     ? await mapWithConcurrency(productResult.data.items, INVENTORY_CONCURRENCY, async (product) => {
+        // Current POS read-only projections include branch on-hand and minimum
+        // quantities, so most items need no extra network request. Only
+        // providers lacking explicit, matching branch evidence fall back.
+        const snapshot = availabilityFromPosCatalogueSnapshot(product, branchId);
+        if (snapshot) return snapshot;
         const result = await api.get<InventoryAvailability[]>(
           `/platform/inventory/availability?productId=${encodeURIComponent(String(product.id))}&branchId=${encodeURIComponent(branchId)}&quantity=1`,
         );
