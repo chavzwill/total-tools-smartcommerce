@@ -390,11 +390,33 @@ export function createTotalToolsPosReadAdapter(
     async getProductById(context, productId: PlatformEntityId) {
       const direct = await request<unknown>(context, `/api/products/${encodeURIComponent(productId)}`);
       if (direct.success) {
-        const row = asRecord(direct.data) || rowsFromPayload(direct.data)[0];
-        const product = row ? mapProduct(context, row) : undefined;
+        const envelope = asRecord(direct.data);
+        const row = asRecord(envelope?.product) ||
+          asRecord(envelope?.data) ||
+          (envelope && textValue(envelope, ["id", "product_id", "productId"]) ? envelope : undefined) ||
+          rowsFromPayload(direct.data)[0];
+        // URL identity is authoritative. A valid-looking but mismatched product
+        // must never be returned as another product's catalogue detail.
+        if (!row || textValue(row, ["id", "product_id", "productId"]) !== productId) {
+          return {
+            success: false,
+            error: { code: "PRODUCT_ID_MISMATCH", message: "POS returned an unverified product identity." },
+            requestId: context.requestId,
+          };
+        }
+        const product = mapProduct(context, row);
         if (product) return { ...direct, data: product };
+        return {
+          success: false,
+          error: { code: "INVALID_PRODUCT_RESPONSE", message: "POS returned an incomplete product." },
+          requestId: context.requestId,
+        };
       }
 
+      // Do not turn a POS authorization, rate-limit or network failure into a
+      // second fuzzy search. Only a genuine not-found can use the exact-ID
+      // compatibility lookup below.
+      if (direct.error.code !== "TOTAL_TOOLS_POS_HTTP_404") return direct;
       const fallback = await request<unknown>(context, "/api/products", { search: productId });
       if (!fallback.success) return fallback;
       const row = rowsFromPayload(fallback.data).find((candidate) =>
