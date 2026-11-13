@@ -32,6 +32,7 @@ assert.equal(orderDelivery.includes("SMARTCOMMERCE_TOTAL_TOOLS_POS_READ_API_KEY"
 
 const { createTotalToolsPosReadAdapter } = await loadModule("../src/integrations/totalToolsPosReadAdapter.ts");
 const { buildPartsFitmentIndex } = await loadModule("../src/lib/partsFitment.ts");
+const { availabilityFromPosCatalogueSnapshot } = await loadModule("../src/lib/posBranchInventorySnapshot.ts");
 // A Vercel protection bypass is separate from POS authorization and must
 // never be forwarded to non-Vercel providers or to the browser.
 const protectedHeaders = [];
@@ -150,6 +151,47 @@ assert.equal(restricted.data.items[0].rentable, true);
 assert.equal(restricted.data.items[1].purchasable, false, "POS service records cannot show normal retail purchase");
 assert.equal(restricted.data.items[2].active, false, "POS unpublished items must not be marked as active commerce products");
 
+// Reuse verified branch stock from one POS catalogue query rather than
+// sending a separate GET /api/products/:id for every part and search result.
+const {adapter: batchAdapter, calls: batchCalls} = makeAdapter({
+  products: [
+    {id: "101", name: "Chain brake", active: 1, online_available: 1,
+      price: 250, branch_id: "branch-A", branch_stock_qty: 0, branch_min_stock: 3, stock_qty: 35},
+    {id: "102", name: "Saw chain", active: 1, online_available: 1,
+      price: 150, branch_id: "branch-A", branch_stock_qty: 2, branch_min_stock: 3, stock_qty: 70},
+    {id: "103", name: "Clutch", active: 1, online_available: 1,
+      price: 500, branch_id: "branch-A", branch_stock_qty: 9, branch_min_stock: 3, stock_qty: 9},
+  ],
+});
+const batch = await batchAdapter.searchProducts(context, {branchId: "branch-A"});
+assert.equal(batch.success, true);
+assert.equal(batchCalls.length, 1, "one catalog request must support all branch stock snapshots");
+assert.equal(new URL(batchCalls[0]).searchParams.get("branch_id"), "branch-A");
+const statuses = batch.data.items.map(item => availabilityFromPosCatalogueSnapshot(item, "branch-A")?.[0]);
+assert.deepEqual(statuses.map(v => v?.status), ["out_of_stock", "low_stock", "in_stock"]);
+assert.deepEqual(statuses.map(v => v?.quantityAvailable), [0, 2, 9]);
+assert.equal(statuses[0].metadata.liveVerified, true);
+assert.equal(availabilityFromPosCatalogueSnapshot(batch.data.items[0], "branch-B"), undefined,
+  "requesting a different branch must never reuse stock from branch-A");
+const globalStockOnly = await makeAdapter({
+  products: [{id: "101", name: "Brake", active: 1, branch_id: "branch-A", stock_qty: 35}],
+}).adapter.searchProducts(context, {branchId: "branch-A"});
+assert.equal(globalStockOnly.success, true);
+assert.equal(availabilityFromPosCatalogueSnapshot(globalStockOnly.data.items[0], "branch-A"), undefined,
+  "global stock without explicit branch quantity must not be marked verified");
+const mismatchedStock = await makeAdapter({
+  products: [{id: "101", name: "Brake", active: 1, branch_id: "branch-B", branch_stock_qty: 12, stock_qty: 35}],
+}).adapter.searchProducts(context, {branchId: "branch-A"});
+assert.equal(availabilityFromPosCatalogueSnapshot(mismatchedStock.data.items[0], "branch-A"), undefined,
+  "wrong branch response cannot be used to verify availability");
+const unscopedBatch = await batchAdapter.searchProducts(context, {});
+assert.equal(unscopedBatch.success, true);
+assert.equal(availabilityFromPosCatalogueSnapshot(unscopedBatch.data.items[0], "branch-A"), undefined,
+  "unscoped listing must not carry verified branch evidence");
+const catalogueSource = await readFile(new URL("../src/lib/branchCatalogue.ts", import.meta.url), "utf8");
+assert.equal(catalogueSource.includes("availabilityFromPosCatalogueSnapshot(product, branchId)"), true,
+  "the actual native catalog loader consumes POS stock snapshots before the fallback request");
+
 // Direct POS detail reads must verify product identity; do not silently
 // substitute an unrelated record or search after an authorization failure.
 async function productDetailScenario(directPayload, directStatus = 200, searchPayload = []) {
@@ -211,4 +253,4 @@ assert.equal(fitment.models[0].parts[0].product, undefined, "cross-brand OEM col
 fitment = buildPartsFitmentIndex([part("4", "STIHL", undefined, "1135 160 5400")], references);
 assert.equal(fitment.models[0].parts[0].product, undefined, "SKU alone is not governed OEM identity");
 
-console.log("POS OEM mapping and branch inventory runtime regressions passed (41 checks).");
+console.log("POS OEM mapping and branch inventory runtime regressions passed.");

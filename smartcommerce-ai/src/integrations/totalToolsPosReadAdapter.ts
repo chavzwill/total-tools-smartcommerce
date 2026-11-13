@@ -218,7 +218,7 @@ export function createTotalToolsPosReadAdapter(
     };
   };
 
-  const mapProduct = (context: PosAdapterContext, row: JsonRecord): CommerceProduct | undefined => {
+  const mapProduct = (context: PosAdapterContext, row: JsonRecord, expectedBranchId?: string): CommerceProduct | undefined => {
     const id = textValue(row, ["id", "product_id", "productId"]);
     const name = textValue(row, ["name", "product_name", "productName", "description"]);
     if (!id || !name) return undefined;
@@ -239,6 +239,14 @@ export function createTotalToolsPosReadAdapter(
     const serviceFlag = booleanValue(row, ["is_service", "service"]);
     const rentalFlag = booleanValue(row, ["is_rental", "rental"]);
     const explicitRentable = booleanValue(row, ["rentable", "is_rentable", "rental_enabled"]);
+    // The POS's published catalogue now carries explicit branch fields.
+    // Do not treat global stock_qty as a branch snapshot. Require a matching
+    // branch ID from the trusted POS response, including for zero quantity.
+    const returnedBranchId = textValue(row, ["branch_id", "branchId"]);
+    const branchQuantity = numberValue(row, ["branch_stock_qty", "branchStockQty"]);
+    const branchMinimum = numberValue(row, ["branch_min_stock", "branchMinStock"]);
+    const branchStockVerified = Boolean(expectedBranchId &&
+      returnedBranchId === expectedBranchId && branchQuantity !== undefined);
 
     return {
       id,
@@ -281,7 +289,16 @@ export function createTotalToolsPosReadAdapter(
           : {}),
       },
       externalRefs: [{ providerId: context.providerId, externalId: id, externalType: "product" }],
-      metadata: { source: "total-tools-pos" },
+      metadata: {
+        source: "total-tools-pos",
+        ...(branchStockVerified
+          ? {
+              branchStockId: expectedBranchId as string,
+              branchStockQty: branchQuantity as number,
+              ...(branchMinimum !== undefined ? { branchMinStock: branchMinimum } : {}),
+            }
+          : {}),
+      },
     };
   };
 
@@ -383,7 +400,7 @@ export function createTotalToolsPosReadAdapter(
       });
       if (!result.success) return result;
       const rows = rowsFromPayload(result.data);
-      const items = rows.map((row) => mapProduct(context, row)).filter(Boolean) as CommerceProduct[];
+      const items = rows.map((row) => mapProduct(context, row, query?.branchId)).filter(Boolean) as CommerceProduct[];
       return { ...result, data: pageFromRows(items, result.data) };
     },
 
