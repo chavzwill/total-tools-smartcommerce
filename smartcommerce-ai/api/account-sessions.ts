@@ -85,6 +85,9 @@ export default async function handler(request:any,response:any) {
     }
     if (action === "revoke_others") {
       const rows=await sql()`UPDATE customer_sessions SET revoked_at=NOW() WHERE customer_id=${current.customer_id} AND id<>${current.id} AND revoked_at IS NULL AND expires_at>NOW() RETURNING id` as Array<{id:string}>;
+      if (process.env.SMARTCOMMERCE_MOBILE_AUTH_ENABLED === 'true') {
+        await sql()`SELECT mobile_revoke_account_sessions(${current.customer_id},${current.id})`;
+      }
       await recordSecurityEvent({request,eventType:"other_sessions_revoked",eventStatus:"success",riskLevel:"medium",customerId:current.customer_id,sessionId:current.id,metadata:{count:rows.length}});
       return send(response,200,{ok:true,revoked:rows.length});
     }

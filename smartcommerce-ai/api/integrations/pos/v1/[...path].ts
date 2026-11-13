@@ -1,3 +1,5 @@
+import {createPosDriverHandler} from '../../../../src/server/mobile/posDriverDecision.js';
+import {applyPosDriverDecision} from '../../../../src/server/mobile/posDriverRepository.js';
 import { timingSafeEqual, createHmac } from "node:crypto";
 import { applyPosCommerceSyncEvent } from "../../../../src/server/posCommerceSyncRepository.js";
 import {
@@ -105,9 +107,12 @@ function requestPath(request: any) {
   catch { return "/"; }
 }
 
+const driverDecisions=createPosDriverHandler({enabled:()=>process.env.SMARTCOMMERCE_POS_DRIVER_SYNC_ENABLED==='true',secret:()=>process.env.SMARTCOMMERCE_POS_DRIVER_SYNC_SECRET?.trim()||'',apply:applyPosDriverDecision});
+
 export default async function handler(request: any, response: any) {
   const method = String(request.method || "GET").toUpperCase();
   const path = requestPath(request);
+  if (path === "/api/integrations/pos/v1/courier-decisions") return driverDecisions(request,response);
   if (path !== "/api/integrations/pos/v1/events") {
     return send(response, 404, { error: { code: "POS_SYNC_ROUTE_NOT_FOUND", message: "That POS synchronization endpoint does not exist." } });
   }
@@ -169,3 +174,5 @@ export default async function handler(request: any, response: any) {
     return send(response, 503, { error: { code: "POS_SYNC_UNAVAILABLE", message: "POS synchronization is temporarily unavailable. The sender may retry safely.", retryable: true } });
   }
 }
+
+export const config={api:{bodyParser:false}};

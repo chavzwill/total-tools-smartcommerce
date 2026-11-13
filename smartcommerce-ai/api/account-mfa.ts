@@ -14,12 +14,21 @@ async function body(req:AsyncIterable<unknown>){const c:Buffer[]=[];let n=0;for 
 function send(res:any,s:number,p:unknown){res.statusCode=s;res.end(JSON.stringify(p));}
 function encryptionKey(){const secret=process.env.SMARTCOMMERCE_MFA_ENCRYPTION_KEY;if(!secret||secret.length<32)throw new Error("MFA_ENCRYPTION_NOT_CONFIGURED");return createHash("sha256").update(secret).digest();}
 function encryptSecret(secret:string){const iv=randomBytes(12),cipher=createCipheriv("aes-256-gcm",encryptionKey(),iv);const ct=Buffer.concat([cipher.update(secret,"utf8"),cipher.final()]);const tag=cipher.getAuthTag();return `v1.${iv.toString("base64url")}.${tag.toString("base64url")}.${ct.toString("base64url")}`;}
-function decryptSecret(value:string){const [v,ivS,tagS,ctS]=value.split(".");if(v!=="v1"||!ivS||!tagS||!ctS)throw new Error("MFA_SECRET_INVALID");const d=createDecipheriv("aes-256-gcm",encryptionKey(),Buffer.from(ivS,"base64url"));d.setAuthTag(Buffer.from(tagS,"base64url"));return Buffer.concat([d.update(Buffer.from(ctS,"base64url")),d.final()]).toString("utf8");}
+export function decryptSecret(value:string){const [v,ivS,tagS,ctS]=value.split(".");if(v!=="v1"||!ivS||!tagS||!ctS)throw new Error("MFA_SECRET_INVALID");const d=createDecipheriv("aes-256-gcm",encryptionKey(),Buffer.from(ivS,"base64url"));d.setAuthTag(Buffer.from(tagS,"base64url"));return Buffer.concat([d.update(Buffer.from(ctS,"base64url")),d.final()]).toString("utf8");}
 const B32="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 function b32encode(bytes:Buffer){let bits=0,val=0,out="";for(const byte of bytes){val=(val<<8)|byte;bits+=8;while(bits>=5){out+=B32[(val>>>(bits-5))&31];bits-=5}}if(bits>0)out+=B32[(val<<(5-bits))&31];return out;}
 function b32decode(input:string){let bits=0,val=0;const out:number[]=[];for(const ch of input.replace(/=|\s|-/g,"").toUpperCase()){const idx=B32.indexOf(ch);if(idx<0)continue;val=(val<<5)|idx;bits+=5;if(bits>=8){out.push((val>>>(bits-8))&255);bits-=8}}return Buffer.from(out);}
 function totp(secret:string,time=Date.now()){const counter=Math.floor(time/30000);const buf=Buffer.alloc(8);buf.writeBigUInt64BE(BigInt(counter));const mac=createHmac("sha1",b32decode(secret)).update(buf).digest();const off=mac[mac.length-1]&15;const num=((mac[off]&127)<<24)|((mac[off+1]&255)<<16)|((mac[off+2]&255)<<8)|(mac[off+3]&255);return String(num%1_000_000).padStart(6,"0");}
 function validTotp(secret:string,code:string){if(!/^\d{6}$/.test(code))return false;for(const drift of[-30000,0,30000]){const expected=Buffer.from(totp(secret,Date.now()+drift));const actual=Buffer.from(code);if(expected.length===actual.length&&timingSafeEqual(expected,actual))return true}return false;}
+export function matchMobileTotpCounter(secret:string,code:string,time=Date.now()):number|null {
+ if(!/^\d{6}$/.test(code))return null;
+ for(const drift of [30000,0,-30000]){
+  const counter=Math.floor((time+drift)/30000);if(counter<0)continue;
+  const expected=Buffer.from(totp(secret,time+drift)),actual=Buffer.from(code);
+  if(timingSafeEqual(expected,actual))return counter;
+ }
+ return null;
+}
 function recoveryHash(code:string){return `sha256:${createHash("sha256").update(code.trim().toUpperCase()).digest("hex")}`;}
 function recoveryCodes(){return Array.from({length:10},()=>`${randomBytes(3).toString("hex").toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`);}
 

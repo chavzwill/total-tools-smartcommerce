@@ -1,0 +1,23 @@
+{
+  "name": "smartcommerce-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run --maxWorkers=1 --hookTimeout=60000",
+    "typecheck": "tsc --noEmit",
+    "start:customer": "npm run start -w @smartcommerce/customer",
+    "start:courier": "npm run start -w @smartcommerce/courier"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.12",
+    "@types/node": "^24.19.2",
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3",
+    "vitest": "5.0.5"
+  }
+}
